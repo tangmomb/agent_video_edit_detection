@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "editgen"
+version = "0.1.0"
+description = "Génère des vidéos annotées (overlays de montage ajoutés sur des clips Pixabay) pour entraîner/évaluer un agent d'extraction."
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "pillow>=10.0",
+    "python-dotenv>=1.0",
+    "imageio-ffmpeg>=0.5",
+]
+
+[project.optional-dependencies]
+agent = ["mistralai>=3.3"]
+# torch : installer la variante CUDA depuis https://download.pytorch.org/whl/cu126
+selector = ["torch", "transformers", "scikit-learn", "numpy"]
+
+[project.scripts]
+editgen = "editgen.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["editgen*", "selector*", "agents*"]
