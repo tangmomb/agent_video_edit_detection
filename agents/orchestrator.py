@@ -4,10 +4,10 @@
 
 Boucle : orchestrateur → (Dataset Builder | Model Researcher) → Evaluator → orchestrateur.
 Chaque délégation lance le sous-agent sur une consigne autonome ; son rapport revient comme
-résultat d'outil. Journaux dans data/runs/<horodatage>/.
+résultat d'outil. Journaux dans runs/<horodatage>/.
 """
 
-from selector.lab import Lab
+from model_training_pipeline.lab import Lab
 
 from . import dataset_builder, evaluator, model_researcher
 from .common import CONTEXT, dataset_info_tool, list_experiments_tool

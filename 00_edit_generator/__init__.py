@@ -1,4 +1,4 @@
-"""editgen : génération de vidéos avec overlays de montage + vérité terrain."""
+"""edit_generator : génération de vidéos avec overlays de montage + vérité terrain."""
 
 from .generator import GenerationConfig, generate_sample
 

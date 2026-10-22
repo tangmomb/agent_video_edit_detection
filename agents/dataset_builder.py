@@ -1,7 +1,7 @@
 """Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées."""
 
-from editgen.generator import ELEMENT_TYPES
-from selector.lab import Lab
+from edit_generator.generator import ELEMENT_TYPES
+from model_training_pipeline.lab import Lab
 
 from .common import CONTEXT, dataset_info_tool
 from .runner import Agent, Tool

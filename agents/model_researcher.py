@@ -1,7 +1,7 @@
 """Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences."""
 
-from selector.features import EXTRACTORS
-from selector.lab import MODELS, Lab
+from model_training_pipeline.features import EXTRACTORS
+from model_training_pipeline.lab import MODELS, Lab
 
 from .common import CONTEXT, dataset_info_tool, list_experiments_tool
 from .runner import Agent, Tool

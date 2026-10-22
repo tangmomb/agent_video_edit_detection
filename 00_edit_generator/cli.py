@@ -10,7 +10,7 @@ from .sources import default_photo_source, default_video_source
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="editgen")
+    p = argparse.ArgumentParser(prog="edit_generator")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     g = sub.add_parser("generate", help="Génère N échantillons annotés")

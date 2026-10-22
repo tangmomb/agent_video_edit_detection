@@ -1,6 +1,6 @@
 """Contexte et outils partagés par plusieurs agents."""
 
-from selector.lab import Lab
+from model_training_pipeline.lab import Lab
 
 from .runner import Tool
 

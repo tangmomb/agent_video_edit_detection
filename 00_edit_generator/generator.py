@@ -243,7 +243,7 @@ def generate_sample(seed: int, out_root: Path = SAMPLES_DIR, config: GenerationC
                     query: str | None = None, orientation: str | None = None,
                     video_source=None, photo_source=None, local_video: Path | None = None,
                     topic: str | None = None, accept_source=None) -> Path:
-    """Génère data/samples/s<seed>/{video.mp4, annotations.json} et renvoie le dossier.
+    """Génère data/videos_samples/s<seed>/{video.mp4, annotations.json} et renvoie le dossier.
 
     accept_source(source) -> bool restreint les vidéos sources possibles (ex. : celles d'un split).
     """

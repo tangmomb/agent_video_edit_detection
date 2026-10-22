@@ -8,7 +8,7 @@ Règles :
 - métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val ;
 - les décisions se prennent sur le split *val* ; le split *test* n'est accessible que par
   final_test, en nombre limité par session ;
-- chaque entraînement est enregistré dans data/experiments/<exp_id>/.
+- chaque entraînement est enregistré dans model_results/<exp_id>/ (à la racine du projet).
 """
 
 import base64
@@ -27,15 +27,16 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from editgen import annotations
-from editgen.config import DATA_DIR, SAMPLES_DIR
-from editgen.ratelimit import QuotaExceeded, api_quotas
+from edit_generator import annotations
+from edit_generator.config import DATA_DIR, ROOT, SAMPLES_DIR
+from edit_generator.ratelimit import QuotaExceeded, api_quotas
 
 from . import metrics
 from .features import EXTRACTORS, VIEWS, extraction_cost, get_features
 from .frames import FPS, FRAMES_DIR, build, load_index, source_key, split_for
 
-EXP_DIR = DATA_DIR / "experiments"
+EXP_DIR = ROOT / "model_results"
+DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des générations, à côté des vidéos
 MODELS = ("logreg", "mlp", "hgb")
 MAX_QUOTA_FAILURES = 3  # échecs de quota d'affilée avant d'interrompre une génération
 
@@ -142,8 +143,8 @@ class Lab:
     def generate_data(self, n: int, reason: str, query: str | None = None, orientation: str | None = None,
                       type_weights: dict | None = None, lang: str = "mix",
                       empty_prob: float | None = None, split: str | None = None) -> dict:
-        from editgen.generator import GenerationConfig, generate_sample
-        from editgen.sources import default_photo_source, default_video_source
+        from edit_generator.generator import GenerationConfig, generate_sample
+        from edit_generator.sources import default_photo_source, default_video_source
 
         if split not in (None, "train", "val", "test"):
             return {"error": f"split inconnu : {split} (train, val ou test)"}
@@ -179,7 +180,7 @@ class Lab:
         self.generated += ok  # seules les vidéos réussies consomment le budget
         build()
         self._rows = None
-        with open(EXP_DIR / "data_requests.jsonl", "a", encoding="utf-8") as fh:
+        with open(DATA_REQUESTS, "a", encoding="utf-8") as fh:
             fh.write(json.dumps({"n": n, "ok": ok, "query": query, "orientation": orientation, "split": split,
                                  "type_weights": type_weights, "reason": reason, "time": time.time()}) + "\n")
         return {"generees": ok, "echecs": len(errors), "exemples_erreurs": errors[:3],
@@ -188,7 +189,7 @@ class Lab:
                 "quotas_api": api_quotas()}
 
     def data_requests(self) -> list[dict]:
-        path = EXP_DIR / "data_requests.jsonl"
+        path = DATA_REQUESTS
         if not path.exists():
             return []
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]

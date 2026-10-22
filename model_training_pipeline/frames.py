@@ -1,4 +1,4 @@
-"""Construit le dataset de frames étiquetées à partir des échantillons editgen.
+"""Construit le dataset de frames étiquetées à partir des échantillons edit_generator.
 
 Chaque ligne de index.jsonl :
   frame, sample_id, t, source, split,
@@ -16,11 +16,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from editgen import annotations
-from editgen.config import DATA_DIR, SAMPLES_DIR, ffmpeg_bin
+from edit_generator import annotations
+from edit_generator.config import DATA_DIR, SAMPLES_DIR, ffmpeg_bin
 
 TEXT_TYPES = {"keyword", "question", "subtitle", "lower_third"}
-FRAMES_DIR = DATA_DIR / "frames"
+FRAMES_DIR = DATA_DIR / "frames_from_videos"
 
 FPS = 1.0  # frames extraites par seconde de vidéo
 

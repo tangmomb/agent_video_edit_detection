@@ -1,8 +1,9 @@
 """Boucle tool use commune aux quatre agents.
 
 Un `Agent` = un prompt système + une liste d'outils + un modèle. Une `Session` exécute des agents
-sur l'API Mistral (chat completions + function calling) avec un budget partagé et journalise tout le pipeline dans data/runs/<horodatage>/ :
-pipeline.json (réécrit à chaque étape), plus report.md pour le rapport final.
+sur l'API Mistral (chat completions + function calling) avec un budget partagé et journalise tout
+le pipeline dans runs/<horodatage>/ (à la racine du projet) : pipeline.json (réécrit à chaque
+étape), plus report.md pour le rapport final.
 
 pipeline.json = {"run": {...paramètres, statut, coût, tokens...}, "steps": [...]}, les étapes
 dans l'ordre chronologique. Chaque étape porte `call` (n° d'appel d'agent) et `parent` (appel
@@ -27,7 +28,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from editgen.config import DATA_DIR
+from edit_generator.config import ROOT
+
+RUNS_DIR = ROOT / "runs"
 
 # Identifiants épinglés (pas d'alias -latest) pour qu'un changement de modèle côté Mistral ne
 # modifie pas le comportement en silence.
@@ -110,7 +113,7 @@ class Session:
         self.spent = 0.0
         self.calls = 0
         self.verbose = verbose
-        self.run_dir = run_dir or DATA_DIR / "runs" / time.strftime("%Y%m%d-%H%M%S")
+        self.run_dir = run_dir or RUNS_DIR / time.strftime("%Y%m%d-%H%M%S")
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self._stack: list[int] = []  # appels d'agent en cours (le dernier est le plus profond)
         self.trace = {

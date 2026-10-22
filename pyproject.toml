@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "editgen"
+name = "00_edit_generator"
 version = "0.1.0"
 description = "Génère des vidéos annotées (overlays de montage ajoutés sur des clips Pixabay) pour entraîner/évaluer un agent d'extraction."
 requires-python = ">=3.10"
@@ -17,10 +17,14 @@ dependencies = [
 [project.optional-dependencies]
 agent = ["mistralai>=3.3"]
 # torch : installer la variante CUDA depuis https://download.pytorch.org/whl/cu126
-selector = ["torch", "transformers", "scikit-learn", "numpy"]
+model_training_pipeline = ["torch", "transformers", "scikit-learn", "numpy"]
 
 [project.scripts]
-editgen = "editgen.cli:main"
+edit_generator = "edit_generator.cli:main"
 
-[tool.setuptools.packages.find]
-include = ["editgen*", "selector*", "agents*"]
+[tool.setuptools]
+packages = ["edit_generator", "model_training_pipeline", "agents"]
+# Un nom de module ne peut pas commencer par un chiffre : le paquet s'importe sous le nom
+# edit_generator mais vit dans le dossier 00_edit_generator (préfixe pour l'ordre des dossiers).
+# Conséquence : il faut l'installer (pip install -e .) pour que l'import fonctionne.
+package-dir = {"edit_generator" = "00_edit_generator"}

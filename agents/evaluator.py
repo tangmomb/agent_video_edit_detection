@@ -1,6 +1,6 @@
 """Evaluator / Error Analyst : mesure, analyse les erreurs, vérifie et promeut les améliorations."""
 
-from selector.lab import Lab
+from model_training_pipeline.lab import Lab
 
 from .common import CONTEXT, list_experiments_tool
 from .runner import Agent, Tool

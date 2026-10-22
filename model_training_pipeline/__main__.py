@@ -4,7 +4,7 @@ from .frames import FPS, build
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="python -m selector")
+    p = argparse.ArgumentParser(prog="python -m model_training_pipeline")
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("frames", help="extrait et étiquette les frames des échantillons")
     b.add_argument("--fps", type=float, default=FPS)

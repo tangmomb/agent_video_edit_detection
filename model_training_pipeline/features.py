@@ -1,4 +1,5 @@
-"""Embeddings figés des frames, cache par échantillon (data/frames/feat/<extracteur>__<vue>/<sample_id>.npy).
+"""Embeddings figés des frames, cache par échantillon
+(data/frames_from_videos/feat/<extracteur>__<vue>/<sample_id>.npy).
 
 Vues :
 - full  : l'image entière, redimensionnée en carré (pas de recadrage central, qui
