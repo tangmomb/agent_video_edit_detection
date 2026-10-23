@@ -54,10 +54,12 @@ SPLITS = ("train", "val", "test")
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
 STRATIFY_KEYS = ("type", "orientation", "clip_vide")
 MODELS = ("logreg", "mlp", "hgb")
-# Groupes d'images qu'on peut sous-échantillonner dans train (train_model, paramètre balance) :
+# Groupes d'images de train qu'on peut rééchantillonner (paramètre balance) ou pondérer (weights) :
 # un type d'élément = images positives dont tous les ajouts visibles sont de ce type ;
-# negatif = images sans ajout ; clip_vide = images des clips sans aucun ajout ; orientation.
-BALANCE_GROUPS = (*ELEMENT_TYPES, "negatif", "clip_vide", "portrait", "paysage")
+# positif / negatif = images avec / sans ajout ; clip_vide = images des clips sans aucun ajout ;
+# orientation.
+BALANCE_GROUPS = (*ELEMENT_TYPES, "positif", "negatif", "clip_vide", "portrait", "paysage")
+MAX_FACTOR = 10  # facteur maximal de balance et de weights
 MAX_QUOTA_FAILURES = 3  # échecs de quota d'affilée avant d'interrompre une génération
 
 
@@ -91,6 +93,8 @@ def _compact(e: dict, errors: dict | None = None) -> dict:
     out.update({k: e[k] for k in ("model", "temporal", "params") if k in e})
     if e.get("balance"):
         out["balance"] = e["balance"]
+    if e.get("weights"):
+        out["weights"] = e["weights"]
     out["hypothese"] = e.get("note", "")
     out["val"] = _compact_val(e["val"])
     if errors is not None:
@@ -442,8 +446,8 @@ class Lab:
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     def train_model(self, embeddings: list[str], model: str = "logreg", temporal: str = "none",
-                    params: dict | None = None, balance: dict | None = None, note: str = "",
-                    split_id: str | None = None) -> dict:
+                    params: dict | None = None, balance: dict | None = None,
+                    weights: dict | None = None, note: str = "", split_id: str | None = None) -> dict:
         if not split_id:
             raise ValueError("split_id obligatoire : un split créé par make_split (voir list_experiments)")
         if model not in MODELS:
@@ -453,12 +457,14 @@ class Lab:
             raise ValueError("splits train/val vides : il faut d'abord générer des données")
         params = params or {}
         tr, balance_report = self._balance(tr, balance or {})
+        sample_weight = self._weights(tr, weights or {})
         X, feat_ms = self._X(embeddings, temporal, self._prev())
         y = self._y()
 
         clf = self._make(model, params)
         t0 = time.time()
-        clf.fit(X[tr], y[tr])
+        fit_kw = {} if sample_weight is None else {f"{clf.steps[-1][0]}__sample_weight": sample_weight}
+        clf.fit(X[tr], y[tr], **fit_kw)
         train_s = time.time() - t0
         t0 = time.time()
         probs = clf.predict_proba(X[va])[:, 1]
@@ -473,9 +479,11 @@ class Lab:
         }
         if balance_report:
             result["reequilibrage_train"] = balance_report
+        if sample_weight is not None:
+            result["ponderation_train"] = {g: f"poids {float(w):g}" for g, w in sorted(weights.items())}
         # Clé "features" gardée dans config.json : l'interface et final_test la relisent.
         config = {"split_id": split_id, "features": embeddings, "model": model, "temporal": temporal,
-                  "params": params, "balance": balance or {}, "note": note}
+                  "params": params, "balance": balance or {}, "weights": weights or {}, "note": note}
         d = EXP_DIR / exp_id
         d.mkdir(parents=True)
         (d / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
@@ -488,8 +496,9 @@ class Lab:
             pickle.dump(clf, fh)
         # Format court : la config est celle de l'appel, le détail reste dans metrics.json.
         short = {"val": _compact_val(result["val"])}
-        if balance_report:
-            short["reequilibrage_train"] = balance_report
+        for k in ("reequilibrage_train", "ponderation_train"):
+            if k in result:
+                short[k] = result[k]
         return _jsonable({"experiment_id": exp_id, **short})
 
     def analyze_errors(self, experiment_id: str, precision: float = metrics.DEFAULT_PRECISION) -> dict:
@@ -717,37 +726,52 @@ class Lab:
         if not r["label_any"]:
             groups.add("negatif")
         else:
+            groups.add("positif")
             types = {el["type"] for el in ann["elements"] if el["id"] in r["visible"]}
             if len(types) == 1:
                 groups.add(types.pop())
         return groups
 
     def _balance(self, tr: np.ndarray, balance: dict) -> tuple[np.ndarray, dict]:
-        """Sous-échantillonne les frames de train : balance = {groupe: fraction gardée}. Une frame
-        dans plusieurs groupes garde la plus petite fraction. Tirage déterministe (graine 0)."""
+        """Rééchantillonne les images de train : balance = {groupe: facteur}. Sous 1, on garde cette
+        fraction des images ; au-dessus, chaque image est dupliquée (1.5 = une image sur deux en double,
+        3 = trois exemplaires). Une image dans plusieurs groupes prend le plus petit facteur. Tirage
+        déterministe (graine 0)."""
         if not balance:
             return tr, {}
         unknown = set(balance) - set(BALANCE_GROUPS)
         if unknown:
             raise ValueError(f"groupes inconnus {sorted(unknown)} ; groupes possibles : {BALANCE_GROUPS}")
-        if any(not 0 <= float(v) <= 1 for v in balance.values()):
-            raise ValueError("chaque fraction gardée doit être entre 0 et 1")
+        if any(not 0 <= float(v) <= MAX_FACTOR for v in balance.values()):
+            raise ValueError(f"chaque facteur de balance doit être entre 0 et {MAX_FACTOR}")
         rng = np.random.default_rng(0)
         keep, before, after = [], Counter(), Counter()
         for i in tr:
             groups = self._balance_groups(self.rows[i]) & set(balance)
-            frac = min((float(balance[g]) for g in groups), default=1.0)
-            kept = rng.random() < frac
+            factor = min((float(balance[g]) for g in groups), default=1.0)
+            copies = int(factor) + (rng.random() < factor - int(factor))
             for g in groups:
                 before[g] += 1
-                after[g] += kept
-            if kept:
-                keep.append(i)
+                after[g] += copies
+            keep += [i] * copies
         if not keep:
             raise ValueError("le rééquilibrage ne laisse aucune image de train")
-        report = {g: f"{after[g]}/{before[g]} images gardées" for g in sorted(balance)}
+        report = {g: f"{after[g]} images pour {before[g]} au départ" for g in sorted(balance)}
         report["images_train"] = f"{len(keep)}/{len(tr)}"
         return np.array(keep, dtype=int), report
+
+    def _weights(self, tr: np.ndarray, weights: dict) -> np.ndarray | None:
+        """Poids des images de train dans la perte : weights = {groupe: poids}. Une image dans
+        plusieurs groupes prend le plus grand poids, les autres gardent 1."""
+        if not weights:
+            return None
+        unknown = set(weights) - set(BALANCE_GROUPS)
+        if unknown:
+            raise ValueError(f"groupes inconnus {sorted(unknown)} ; groupes possibles : {BALANCE_GROUPS}")
+        if any(not 0 < float(v) <= MAX_FACTOR for v in weights.values()):
+            raise ValueError(f"chaque poids doit être > 0 et au plus {MAX_FACTOR}")
+        return np.array([max((float(weights[g]) for g in self._balance_groups(self.rows[i]) & set(weights)),
+                             default=1.0) for i in tr])
 
     def _data_snapshot(self, split_id: str) -> dict:
         """Volume de données au moment de l'entraînement, pour comparer les expériences entre elles."""

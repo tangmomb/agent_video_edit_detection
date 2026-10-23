@@ -11,8 +11,11 @@ SYSTEM = CONTEXT + """
 Ton rôle : Model Researcher. Tu constitues les splits train/val/test (make_split) et tu mènes les \
 expériences demandées par l'orchestrateur : choix des embeddings figés (CLIP seul, DINOv2 seul ou \
 les deux concaténés ; image entière ou quadrants), du classifieur et de ses hyperparamètres, de \
-l'information temporelle, et du rééquilibrage de train (balance) quand un type d'ajout ou les \
-négatifs sont sur-représentés. Tu ne génères pas de données et tu ne mesures jamais sur test : \
+l'information temporelle, du rééchantillonnage de train (balance : retirer ou dupliquer des \
+images d'un groupe) et de la pondération de la perte (weights : faire peser davantage un groupe \
+difficile, par exemple les petites formes que le modèle rate). Le seuil est choisi par le code sur \
+val (meilleur rappel à 95 % de précision) : pondérer toutes les images positives ou négatives revient \
+surtout à le déplacer ; vise plutôt un groupe précis. Tu ne génères pas de données et tu ne mesures jamais sur test : \
 seul l'Evaluator y accède.
 
 Splits : les splits existants sont dans list_experiments ; décide-les à partir de la composition du \
@@ -80,10 +83,10 @@ def make(lab: Lab) -> Agent:
             Tool(
                 name="train_model",
                 description="Entraîne un classifieur binaire (ajout de montage visible ou non) sur des "
-                            "embeddings figés, sur le train du split choisi avec un sous-échantillonnage "
-                            "optionnel (balance), et l'évalue sur le val de ce split. Renvoie l'id d'expérience, AUC, AP, "
-                            "le rappel au seuil de précision 95 % (avec FP/FN) et l'effet du "
-                            "rééquilibrage. Les embeddings absents du cache sont calculés à la volée (GPU).",
+                            "embeddings figés, sur le train du split choisi avec un rééchantillonnage "
+                            "(balance) et une pondération (weights) optionnels, et l'évalue sur le val de ce "
+                            "split. Renvoie l'id d'expérience, AUC, AP, le rappel au seuil de précision 95 % "
+                            "(avec FP/FN) et l'effet du rééchantillonnage et de la pondération. Les embeddings absents du cache sont calculés à la volée (GPU).",
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -101,14 +104,23 @@ def make(lab: Lab) -> Agent:
                                    "description": "logreg: C ; mlp: hidden (liste), alpha ; "
                                                   "hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int)."},
                         "balance": {"type": "object", "additionalProperties": {"type": "number"},
-                                    "description": "Sous-échantillonnage de train seulement (val et test "
-                                                   "intacts) : {groupe: fraction d'images gardée, 0 à 1}. "
-                                                   "Groupes : " + ", ".join(BALANCE_GROUPS) + ". Un type "
-                                                   "d'élément = images positives dont tous les ajouts visibles "
-                                                   "sont de ce type ; negatif = images sans ajout ; clip_vide "
-                                                   "= images des clips sans aucun ajout. Ex. "
-                                                   "{'subtitle': 0.5, 'negatif': 0.7}. Le dataset n'est pas "
+                                    "description": "Rééchantillonnage de train seulement (val et test "
+                                                   "intacts) : {groupe: facteur, 0 à 10}. Sous 1, on garde "
+                                                   "cette fraction des images ; au-dessus, on les duplique "
+                                                   "(3 = trois exemplaires). Groupes : "
+                                                   + ", ".join(BALANCE_GROUPS) + ". Un type d'élément = "
+                                                   "images positives dont tous les ajouts visibles sont de ce "
+                                                   "type ; positif / negatif = images avec / sans ajout ; "
+                                                   "clip_vide = images des clips sans aucun ajout. Ex. "
+                                                   "{'shape': 3, 'negatif': 0.7}. Le dataset n'est pas "
                                                    "modifié."},
+                        "weights": {"type": "object", "additionalProperties": {"type": "number"},
+                                    "description": "Poids des images de train dans la perte, sans changer "
+                                                   "les données : {groupe: poids, > 0 et au plus 10}, mêmes "
+                                                   "groupes que balance. Une image dans plusieurs groupes prend "
+                                                   "le plus grand poids, les autres gardent 1. S'ajoute à la "
+                                                   "pondération équilibrée des classes déjà appliquée (logreg, "
+                                                   "hgb). Ex. {'shape': 3}."},
                         "note": {"type": "string",
                                  "description": "Hypothèse testée, en une phrase, sans recopier la config."},
                         "split_id": {"type": "string",

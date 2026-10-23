@@ -83,7 +83,7 @@ def list_experiments_tool(lab: Lab) -> Tool:
                     "toujours 0 : un rush n'appartient qu'à une partie), clips générés en train/val/test, images du val et images positives du val, clips générés "
                     "après le split, "
                     "note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, "
-                    "rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), "
+                    "rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), "
                     "erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes), "
                     "test final, en_production si c'est le modèle en production. Un split sans "
                     "expérience n'apparaît que s'il est le plus récent.",
