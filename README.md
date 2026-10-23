@@ -44,7 +44,7 @@ python -m model_training_pipeline frames    # frames à 1 fps + labels (data/vid
 python -m model_training_pipeline info      # état du dataset
 ```
 
-Cible binaire `label_any` (au moins un ajout pleinement visible), frames en fondu exclues.
+Cible binaire `label_any` (au moins un ajout visible sur l'image).
 Split train/val/test par rush brut (pas de fuite entre échantillons tirés du même rush).
 Métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val et
 appliqué tel quel sur test ; AUC et AP en repères (`model_training_pipeline/metrics.py`).

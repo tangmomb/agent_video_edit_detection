@@ -155,12 +155,11 @@ details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding
 Outils réellement appelés par dataset_builder :
 - dataset_info : 2 réussi(s), 0 échec(s)
 - data_requests : 1 réussi(s), 0 échec(s)
-- generate_data : 18 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">dataset_builder</span><span class="meta">mistral-large-4-0 · 12 tours max · 3 outils</span></summary><div class="body"><p class="desc">Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (clips générés, rushes bruts uniques, images extraites des clips, pourcentage d&#x27;images avec ajout, images ambiguës exclues, clips sans et avec ajout, répartition des vidéos par orientation et des éléments par type, surface et fond), diversité (rushes bruts réutilisés), budgets restants (génération, quotas d&#x27;API).</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet après la remise à zéro (un clip par rush en cache). Dataset vide : {"dataset_vide": true, "budgets": {…}, "message": "…"}.</p><pre>{
+- generate_data : 18 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">dataset_builder</span><span class="meta">mistral-large-4-0 · 12 tours max · 3 outils</span></summary><div class="body"><p class="desc">Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (clips générés, rushes bruts uniques, images extraites des clips, pourcentage d&#x27;images avec ajout, clips sans et avec ajout, répartition des vidéos par orientation et des éléments par type, surface et fond), diversité (rushes bruts réutilisés), budgets restants (génération, quotas d&#x27;API).</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet après la remise à zéro (un clip par rush en cache). Dataset vide : {"dataset_vide": true, "budgets": {…}, "message": "…"}.</p><pre>{
   "dataset": {
     "rushes_bruts_uniques": 259,
     "clips_generes": 259,
     "images_extraites_des_clips": 2837,
-    "images_ambigues_exclues": 0,
     "clips_sans_ajout": 64,
     "clips_avec_ajout": 195,
     "clips_par_orientation": {"paysage": 196, "portrait": 63},
@@ -261,7 +260,7 @@ Outils réellement appelés par model_researcher :
 - dataset_info : 2 réussi(s), 0 échec(s)
 - list_experiments : 1 réussi(s), 0 échec(s)
 - make_split : 1 réussi(s), 0 échec(s)
-- train_model : 8 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">mistral-large-4-0 · 20 tours max · 5 outils</span></summary><div class="body"><p class="desc">Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (clips générés, rushes bruts uniques, images extraites des clips, pourcentage d&#x27;images avec ajout, images ambiguës exclues, clips sans et avec ajout, répartition des vidéos par orientation et des éléments par type, surface et fond) ; avec split_id, la même composition pour train, val et test.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de train, val et test pour ce split (id renvoyé par make_split).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Exemple d'avant la remise à zéro du 23/10/2026, abrégé. Sans split_id, pas de composition_du_split ; test n'a pas de pourcentage_images_avec_ajout.</p><div class="exlabel">Appel</div><pre>{"split_id": "split_002"}</pre><div class="exlabel">Réponse</div><pre>{
+- train_model : 8 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">mistral-large-4-0 · 20 tours max · 5 outils</span></summary><div class="body"><p class="desc">Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (clips générés, rushes bruts uniques, images extraites des clips, pourcentage d&#x27;images avec ajout, clips sans et avec ajout, répartition des vidéos par orientation et des éléments par type, surface et fond) ; avec split_id, la même composition pour train, val et test.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de train, val et test pour ce split (id renvoyé par make_split).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Exemple d'avant la remise à zéro du 23/10/2026, abrégé. Sans split_id, pas de composition_du_split ; test n'a pas de pourcentage_images_avec_ajout.</p><div class="exlabel">Appel</div><pre>{"split_id": "split_002"}</pre><div class="exlabel">Réponse</div><pre>{
   "fps": 1.0,
   "dataset": {"…": "même bloc dataset que sans split_id"},
   "composition_du_split": {
@@ -270,7 +269,6 @@ Outils réellement appelés par model_researcher :
       "rushes_bruts_uniques": 75,
       "clips_generes": 77,
       "images_extraites_des_clips": 816,
-      "images_ambigues_exclues": 35,
       "clips_sans_ajout": 39,
       "clips_avec_ajout": 38,
       "clips_par_orientation": {"paysage": 60, "portrait": 17},
@@ -280,7 +278,6 @@ Outils réellement appelés par model_researcher :
       "rushes_bruts_uniques": 33,
       "clips_generes": 33,
       "images_extraites_des_clips": 356,
-      "images_ambigues_exclues": 5,
       "clips_sans_ajout": 18,
       "clips_avec_ajout": 15,
       "clips_par_orientation": {"portrait": 8, "paysage": 25},
@@ -290,7 +287,6 @@ Outils réellement appelés par model_researcher :
       "rushes_bruts_uniques": 24,
       "clips_generes": 26,
       "images_extraites_des_clips": 290,
-      "images_ambigues_exclues": 4,
       "clips_sans_ajout": 15,
       "clips_avec_ajout": 11,
       "clips_par_orientation": {"portrait": 8, "paysage": 18},
@@ -374,7 +370,6 @@ Outils réellement appelés par model_researcher :
     "rushes_bruts_uniques": 52,
     "clips_generes": 55,
     "images_extraites_des_clips": 596,
-    "images_ambigues_exclues": 26,
     "clips_sans_ajout": 24,
     "clips_avec_ajout": 31,
     "clips_par_orientation": {"paysage": 41, "portrait": 14},
@@ -384,7 +379,6 @@ Outils réellement appelés par model_researcher :
     "rushes_bruts_uniques": 17,
     "clips_generes": 18,
     "images_extraites_des_clips": 199,
-    "images_ambigues_exclues": 3,
     "clips_sans_ajout": 8,
     "clips_avec_ajout": 10,
     "clips_par_orientation": {"paysage": 11, "portrait": 7},
@@ -394,7 +388,6 @@ Outils réellement appelés par model_researcher :
     "rushes_bruts_uniques": 17,
     "clips_generes": 17,
     "images_extraites_des_clips": 162,
-    "images_ambigues_exclues": 9,
     "clips_sans_ajout": 7,
     "clips_avec_ajout": 10,
     "clips_par_orientation": {"portrait": 6, "paysage": 11},

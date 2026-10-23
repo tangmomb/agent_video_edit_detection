@@ -45,7 +45,7 @@ class GenerationConfig:
     empty_prob: float = 0.08  # échantillons sans aucun ajout (négatifs)
     lang: str = "fr"  # fr | en | mix
     # Sans animation, chaque ajout apparaît et disparaît d'un coup : à 1 image/s, l'image où il est
-    # posé suffit à le détecter, et un fondu ne produit que des images ambiguës écartées du dataset.
+    # posé suffit à le détecter.
     animations: bool = False
     type_weights: dict[str, float] = field(default_factory=lambda: {
         "keyword": 3, "question": 2, "subtitle": 2, "lower_third": 1, "image": 2, "shape": 1,

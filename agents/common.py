@@ -7,8 +7,8 @@ from .runner import Tool
 CONTEXT = """Projet : un classifieur d'images qui dit si une image extraite d'un clip contient un ajout de \
 montage (mot-clé, question, sous-titre, bandeau, image incrustée, forme, carton plein écran \
 de type chapitre ou question sur fond opaque) ou non. Les images sont \
-échantillonnées à 1 par seconde ; une image est positive si au moins un ajout y est pleinement \
-visible. Les images ambiguës (un ajout en fondu) sont exclues de l'entraînement et de la mesure.
+échantillonnées à 1 par seconde ; une image est positive si au moins un ajout y est \
+visible.
 
 Objectif : le meilleur rappel possible à précision fixée (95 % par défaut) sur le split val, \
 c'est-à-dire détecter le plus d'images avec ajout en gardant au plus 5 % de fausses alertes. \
@@ -66,7 +66,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
     return Tool(
         name="dataset_info",
         description="État du dataset : composition globale (clips générés, rushes bruts uniques, images "
-                    "extraites des clips, pourcentage d'images avec ajout, images ambiguës exclues, clips sans "
+                    "extraites des clips, pourcentage d'images avec ajout, clips sans "
                     "et avec ajout, répartition des vidéos par orientation et "
                     "des éléments par type, surface et fond)"
                     + contenu + ".",

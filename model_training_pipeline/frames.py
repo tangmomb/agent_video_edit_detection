@@ -2,10 +2,8 @@
 
 Chaque ligne de index.jsonl :
   frame, sample_id, t, source (rush brut : le split se fait par rush, voir lab.make_split),
-  visible      : ids des éléments pleinement visibles (opacité >= 0.9)
-  partial      : ids en cours de fondu (0.05 < opacité < 0.9)
-  label_any    : 1 si au moins un élément pleinement visible (la cible du classifieur)
-  ambiguous    : True si un élément est en fondu (exclu de l'entraînement)
+  visible      : ids des éléments visibles sur l'image
+  label_any    : 1 si au moins un élément visible (la cible du classifieur)
 """
 
 import json
@@ -57,18 +55,9 @@ def _drop(out_dir: Path, sample_id: str) -> None:
 
 
 def label(ann: dict, t: float) -> dict:
-    visible, partial = [], []
-    for el in ann["elements"]:
-        op = annotations.opacity_at(el, t)
-        if op >= 0.9:
-            visible.append(el["id"])
-        elif op > 0.05:
-            partial.append(el["id"])
-    return {
-        "visible": visible, "partial": partial,
-        "label_any": int(bool(visible)),
-        "ambiguous": bool(partial),
-    }
+    # Sans animation, un ajout est à opacité 0 ou 1 ; le seuil ne joue que si on réactive les fondus.
+    visible = [el["id"] for el in ann["elements"] if annotations.opacity_at(el, t) >= 0.5]
+    return {"visible": visible, "label_any": int(bool(visible))}
 
 
 def build(samples_dir: Path = SAMPLES_DIR, out_dir: Path = FRAMES_DIR, fps: float = FPS,

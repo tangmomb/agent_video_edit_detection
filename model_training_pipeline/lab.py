@@ -3,8 +3,7 @@ opérations sur les données, les modèles et les évaluations, sans aucune dép
 Les agents (package agents/) n'exposent qu'un sous-ensemble de ces méthodes comme outils.
 
 Règles :
-- cible binaire label_any (au moins un ajout pleinement visible) ; les frames ambiguës (un
-  élément en fondu) sont exclues de l'entraînement et de l'évaluation ;
+- cible binaire label_any (au moins un ajout visible sur l'image) ;
 - métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val ;
 - la génération ignore les splits ; un split est un découpage train/val/test nommé et figé,
   fait par rush brut (make_split, stockés dans data/splits/) : les vidéos générées après sa
@@ -181,10 +180,10 @@ class Lab:
         return set(clips)
 
     def _idx(self, split: str, split_id: str) -> np.ndarray:
-        """Frames non ambiguës du split (celles sur lesquelles on entraîne et on mesure)."""
+        """Images du split (celles sur lesquelles on entraîne et on mesure)."""
         m = self._split_map(split_id)
         return np.array([i for i, r in enumerate(self.rows)
-                         if m.get(r["sample_id"]) == split and not r["ambiguous"]], dtype=int)
+                         if m.get(r["sample_id"]) == split], dtype=int)
 
     def _y(self) -> np.ndarray:
         return np.array([r["label_any"] for r in self.rows])
@@ -226,9 +225,8 @@ class Lab:
         def count(key):
             return dict(Counter(key(a, el) for a, el in els).most_common())
 
-        clear = [r for r in rows if not r["ambiguous"]]
         out = {"rushes_bruts_uniques": len({r["source"] for r in rows}), "clips_generes": len(sids),
-               "images_extraites_des_clips": len(clear), "images_ambigues_exclues": len(rows) - len(clear),
+               "images_extraites_des_clips": len(rows),
                "clips_sans_ajout": sum(not a["elements"] for a in anns),
                "clips_avec_ajout": sum(bool(a["elements"]) for a in anns),
                "clips_par_orientation": dict(Counter(_orient(a) for a in anns)),
@@ -238,7 +236,7 @@ class Lab:
                "elements_par_fond": count(lambda a, el: "avec fond" if _has_box(el) else "sans fond")}
         if with_positives:
             out["pourcentage_images_avec_ajout"] = (
-                round(100 * sum(r["label_any"] for r in clear) / len(clear), 1) if clear else None)
+                round(100 * sum(r["label_any"] for r in rows) / len(rows), 1) if rows else None)
         return out
 
     def _split_summaries(self) -> list[dict]:
@@ -778,7 +776,7 @@ class Lab:
                 "fp_par_clip": dict(fp.most_common(5))}
 
     def _visible(self, r: dict) -> list[dict]:
-        """Éléments pleinement visibles sur l'image, avec surface relative et présence d'un fond."""
+        """Éléments visibles sur l'image, avec surface relative et présence d'un fond."""
         ann = self._ann(r["sample_id"])
         W, H = ann["video"]["width"], ann["video"]["height"]
         out = []
