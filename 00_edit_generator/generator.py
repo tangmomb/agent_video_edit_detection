@@ -44,6 +44,9 @@ class GenerationConfig:
     n_elements: tuple[int, int] = (1, 6)
     empty_prob: float = 0.08  # échantillons sans aucun ajout (négatifs)
     lang: str = "fr"  # fr | en | mix
+    # Sans animation, chaque ajout apparaît et disparaît d'un coup : à 1 image/s, l'image où il est
+    # posé suffit à le détecter, et un fondu ne produit que des images ambiguës écartées du dataset.
+    animations: bool = False
     type_weights: dict[str, float] = field(default_factory=lambda: {
         "keyword": 3, "question": 2, "subtitle": 2, "lower_third": 1, "image": 2, "shape": 1,
         "title_card": 1})
@@ -78,6 +81,8 @@ class _Sampler:
         return round(start, 2), round(start + length, 2)
 
     def animation(self, length: float, allow_slide: bool = True) -> dict:
+        if not self.cfg.animations:
+            return {"in": {"type": "none", "duration": 0.0}, "out": {"type": "none", "duration": 0.0}}
         r = self.rng
         kinds = ["none", "fade"] + (["slide_left", "slide_right", "slide_up", "slide_down"] if allow_slide else [])
         weights = [3, 3] + ([1, 1, 1, 1] if allow_slide else [])
@@ -285,23 +290,20 @@ def generate_sample(seed: int, out_root: Path = SAMPLES_DIR, config: GenerationC
 
     if local_video:
         src_path = Path(local_video)
-        topic_fr = topic or "la cuisine"
-        photo_query = content.TOPIC_EN.get(topic_fr, "food")
         words: list[str] = []
         source = {"kind": "local", "path": str(src_path)}
     else:
         video_source = video_source or default_video_source()
-        if query:
-            topic_fr = topic or next((fr for en, fr in content.QUERY_POOL if en == query), query)
-        else:
-            query, topic_fr = rng.choice(content.QUERY_POOL)
+        query = query or rng.choice(content.QUERY_POOL)[0]
         orientation = orientation or rng.choice(["portrait", "landscape"])
         extra = {"accept": accept_source} if accept_source else {}
         pick = video_source.pick(rng, query, orientation, cfg.min_duration, cfg.short_side, **extra)
         src_path, source, words = pick.path, pick.source, pick.words
-        # Les photos incrustées n'ont pas à coller au thème du rush : une requête courte tirée au
-        # hasard trouve toujours des résultats sur Unsplash, ce que la requête du rush ne garantit pas.
-        photo_query = rng.choice(content.QUERY_POOL)[0]
+
+    # Les ajouts n'ont aucun rapport avec le rush : le sujet des textes et la recherche des photos
+    # sont tirés au hasard (une requête courte trouve toujours des photos sur Unsplash).
+    topic_fr = topic or rng.choice(content.QUERY_POOL)[1]
+    photo_query = rng.choice(content.QUERY_POOL)[0]
 
     meta = probe(src_path)
     portrait = meta["height"] > meta["width"]

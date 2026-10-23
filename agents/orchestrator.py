@@ -72,7 +72,7 @@ def make(lab: Lab, session: Session) -> Agent:
         return ask
 
     def global_status() -> dict:
-        # Volumes seulement : le détail de composition (types, animations, thèmes, extracteurs)
+        # Volumes seulement : le détail de composition (types d'ajout, orientation)
         # sert aux sous-agents, qui le lisent par leur propre dataset_info.
         info = lab.dataset_info()
         if info.get("dataset_vide"):
@@ -101,8 +101,8 @@ def make(lab: Lab, session: Session) -> Agent:
                  description="État global : volumes du dataset (clips générés, rushes bruts uniques, images "
                              "extraites des clips, clips sans et avec ajout, pourcentage d'images avec "
                              "ajout), budgets restants (génération, tests finaux), budget de session. "
-                             "Les splits sont dans list_experiments ; le détail de composition (types, "
-                             "animations, thèmes) n'est visible que des sous-agents.",
+                             "Les splits sont dans list_experiments ; le détail de composition (types "
+                             "d'ajout, orientation) n'est visible que des sous-agents.",
                  input_schema={"type": "object", "properties": {}}, fn=global_status),
             list_experiments_tool(lab),
             Tool(name="ask_dataset_builder",

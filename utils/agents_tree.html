@@ -58,7 +58,7 @@ details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding
 <div class="legend"><span><span class="badge agent">agent</span> agent Mistral</span>
 <span><span class="badge tool">outil</span> appel au labo</span>
 <span><span class="badge delegate">délègue</span> lance un sous-agent</span></div>
-<ul class="tree"><li class="node agent"><details open><summary><span class="badge agent">agent</span><span class="aname">orchestrator</span><span class="meta">mistral-large-4-0 · 30 tours max · 5 outils</span></summary><div class="body"><p class="desc">Orchestrateur : décide de la prochaine expérience et délègue aux trois autres agents.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">global_status</code></summary><div class="body"><p class="desc">État global : volumes du dataset (clips générés, rushes bruts uniques, images extraites des clips, clips sans et avec ajout, pourcentage d&#x27;images avec ajout), budgets restants (génération, tests finaux), budget de session. Les splits sont dans list_experiments ; le détail de composition (types, animations, thèmes) n&#x27;est visible que des sous-agents.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026 (budget de session illustratif). Dataset vide : <code>dataset</code> vaut <code>{"dataset_vide": true, "budgets": {…}, "message": "…"}</code>.</p><pre>{
+<ul class="tree"><li class="node agent"><details open><summary><span class="badge agent">agent</span><span class="aname">orchestrator</span><span class="meta">mistral-large-4-0 · 30 tours max · 5 outils</span></summary><div class="body"><p class="desc">Orchestrateur : décide de la prochaine expérience et délègue aux trois autres agents.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">global_status</code></summary><div class="body"><p class="desc">État global : volumes du dataset (clips générés, rushes bruts uniques, images extraites des clips, clips sans et avec ajout, pourcentage d&#x27;images avec ajout), budgets restants (génération, tests finaux), budget de session. Les splits sont dans list_experiments ; le détail de composition (types d&#x27;ajout, orientation) n&#x27;est visible que des sous-agents.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026 (budget de session illustratif). Dataset vide : <code>dataset</code> vaut <code>{"dataset_vide": true, "budgets": {…}, "message": "…"}</code>.</p><pre>{
   "dataset": {
     "rushes_bruts_uniques": 132,
     "clips_generes": 136,
@@ -77,7 +77,7 @@ details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding
     "reserve_rapport_usd": 0.5,
     "disponible_pour_deleguer": 4.08
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : rushes bruts en train/val/test et rushes_shared (rushes présents dans plusieurs parties, toujours 0 : un rush n&#x27;appartient qu&#x27;à une partie), clips générés en train/val/test, images du val et images positives du val, clips générés après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes avec leur thème), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026 (les 3 expériences restantes ; leurs hypothèses recopient encore la config, les nouvelles ne le feront plus). split_001, sans expérience et plus ancien, n'apparaît pas. Avec <code>split_id</code>, seul ce split est renvoyé.</p><pre>{
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : rushes bruts en train/val/test et rushes_shared (rushes présents dans plusieurs parties, toujours 0 : un rush n&#x27;appartient qu&#x27;à une partie), clips générés en train/val/test, images du val et images positives du val, clips générés après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Exemple d'avant la remise à zéro du 23/10/2026 (les 3 expériences d'alors ; leurs hypothèses recopient encore la config, les nouvelles ne le feront plus). split_001, sans expérience et plus ancien, n'apparaît pas. Avec <code>split_id</code>, seul ce split est renvoyé.</p><pre>{
   "splits": [
     {
       "split_id": "split_002",
@@ -103,18 +103,7 @@ details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding
           "val": {"auc": 0.9982, "ap": 0.9946, "seuil_p95": 0.6835, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"subtitle": 1, "keyword": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000036",
-                "fp": 2,
-                "theme": "urban street people walking city lifestyle traffic"
-              },
-              {
-                "clip": "s000088",
-                "fp": 1,
-                "theme": "market street shop signs advertising posters storefront"
-              }
-            ]
+            "fp_par_clip": {"s000036": 2, "s000088": 1}
           }
         },
         {
@@ -127,18 +116,7 @@ details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding
           "val": {"auc": 0.9996, "ap": 0.9985, "seuil_p95": 0.5515, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"subtitle": 1, "keyword": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000088",
-                "fp": 2,
-                "theme": "market street shop signs advertising posters storefront"
-              },
-              {
-                "clip": "s000036",
-                "fp": 1,
-                "theme": "urban street people walking city lifestyle traffic"
-              }
-            ]
+            "fp_par_clip": {"s000088": 2, "s000036": 1}
           },
           "test": {"recall": 0.9216, "precision": 0.9592, "fp": 2, "fn": 4, "auc": 0.9981, "ap": 0.9916},
           "en_production": true
@@ -153,18 +131,7 @@ details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding
           "val": {"auc": 0.9991, "ap": 0.9968, "seuil_p95": 0.4406, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"image": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000088",
-                "fp": 2,
-                "theme": "market street shop signs advertising posters storefront"
-              },
-              {
-                "clip": "s000119",
-                "fp": 1,
-                "theme": "wall posters advertisements flyers urban street many papers"
-              }
-            ]
+            "fp_par_clip": {"s000088": 2, "s000119": 1}
           }
         }
       ]
@@ -188,40 +155,29 @@ details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding
 Outils réellement appelés par dataset_builder :
 - dataset_info : 2 réussi(s), 0 échec(s)
 - data_requests : 1 réussi(s), 0 échec(s)
-- generate_data : 18 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">dataset_builder</span><span class="meta">mistral-large-4-0 · 12 tours max · 3 outils</span></summary><div class="body"><p class="desc">Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (clips générés, rushes bruts uniques, images extraites des clips, pourcentage d&#x27;images avec ajout, images ambiguës exclues, clips sans et avec ajout, répartition des vidéos par orientation et des éléments par type, animation d&#x27;entrée, animation de sortie, surface et fond), diversité (vidéos par thème, rushes bruts réutilisés), budgets restants (génération, quotas d&#x27;API).</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026, listes abrégées par « … ». Dataset vide : {"dataset_vide": true, "budgets": {…}, "message": "…"}.</p><pre>{
+- generate_data : 18 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">dataset_builder</span><span class="meta">mistral-large-4-0 · 12 tours max · 3 outils</span></summary><div class="body"><p class="desc">Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (clips générés, rushes bruts uniques, images extraites des clips, pourcentage d&#x27;images avec ajout, images ambiguës exclues, clips sans et avec ajout, répartition des vidéos par orientation et des éléments par type, surface et fond), diversité (rushes bruts réutilisés), budgets restants (génération, quotas d&#x27;API).</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet après la remise à zéro (un clip par rush en cache). Dataset vide : {"dataset_vide": true, "budgets": {…}, "message": "…"}.</p><pre>{
   "dataset": {
-    "rushes_bruts_uniques": 132,
-    "clips_generes": 136,
-    "images_extraites_des_clips": 1462,
-    "images_ambigues_exclues": 44,
-    "clips_sans_ajout": 72,
-    "clips_avec_ajout": 64,
-    "clips_par_orientation": {"paysage": 103, "portrait": 33},
+    "rushes_bruts_uniques": 259,
+    "clips_generes": 259,
+    "images_extraites_des_clips": 2837,
+    "images_ambigues_exclues": 0,
+    "clips_sans_ajout": 64,
+    "clips_avec_ajout": 195,
+    "clips_par_orientation": {"paysage": 196, "portrait": 63},
     "elements_par_type": {
-      "subtitle": 71,
-      "keyword": 65,
-      "image": 32,
-      "question": 25,
-      "shape": 25,
-      "lower_third": 15,
-      "title_card": 9
+      "subtitle": 225,
+      "keyword": 189,
+      "question": 113,
+      "image": 108,
+      "shape": 61,
+      "lower_third": 45,
+      "title_card": 31
     },
-    "elements_par_animation_entree": {"none": 127, "fade": 53, "slide_up+fade": 11, "…": "7 clés de plus"},
-    "elements_par_animation_sortie": {"none": 160, "fade": 82},
-    "elements_par_surface": {"1-3%": 96, "3-8%": 68, "&gt;8%": 46, "&lt;1%": 32},
-    "elements_par_fond": {"sans fond": 126, "avec fond": 116},
-    "pourcentage_images_avec_ajout": 20.0
+    "elements_par_surface": {"1-3%": 301, "3-8%": 221, "&gt;8%": 148, "&lt;1%": 102},
+    "elements_par_fond": {"sans fond": 432, "avec fond": 340},
+    "pourcentage_images_avec_ajout": 38.3
   },
-  "diversite": {
-    "rushes_bruts_uniques": 132,
-    "clips_generes": 136,
-    "clips_par_theme": {
-      "city street traffic timelapse people walking urban": 6,
-      "nature forest river waterfall landscape scenery": 6,
-      "…": "54 clés de plus"
-    },
-    "rushes_bruts_reutilises": {"pixabay:84877": 3, "pixabay:208442": 2, "pixabay:11230": 2}
-  },
+  "diversite": {"rushes_bruts_uniques": 259, "clips_generes": 259, "rushes_bruts_reutilises": {}},
   "budgets": {
     "clips_generables_restants": 250,
     "quotas_api": {
@@ -229,24 +185,21 @@ Outils réellement appelés par dataset_builder :
         "appels_dans_la_fenetre": 0,
         "max_par_fenetre": 98,
         "fenetre_s": 60,
-        "restant_annonce_par_api": 99,
+        "restant_annonce_par_api": null,
         "attente_avant_prochain_appel_s": 0
       },
       "unsplash": {
         "appels_dans_la_fenetre": 0,
         "max_par_fenetre": 48,
         "fenetre_s": 3600,
-        "restant_annonce_par_api": 15,
+        "restant_annonce_par_api": null,
         "attente_avant_prochain_appel_s": 0
       }
     }
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">data_requested_history</code></summary><div class="body"><p class="desc">Historique des générations passées, regroupé par thème : appels, clips demandés, clips obtenus, orientations. Moins de clips obtenus que demandés : le thème s&#x27;épuise.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026 : une entrée par thème, toutes sessions.</p><pre>{
-  "city street traffic timelapse people walking urban": {"appels": 1, "clips_demandes": 6, "clips_generes": 6, "…": "1 clés de plus"},
-  "vertical video talking person street lifestyle vlog": {"appels": 1, "clips_demandes": 5, "clips_generes": 5, "…": "1 clés de plus"},
-  "cooking kitchen food preparation close-up hands": {"appels": 1, "clips_demandes": 4, "clips_generes": 4, "…": "1 clés de plus"},
-  "…": "53 clés de plus"
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">generate_data</code></summary><div class="body"><p class="desc">Génère de nouvelles vidéos annotées, chacune sur un rush brut jamais utilisé, et les ajoute au dataset, puis extrait et étiquette leurs images. Coûteux en temps et en quota d&#x27;API d&#x27;images : justifie chaque génération.</p><ul class="params"><li><code class="pname">n</code><span class=req>requis</span> <span class="ptype">integer</span> <span class=penum>1…100</span></li><li><code class="pname">reason</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ces données sont nécessaires.</div></li><li><code class="pname">query</code> <span class="ptype">string</span><div class=pdesc>Recherche Pixabay des rushes bruts : 2 à 4 mots-clés en anglais (sinon thème aléatoire).</div></li><li><code class="pname">orientation</code> <span class="ptype">string</span> <span class=penum><code>portrait</code> | <code>landscape</code></span></li><li><code class="pname">type_weights</code> <span class="ptype">object</span><div class=pdesc>Poids relatifs des types : keyword, question, subtitle, lower_third, image, shape, title_card</div></li><li><code class="pname">lang</code> <span class="ptype">string</span> <span class=penum><code>fr</code> | <code>en</code> | <code>mix</code></span></li><li><code class="pname">empty_prob</code> <span class="ptype">number</span> <span class=penum>0…1</span><div class=pdesc>Proportion de vidéos sans aucun ajout (négatifs).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026).</p><div class="exlabel">Appel</div><pre>{
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">data_requested_history</code></summary><div class="body"><p class="desc">Historique des générations passées, regroupé par requête Pixabay : appels, clips demandés, clips obtenus, orientations. Moins de clips obtenus que demandés : la requête s&#x27;épuise.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet après la remise à zéro : une entrée par requête Pixabay, toutes sessions ; ici le seul lot, généré depuis les rushes en cache.</p><pre>{
+  "rushes en cache": {"appels": 1, "clips_demandes": 259, "clips_generes": 259, "…": "1 clés de plus"}
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">generate_data</code></summary><div class="body"><p class="desc">Génère de nouvelles vidéos annotées, chacune sur un rush brut jamais utilisé, et les ajoute au dataset, puis extrait et étiquette leurs images. Coûteux en temps et en quota d&#x27;API d&#x27;images : justifie chaque génération.</p><ul class="params"><li><code class="pname">n</code><span class=req>requis</span> <span class="ptype">integer</span> <span class=penum>1…100</span></li><li><code class="pname">reason</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ces données sont nécessaires.</div></li><li><code class="pname">query</code> <span class="ptype">string</span><div class=pdesc>Recherche Pixabay des rushes bruts : 2 à 4 mots-clés en anglais (sinon requête tirée au hasard).</div></li><li><code class="pname">orientation</code> <span class="ptype">string</span> <span class=penum><code>portrait</code> | <code>landscape</code></span></li><li><code class="pname">type_weights</code> <span class="ptype">object</span><div class=pdesc>Poids relatifs des types : keyword, question, subtitle, lower_third, image, shape, title_card</div></li><li><code class="pname">lang</code> <span class="ptype">string</span> <span class=penum><code>fr</code> | <code>en</code> | <code>mix</code></span></li><li><code class="pname">empty_prob</code> <span class="ptype">number</span> <span class=penum>0…1</span><div class=pdesc>Proportion de vidéos sans aucun ajout (négatifs).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026).</p><div class="exlabel">Appel</div><pre>{
   "empty_prob": 0,
   "lang": "mix",
   "n": 3,
@@ -308,7 +261,7 @@ Outils réellement appelés par model_researcher :
 - dataset_info : 2 réussi(s), 0 échec(s)
 - list_experiments : 1 réussi(s), 0 échec(s)
 - make_split : 1 réussi(s), 0 échec(s)
-- train_model : 8 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">mistral-large-4-0 · 20 tours max · 5 outils</span></summary><div class="body"><p class="desc">Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (clips générés, rushes bruts uniques, images extraites des clips, pourcentage d&#x27;images avec ajout, images ambiguës exclues, clips sans et avec ajout, répartition des vidéos par orientation et des éléments par type, animation d&#x27;entrée, animation de sortie, surface et fond) ; avec split_id, la même composition pour train, val et test.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de train, val et test pour ce split (id renvoyé par make_split).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026, abrégé. Sans split_id, pas de composition_du_split ; test n'a pas de pourcentage_images_avec_ajout.</p><div class="exlabel">Appel</div><pre>{"split_id": "split_002"}</pre><div class="exlabel">Réponse</div><pre>{
+- train_model : 8 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">mistral-large-4-0 · 20 tours max · 5 outils</span></summary><div class="body"><p class="desc">Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (clips générés, rushes bruts uniques, images extraites des clips, pourcentage d&#x27;images avec ajout, images ambiguës exclues, clips sans et avec ajout, répartition des vidéos par orientation et des éléments par type, surface et fond) ; avec split_id, la même composition pour train, val et test.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de train, val et test pour ce split (id renvoyé par make_split).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Exemple d'avant la remise à zéro du 23/10/2026, abrégé. Sans split_id, pas de composition_du_split ; test n'a pas de pourcentage_images_avec_ajout.</p><div class="exlabel">Appel</div><pre>{"split_id": "split_002"}</pre><div class="exlabel">Réponse</div><pre>{
   "fps": 1.0,
   "dataset": {"…": "même bloc dataset que sans split_id"},
   "composition_du_split": {
@@ -321,7 +274,7 @@ Outils réellement appelés par model_researcher :
       "clips_sans_ajout": 39,
       "clips_avec_ajout": 38,
       "clips_par_orientation": {"paysage": 60, "portrait": 17},
-      "…": "6 clés de plus"
+      "…": "4 clés de plus"
     },
     "val": {
       "rushes_bruts_uniques": 33,
@@ -331,7 +284,7 @@ Outils réellement appelés par model_researcher :
       "clips_sans_ajout": 18,
       "clips_avec_ajout": 15,
       "clips_par_orientation": {"portrait": 8, "paysage": 25},
-      "…": "6 clés de plus"
+      "…": "4 clés de plus"
     },
     "test": {
       "rushes_bruts_uniques": 24,
@@ -341,10 +294,10 @@ Outils réellement appelés par model_researcher :
       "clips_sans_ajout": 15,
       "clips_avec_ajout": 11,
       "clips_par_orientation": {"portrait": 8, "paysage": 18},
-      "…": "5 clés de plus"
+      "…": "3 clés de plus"
     }
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : rushes bruts en train/val/test et rushes_shared (rushes présents dans plusieurs parties, toujours 0 : un rush n&#x27;appartient qu&#x27;à une partie), clips générés en train/val/test, images du val et images positives du val, clips générés après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes avec leur thème), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026 (les 3 expériences restantes ; leurs hypothèses recopient encore la config, les nouvelles ne le feront plus). split_001, sans expérience et plus ancien, n'apparaît pas. Avec <code>split_id</code>, seul ce split est renvoyé.</p><pre>{
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : rushes bruts en train/val/test et rushes_shared (rushes présents dans plusieurs parties, toujours 0 : un rush n&#x27;appartient qu&#x27;à une partie), clips générés en train/val/test, images du val et images positives du val, clips générés après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Exemple d'avant la remise à zéro du 23/10/2026 (les 3 expériences d'alors ; leurs hypothèses recopient encore la config, les nouvelles ne le feront plus). split_001, sans expérience et plus ancien, n'apparaît pas. Avec <code>split_id</code>, seul ce split est renvoyé.</p><pre>{
   "splits": [
     {
       "split_id": "split_002",
@@ -370,18 +323,7 @@ Outils réellement appelés par model_researcher :
           "val": {"auc": 0.9982, "ap": 0.9946, "seuil_p95": 0.6835, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"subtitle": 1, "keyword": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000036",
-                "fp": 2,
-                "theme": "urban street people walking city lifestyle traffic"
-              },
-              {
-                "clip": "s000088",
-                "fp": 1,
-                "theme": "market street shop signs advertising posters storefront"
-              }
-            ]
+            "fp_par_clip": {"s000036": 2, "s000088": 1}
           }
         },
         {
@@ -394,18 +336,7 @@ Outils réellement appelés par model_researcher :
           "val": {"auc": 0.9996, "ap": 0.9985, "seuil_p95": 0.5515, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"subtitle": 1, "keyword": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000088",
-                "fp": 2,
-                "theme": "market street shop signs advertising posters storefront"
-              },
-              {
-                "clip": "s000036",
-                "fp": 1,
-                "theme": "urban street people walking city lifestyle traffic"
-              }
-            ]
+            "fp_par_clip": {"s000088": 2, "s000036": 1}
           },
           "test": {"recall": 0.9216, "precision": 0.9592, "fp": 2, "fn": 4, "auc": 0.9981, "ap": 0.9916},
           "en_production": true
@@ -420,24 +351,13 @@ Outils réellement appelés par model_researcher :
           "val": {"auc": 0.9991, "ap": 0.9968, "seuil_p95": 0.4406, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"image": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000088",
-                "fp": 2,
-                "theme": "market street shop signs advertising posters storefront"
-              },
-              {
-                "clip": "s000119",
-                "fp": 1,
-                "theme": "wall posters advertisements flyers urban street many papers"
-              }
-            ]
+            "fp_par_clip": {"s000088": 2, "s000119": 1}
           }
         }
       ]
     }
   ]
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><p class="desc">Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos générées ensuite n&#x27;y entrent pas). Les vidéos d&#x27;un même rush brut restent du même côté. Le test est commun à tous les splits (figé au premier) : seuls train et val sont redécoupés. Renvoie l&#x27;id du split et la composition de train, val et test.</p><ul class="params"><li><code class="pname">note</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ce split (ce qu&#x27;il corrige ou couvre).</div></li><li><code class="pname">val_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en val (défaut 0.2).</div></li><li><code class="pname">test_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en test (défaut 0.2), pour le premier split seulement : ignoré ensuite (test figé).</div></li><li><code class="pname">stratify</code> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Caractéristiques à répartir au plus près des proportions visées dans chaque split : type (d&#x27;élément), animation (d&#x27;entrée), orientation, theme, clip_vide. Par défaut toutes ; [] = tirage purement aléatoire.</div></li><li><code class="pname">seed</code> <span class="ptype">integer</span><div class=pdesc>Graine du tirage (défaut 0).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026), compositions abrégées.</p><div class="exlabel">Appel</div><pre>{
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><p class="desc">Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos générées ensuite n&#x27;y entrent pas). Les vidéos d&#x27;un même rush brut restent du même côté. Le test est commun à tous les splits (figé au premier) : seuls train et val sont redécoupés. Renvoie l&#x27;id du split et la composition de train, val et test.</p><ul class="params"><li><code class="pname">note</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ce split (ce qu&#x27;il corrige ou couvre).</div></li><li><code class="pname">val_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en val (défaut 0.2).</div></li><li><code class="pname">test_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en test (défaut 0.2), pour le premier split seulement : ignoré ensuite (test figé).</div></li><li><code class="pname">stratify</code> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Caractéristiques à répartir au plus près des proportions visées dans chaque split : type (d&#x27;élément), orientation, clip_vide. Par défaut toutes ; [] = tirage purement aléatoire.</div></li><li><code class="pname">seed</code> <span class="ptype">integer</span><div class=pdesc>Graine du tirage (défaut 0).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026), compositions abrégées.</p><div class="exlabel">Appel</div><pre>{
   "note": "Split de référence v1 de la session : 90 vidéos (957 frames, ~23% positifs), découpé par clip source, stratifié sur type…",
   "test_ratio": 0.2,
   "val_ratio": 0.2
@@ -446,7 +366,7 @@ Outils réellement appelés par model_researcher :
   "params": {
     "val_ratio": 0.2,
     "test_ratio": 0.2,
-    "stratify": ["type", "animation", "… (5 au total)"],
+    "stratify": ["type", "orientation", "clip_vide"],
     "seed": 0
   },
   "clips_exclus": 0,
@@ -480,7 +400,7 @@ Outils réellement appelés par model_researcher :
     "clips_par_orientation": {"portrait": 6, "paysage": 11},
     "…": "5 clés de plus"
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">train_model</code></summary><div class="body"><p class="desc">Entraîne un classifieur binaire (ajout de montage visible ou non) sur des embeddings figés, sur le train du split choisi avec un sous-échantillonnage optionnel (balance), et l&#x27;évalue sur le val de ce split. Renvoie l&#x27;id d&#x27;expérience, AUC, AP, le rappel au seuil de précision 95 % (avec FP/FN) et l&#x27;effet du rééquilibrage. Les embeddings absents du cache sont calculés à la volée (GPU).</p><ul class="params"><li><code class="pname">embeddings</code><span class=req>requis</span> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Liste &#x27;extracteur:vue&#x27;, extracteurs clip_b32, clip_b16, clip_l14, dinov2_s, dinov2_b ; vues full (image entière) ou grid2 (image + 4 quadrants). Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = embeddings concaténés, ex. [&#x27;clip_b32:full&#x27;, &#x27;dinov2_s:full&#x27;] pour CLIP + DINOv2.</div></li><li><code class="pname">model</code> <span class="ptype">string</span> <span class=penum><code>logreg</code> | <code>mlp</code> | <code>hgb</code></span></li><li><code class="pname">temporal</code> <span class="ptype">string</span> <span class=penum><code>none</code> | <code>diff</code></span><div class=pdesc>diff ajoute e_t - e_(t-1) (changement depuis l&#x27;image précédente).</div></li><li><code class="pname">params</code> <span class="ptype">object</span><div class=pdesc>logreg: C ; mlp: hidden (liste), alpha ; hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int).</div></li><li><code class="pname">balance</code> <span class="ptype">object</span><div class=pdesc>Sous-échantillonnage de train seulement (val et test intacts) : {groupe: fraction d&#x27;images gardée, 0 à 1}. Groupes : keyword, question, subtitle, lower_third, image, shape, title_card, negatif, clip_vide, portrait, paysage. Un type d&#x27;élément = images positives dont tous les ajouts visibles sont de ce type ; negatif = images sans ajout ; clip_vide = images des clips sans aucun ajout. Ex. {&#x27;subtitle&#x27;: 0.5, &#x27;negatif&#x27;: 0.7}. Le dataset n&#x27;est pas modifié.</div></li><li><code class="pname">note</code> <span class="ptype">string</span><div class=pdesc>Hypothèse testée, en une phrase, sans recopier la config.</div></li><li><code class="pname">split_id</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Split sur lequel entraîner (train) et mesurer (val) : un id renvoyé par make_split (voir list_experiments).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (exp_037, run 005 du 23/10/2026), réponse au format actuel. Avec balance, la réponse ajoute reequilibrage_train (frames gardées par groupe).</p><div class="exlabel">Appel</div><pre>{
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">train_model</code></summary><div class="body"><p class="desc">Entraîne un classifieur binaire (ajout de montage visible ou non) sur des embeddings figés, sur le train du split choisi avec un sous-échantillonnage optionnel (balance), et l&#x27;évalue sur le val de ce split. Renvoie l&#x27;id d&#x27;expérience, AUC, AP, le rappel au seuil de précision 95 % (avec FP/FN) et l&#x27;effet du rééquilibrage. Les embeddings absents du cache sont calculés à la volée (GPU).</p><ul class="params"><li><code class="pname">embeddings</code><span class=req>requis</span> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Liste &#x27;extracteur:vue&#x27;, extracteurs clip_b32, clip_b16, clip_l14, dinov2_s, dinov2_b ; vues full (image entière) ou grid2 (image + 4 quadrants). Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = embeddings concaténés, ex. [&#x27;clip_b32:full&#x27;, &#x27;dinov2_s:full&#x27;] pour CLIP + DINOv2.</div></li><li><code class="pname">model</code> <span class="ptype">string</span> <span class=penum><code>logreg</code> | <code>mlp</code> | <code>hgb</code></span></li><li><code class="pname">temporal</code> <span class="ptype">string</span> <span class=penum><code>none</code> | <code>diff</code></span><div class=pdesc>diff ajoute e_t - e_(t-1) (changement depuis l&#x27;image précédente).</div></li><li><code class="pname">params</code> <span class="ptype">object</span><div class=pdesc>logreg: C ; mlp: hidden (liste), alpha ; hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int).</div></li><li><code class="pname">balance</code> <span class="ptype">object</span><div class=pdesc>Sous-échantillonnage de train seulement (val et test intacts) : {groupe: fraction d&#x27;images gardée, 0 à 1}. Groupes : keyword, question, subtitle, lower_third, image, shape, title_card, negatif, clip_vide, portrait, paysage. Un type d&#x27;élément = images positives dont tous les ajouts visibles sont de ce type ; negatif = images sans ajout ; clip_vide = images des clips sans aucun ajout. Ex. {&#x27;subtitle&#x27;: 0.5, &#x27;negatif&#x27;: 0.7}. Le dataset n&#x27;est pas modifié.</div></li><li><code class="pname">note</code> <span class="ptype">string</span><div class=pdesc>Hypothèse testée, en une phrase, sans recopier la config.</div></li><li><code class="pname">split_id</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Split sur lequel entraîner (train) et mesurer (val) : un id renvoyé par make_split (voir list_experiments).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (exp_037, run 005, avant la remise à zéro), réponse au format actuel. Avec balance, la réponse ajoute reequilibrage_train (images gardées par groupe).</p><div class="exlabel">Appel</div><pre>{
   "embeddings": ["clip_l14:full"],
   "model": "logreg",
   "temporal": "diff",
@@ -523,7 +443,7 @@ Découpage agrégé (analyze_errors) :
 Outils réellement appelés par evaluator :
 - list_experiments : 1 réussi(s), 0 échec(s)
 - analyze_errors : 2 réussi(s), 0 échec(s)
-- show_examples : 4 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">evaluator</span><span class="meta">mistral-large-4-0 · 15 tours max · 4 outils</span></summary><div class="body"><p class="desc">Splits figés (id, clips générés en train/val/test, note, paramètres, date, clips exclus, clips générés après le split) et historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (clips générés et frames par split, fps), date, résultat du test final.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : rushes bruts en train/val/test et rushes_shared (rushes présents dans plusieurs parties, toujours 0 : un rush n&#x27;appartient qu&#x27;à une partie), clips générés en train/val/test, images du val et images positives du val, clips générés après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes avec leur thème), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026 (les 3 expériences restantes ; leurs hypothèses recopient encore la config, les nouvelles ne le feront plus). split_001, sans expérience et plus ancien, n'apparaît pas. Avec <code>split_id</code>, seul ce split est renvoyé.</p><pre>{
+- show_examples : 4 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">evaluator</span><span class="meta">mistral-large-4-0 · 15 tours max · 4 outils</span></summary><div class="body"><p class="desc">Splits figés (id, clips générés en train/val/test, note, paramètres, date, clips exclus, clips générés après le split) et historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (clips générés et frames par split, fps), date, résultat du test final.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : rushes bruts en train/val/test et rushes_shared (rushes présents dans plusieurs parties, toujours 0 : un rush n&#x27;appartient qu&#x27;à une partie), clips générés en train/val/test, images du val et images positives du val, clips générés après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Exemple d'avant la remise à zéro du 23/10/2026 (les 3 expériences d'alors ; leurs hypothèses recopient encore la config, les nouvelles ne le feront plus). split_001, sans expérience et plus ancien, n'apparaît pas. Avec <code>split_id</code>, seul ce split est renvoyé.</p><pre>{
   "splits": [
     {
       "split_id": "split_002",
@@ -549,18 +469,7 @@ Outils réellement appelés par evaluator :
           "val": {"auc": 0.9982, "ap": 0.9946, "seuil_p95": 0.6835, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"subtitle": 1, "keyword": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000036",
-                "fp": 2,
-                "theme": "urban street people walking city lifestyle traffic"
-              },
-              {
-                "clip": "s000088",
-                "fp": 1,
-                "theme": "market street shop signs advertising posters storefront"
-              }
-            ]
+            "fp_par_clip": {"s000036": 2, "s000088": 1}
           }
         },
         {
@@ -573,18 +482,7 @@ Outils réellement appelés par evaluator :
           "val": {"auc": 0.9996, "ap": 0.9985, "seuil_p95": 0.5515, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"subtitle": 1, "keyword": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000088",
-                "fp": 2,
-                "theme": "market street shop signs advertising posters storefront"
-              },
-              {
-                "clip": "s000036",
-                "fp": 1,
-                "theme": "urban street people walking city lifestyle traffic"
-              }
-            ]
+            "fp_par_clip": {"s000088": 2, "s000036": 1}
           },
           "test": {"recall": 0.9216, "precision": 0.9592, "fp": 2, "fn": 4, "auc": 0.9981, "ap": 0.9916},
           "en_production": true
@@ -599,73 +497,44 @@ Outils réellement appelés par evaluator :
           "val": {"auc": 0.9991, "ap": 0.9968, "seuil_p95": 0.4406, "recall": 0.9848, "fp": 3, "fn": 1},
           "erreurs_val": {
             "fn_par_type": {"image": 1},
-            "fp_par_clip": [
-              {
-                "clip": "s000088",
-                "fp": 2,
-                "theme": "market street shop signs advertising posters storefront"
-              },
-              {
-                "clip": "s000119",
-                "fp": 1,
-                "theme": "wall posters advertisements flyers urban street many papers"
-              }
-            ]
+            "fp_par_clip": {"s000088": 2, "s000119": 1}
           }
         }
       ]
     }
   ]
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">analyze_errors</code></summary><div class="body"><p class="desc">Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux de images positives ratées par type d&#x27;ajout, surface, fond, animation d&#x27;entrée, phase (entrée ou sortie en cours, repos), nombre d&#x27;ajouts et orientation ; répartition des fausses alertes ; exemples d&#x27;images ratées.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026), découpages abrégés.</p><div class="exlabel">Appel</div><pre>{"experiment_id": "exp_030", "precision": 0.95}</pre><div class="exlabel">Réponse</div><pre>{
-  "experiment_id": "exp_030",
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">analyze_errors</code></summary><div class="body"><p class="desc">Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux de images positives ratées par type d&#x27;ajout, surface, fond, nombre d&#x27;ajouts et orientation ; répartition des fausses alertes ; exemples d&#x27;images ratées.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels sur exp_037, avant la remise à zéro du 23/10/2026.</p><div class="exlabel">Appel</div><pre>{"experiment_id": "exp_037", "precision": 0.95}</pre><div class="exlabel">Réponse</div><pre>{
+  "experiment_id": "exp_037",
   "precision_visee": 0.95,
-  "threshold": 0.0645,
-  "recall": 0.9808,
-  "precision": 0.9623,
-  "tp": 51,
-  "fp": 2,
+  "threshold": 0.5515,
+  "recall": 0.9848,
+  "precision": 0.9559,
+  "tp": 65,
+  "fp": 3,
   "fn": 1,
-  "tn": 145,
+  "tn": 287,
   "positifs_rates_par_type": {
-    "image": "0/13 ratées",
-    "keyword": "0/5 ratées",
-    "lower_third": "0/13 ratées",
-    "question": "0/7 ratées",
-    "shape": "1/8 ratées",
-    "subtitle": "0/14 ratées",
+    "image": "0/11 ratées",
+    "keyword": "1/24 ratées",
+    "lower_third": "0/9 ratées",
+    "question": "0/8 ratées",
+    "shape": "0/3 ratées",
+    "subtitle": "1/18 ratées",
     "title_card": "0/3 ratées"
   },
-  "positifs_rates_par_plus_grande_surface": {"1-3%": "0/19 ratées", "3-8%": "0/6 ratées", "&lt;1%": "1/6 ratées", "&gt;8%": "0/21 ratées"},
-  "positifs_rates_avec_fond": {"avec fond": "0/29 ratées", "sans fond": "1/23 ratées"},
-  "positifs_rates_par_animation_entree": {
-    "fade": "0/11 ratées",
-    "none": "1/32 ratées",
-    "slide_down": "0/2 ratées",
-    "slide_down+fade": "0/1 ratées",
-    "slide_left": "0/10 ratées",
-    "slide_left+fade": "0/1 ratées",
-    "slide_right": "0/1 ratées",
-    "slide_right+fade": "0/1 ratées",
-    "slide_up+fade": "0/3 ratées"
-  },
-  "positifs_rates_par_phase": {"entrée slide_down": "0/1 ratées", "repos": "1/51 ratées"},
-  "positifs_rates_par_nb_elements": {"1": "1/39 ratées", "2": "0/10 ratées", "3": "0/3 ratées"},
-  "positifs_rates_par_orientation": {"paysage": "0/22 ratées", "portrait": "1/30 ratées"},
-  "faux_positifs_par_orientation": {"paysage": 2},
-  "faux_positifs_par_clip": {"s000061": 2},
+  "positifs_rates_par_plus_grande_surface": {"1-3%": "1/24 ratées", "3-8%": "0/23 ratées", "&lt;1%": "0/5 ratées", "&gt;8%": "0/14 ratées"},
+  "positifs_rates_avec_fond": {"avec fond": "0/30 ratées", "sans fond": "1/36 ratées"},
+  "positifs_rates_par_nb_elements": {"1": "0/53 ratées", "2": "1/10 ratées", "3": "0/3 ratées"},
+  "positifs_rates_par_orientation": {"paysage": "1/38 ratées", "portrait": "0/28 ratées"},
+  "faux_positifs_par_orientation": {"paysage": 3},
+  "faux_positifs_par_clip": {"s000088": 2, "s000036": 1},
   "exemples_rates": [
     {
-      "frame": "img/s000054/00003.jpg",
-      "t": 2.0,
+      "image": "img/s000136/00004.jpg",
+      "t": 3.0,
       "elements": [
-        {
-          "type": "shape",
-          "text": null,
-          "area_ratio": 0.001,
-          "has_box": false,
-          "animation": "none",
-          "phase": "repos"
-        }
+        {"type": "keyword", "text": "Secret", "area_ratio": 0.0129, "has_box": false},
+        {"type": "subtitle", "text": "here", "area_ratio": 0.003, "has_box": false}
       ]
     }
   ]

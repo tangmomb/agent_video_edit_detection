@@ -53,7 +53,7 @@ EXCLUDED = DATA_DIR / "excluded.json"
 LEGACY_SPLIT = "hash"
 SPLITS = ("train", "val", "test")
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
-STRATIFY_KEYS = ("type", "animation", "orientation", "theme", "clip_vide")
+STRATIFY_KEYS = ("type", "orientation", "clip_vide")
 MODELS = ("logreg", "mlp", "hgb")
 # Groupes d'images qu'on peut sous-échantillonner dans train (train_model, paramètre balance) :
 # un type d'élément = images positives dont tous les ajouts visibles sont de ce type ;
@@ -114,11 +114,6 @@ def _has_box(el: dict) -> bool:
     return bool(el["style"].get("box") or el["type"] == "lower_third")
 
 
-def _anim_in(el: dict) -> str:
-    ain = el["animation"]["in"]
-    return ain["type"] + ("+fade" if ain.get("fade") else "")
-
-
 def _orient(ann: dict) -> str:
     return "portrait" if ann["video"]["height"] > ann["video"]["width"] else "paysage"
 
@@ -129,12 +124,8 @@ def _video_traits(ann: dict, keys: list[str]) -> set[str]:
     for k in keys:
         if k == "type":
             out |= {f"type:{el['type']}" for el in ann["elements"]}
-        elif k == "animation":
-            out |= {f"animation:{_anim_in(el)}" for el in ann["elements"]}
         elif k == "orientation":
             out.add(f"orientation:{_orient(ann)}")
-        elif k == "theme":
-            out.add(f"theme:{ann.get('topic') or 'inconnu'}")
         elif k == "clip_vide" and not ann["elements"]:
             out.add("clip_vide")
     return out
@@ -242,8 +233,6 @@ class Lab:
                "clips_avec_ajout": sum(bool(a["elements"]) for a in anns),
                "clips_par_orientation": dict(Counter(_orient(a) for a in anns)),
                "elements_par_type": count(lambda a, el: el["type"]),
-               "elements_par_animation_entree": count(lambda a, el: _anim_in(el)),
-               "elements_par_animation_sortie": count(lambda a, el: el["animation"]["out"]["type"]),
                "elements_par_surface": count(lambda a, el: _area_bucket(
                    el["bbox"][2] * el["bbox"][3] / (a["video"]["width"] * a["video"]["height"]))),
                "elements_par_fond": count(lambda a, el: "avec fond" if _has_box(el) else "sans fond")}
@@ -280,11 +269,9 @@ class Lab:
                 "split_id": split_id,
                 **{s: self._composition({k for k, v in m.items() if v == s}, with_positives=s != "test")
                    for s in SPLITS}}
-        themes = Counter(self._ann(s).get("topic") or "inconnu" for s in sids)
         clips = Counter(source_key(self._ann(s)) for s in sids)
         info["diversite"] = {
             "rushes_bruts_uniques": len(clips), "clips_generes": len(sids),
-            "clips_par_theme": dict(themes.most_common()),
             # Vidéos générées avant que generate_data n'écarte les rushes déjà utilisés.
             "rushes_bruts_reutilises": {k: n for k, n in clips.most_common() if n > 1},
         }
@@ -355,11 +342,12 @@ class Lab:
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     def data_requested_history(self) -> dict:
-        """Historique des générations regroupé par thème : un thème où on obtient moins de clips
-        que demandé est en voie d'épuisement (ses rushes ne servent qu'une fois)."""
+        """Historique des générations regroupé par requête Pixabay : une requête où on obtient moins
+        de clips que demandé est en voie d'épuisement (ses rushes ne servent qu'une fois)."""
         out: dict[str, dict] = {}
         for r in self.data_requests():
-            t = out.setdefault(r.get("query") or "aléatoire",
+            label = r.get("query") or ("rushes en cache" if r.get("source") == "cache" else "aléatoire")
+            t = out.setdefault(label,
                                {"appels": 0, "clips_demandes": 0, "clips_generes": 0, "orientations": []})
             t["appels"] += 1
             t["clips_demandes"] += r["n"]
@@ -389,13 +377,13 @@ class Lab:
     def make_split(self, note: str, val_ratio: float = 0.2, test_ratio: float = 0.2,
                    stratify: list[str] | None = None, seed: int = 0) -> dict:
         """Crée un split train/val/test figé. Toutes les vidéos d'un même rush brut vont du même
-        côté. Chaque caractéristique de stratify (type d'élément, animation, thème...) est
+        côté. Chaque caractéristique de stratify (type d'élément, orientation, clip vide) est
         répartie au plus près des proportions visées (stratification itérative, caractéristiques
         les plus rares d'abord) ; par défaut toutes, [] pour un tirage purement aléatoire.
         Le test est figé au premier split (TEST_SET) : ensuite, test_ratio est ignoré et seuls
         train et val sont redécoupés."""
-        # Par défaut tout est stratifié : sans ça, un thème rare (ex. les négatifs difficiles
-        # « texte dans la scène ») peut tomber entièrement en test et jamais en val (run 004).
+        # Par défaut tout est stratifié : sans ça, un cas rare peut tomber entièrement en test et
+        # jamais en val (run 004).
         stratify = list(STRATIFY_KEYS) if stratify is None else list(stratify)
         exclude = self._excluded()
         if not note.strip():
@@ -535,16 +523,12 @@ class Lab:
                 lambda r: {_area_bucket(max(e["area_ratio"] for e in self._visible(r)))}),
             "positifs_rates_avec_fond": rates(
                 lambda r: {"avec fond" if any(e["has_box"] for e in self._visible(r)) else "sans fond"}),
-            "positifs_rates_par_animation_entree": rates(lambda r: {e["animation"] for e in self._visible(r)}),
-            "positifs_rates_par_phase": rates(lambda r: {e["phase"] for e in self._visible(r)}),
             "positifs_rates_par_nb_elements": rates(lambda r: {min(len(r["visible"]), 4)}),
             "positifs_rates_par_orientation": rates(lambda r: {self._orientation(r)}),
             "faux_positifs_par_orientation": dict(Counter(self._orientation(r) for r in fp_rows)),
             "faux_positifs_par_clip": dict(Counter(r["sample_id"] for r in fp_rows).most_common(8)),
             "exemples_rates": [{"image": r["frame"], "t": r["t"],
-                                "elements": [{k: e[k] for k in ("type", "text", "area_ratio", "has_box",
-                                                                "animation", "phase")}
-                                             for e in self._visible(r)]} for r in fn_rows[:10]],
+                                "elements": self._visible(r)} for r in fn_rows[:10]],
         })
 
     def show_examples(self, experiment_id: str, kind: str = "missed", n: int = 4,
@@ -774,8 +758,8 @@ class Lab:
 
     def _val_errors(self, experiment_id: str) -> dict | None:
         """Résumé des erreurs val au seuil de précision par défaut, pour list_experiments : ajouts
-        ratés par type (une image ratée compte pour chaque type visible), clips à fausses alertes
-        avec leur thème. Le détail est dans analyze_errors."""
+        ratés par type (une image ratée compte pour chaque type visible), clips à fausses alertes.
+        Le détail est dans analyze_errors."""
         try:
             frames, y, probs, op = self._val_at(experiment_id, metrics.DEFAULT_PRECISION)
         except ValueError:
@@ -791,30 +775,19 @@ class Lab:
             elif pi and not yi:
                 fp[by_frame[f]["sample_id"]] += 1
         return {"fn_par_type": dict(fn.most_common()),
-                "fp_par_clip": [{"clip": c, "fp": n, "theme": self._ann(c).get("topic")}
-                                for c, n in fp.most_common(5)]}
+                "fp_par_clip": dict(fp.most_common(5))}
 
     def _visible(self, r: dict) -> list[dict]:
-        """Éléments pleinement visibles sur la frame, avec surface relative, présence d'un fond,
-        animation d'entrée et phase (entrée / sortie en cours, ou repos)."""
+        """Éléments pleinement visibles sur l'image, avec surface relative et présence d'un fond."""
         ann = self._ann(r["sample_id"])
         W, H = ann["video"]["width"], ann["video"]["height"]
         out = []
         for el in ann["elements"]:
             if el["id"] in r["visible"]:
                 b = annotations.bbox_at(el, r["t"]) or el["bbox"]
-                ain, aout = el["animation"]["in"], el["animation"]["out"]
-                anim = ain["type"] + ("+fade" if ain.get("fade") else "")
-                if r["t"] - el["t_start"] < ain["duration"]:
-                    phase = f"entrée {anim}"
-                elif el["t_end"] - r["t"] < aout["duration"]:
-                    phase = f"sortie {aout['type']}"
-                else:
-                    phase = "repos"
                 out.append({"type": el["type"], "text": el.get("text"),
                             "area_ratio": round(b[2] * b[3] / (W * H), 4),
-                            "has_box": _has_box(el),
-                            "animation": anim, "phase": phase})
+                            "has_box": _has_box(el)})
         return out
 
     def _orientation(self, r: dict) -> str:

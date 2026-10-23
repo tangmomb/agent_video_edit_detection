@@ -36,7 +36,7 @@ refusée en changeant seulement ses paramètres.
 que rien d'autre n'a été fait."""
 
 
-# Ce que chaque agent lit de dataset_info : le Dataset Builder les thèmes et les budgets de
+# Ce que chaque agent lit de dataset_info : le Dataset Builder la diversité et les budgets de
 # génération, le Model Researcher la composition d'un split (les extracteurs sont listés dans
 # la description de train_model).
 DATASET_INFO_KEYS = {"dataset_builder": ("dataset", "diversite", "budgets"),
@@ -60,7 +60,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
             out["budgets"] = {k: v for k, v in out["budgets"].items() if k != "final_tests_restants"}
         return out
 
-    contenu = (", diversité (vidéos par thème, rushes bruts réutilisés), budgets restants (génération, "
+    contenu = (", diversité (rushes bruts réutilisés), budgets restants (génération, "
                "quotas d'API)" if agent == "dataset_builder" else
                " ; avec split_id, la même composition pour train, val et test")
     return Tool(
@@ -68,7 +68,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
         description="État du dataset : composition globale (clips générés, rushes bruts uniques, images "
                     "extraites des clips, pourcentage d'images avec ajout, images ambiguës exclues, clips sans "
                     "et avec ajout, répartition des vidéos par orientation et "
-                    "des éléments par type, animation d'entrée, animation de sortie, surface et fond)"
+                    "des éléments par type, surface et fond)"
                     + contenu + ".",
         input_schema={"type": "object", "properties": props},
         fn=fn,
@@ -84,8 +84,7 @@ def list_experiments_tool(lab: Lab) -> Tool:
                     "après le split, "
                     "note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, "
                     "rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), "
-                    "erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes avec leur "
-                    "thème), "
+                    "erreurs_val à ce seuil (ajouts ratés par type, clips à fausses alertes), "
                     "test final, en_production si c'est le modèle en production. Un split sans "
                     "expérience n'apparaît que s'il est le plus récent.",
         input_schema={"type": "object", "properties": {

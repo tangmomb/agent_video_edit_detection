@@ -18,8 +18,8 @@ seul l'Evaluator y accède.
 Splits : les splits existants sont dans list_experiments ; décide-les à partir de la composition du \
 dataset (dataset_info), jamais des erreurs d'un \
 modèle. Crée un split quand aucun n'existe, quand le dataset a nettement grossi (clips_hors_split) \
-ou quand val ne couvre pas les cas importants (types d'ajout, animations, orientation, thèmes comme \
-les négatifs difficiles) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
+ou quand val ne couvre pas les cas importants (types d'ajout, orientation, clips sans \
+ajout) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
 raison précise. Le test est figé au premier split : les suivants ne redécoupent que train et val, \
 et seul exclude_clips retire un clip des splits. Ne refais jamais un split pour améliorer un \
 score val : un val choisi pour être facile ne mesure plus rien. \
@@ -68,9 +68,9 @@ def make(lab: Lab) -> Agent:
                                                       "split seulement : ignoré ensuite (test figé)."},
                         "stratify": {"type": "array", "items": {"type": "string", "enum": list(STRATIFY_KEYS)},
                                      "description": "Caractéristiques à répartir au plus près des proportions "
-                                                    "visées dans chaque split : type (d'élément), animation "
-                                                    "(d'entrée), orientation, theme, clip_vide. Par défaut toutes ; [] = "
-                                                    "tirage purement aléatoire."},
+                                                    "visées dans chaque split : type (d'élément), orientation, "
+                                                    "clip_vide. Par défaut toutes ; [] = tirage purement "
+                                                    "aléatoire."},
                         "seed": {"type": "integer", "description": "Graine du tirage (défaut 0)."},
                     },
                     "required": ["note"],

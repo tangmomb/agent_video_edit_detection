@@ -75,7 +75,7 @@ Organisation :
 - `agents/<agent>.py` : prompt + sous-ensemble d'outils du lab propres à chaque agent ;
   le Dataset Builder génère sans se soucier des splits, le Model Researcher découpe le dataset en
   splits train/val/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
-  rush brut, stratifiés par défaut sur type, animation, orientation, thème et vidéos vides ;
+  rush brut, stratifiés par défaut sur type, orientation et clips vides ;
   l'ancien découpage `hash`, non figé, est refusé). Le test est figé au premier split
   (`data/splits/test_set.json`) : les splits suivants ne redécoupent que train/val. Le Dataset
   Builder ne fait qu'ajouter des données ; le Model Researcher peut exclure un clip défectueux

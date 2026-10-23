@@ -24,7 +24,7 @@ quelques points n'est pas une preuve. N'utilise final_test que sur un candidat d
 val, et dis clairement si le test confirme val (précision visée tenue au seuil choisi sur val).
 
 Rapport final (court, en français) : chiffres clés par expérience évaluée, erreurs dominantes \
-(types d'ajout, tailles, fonds, animations et phase d'animation, nombre d'ajouts, orientation, \
+(types d'ajout, tailles, fonds, nombre d'ajouts, orientation, \
 vidéos à fausses alertes) avec leur \
 cause probable, verdict sur l'amélioration, et recommandations concrètes : quelles données \
 générer, quelles pistes de modèle tester."""
@@ -42,8 +42,8 @@ def make(lab: Lab) -> Agent:
             Tool(
                 name="analyze_errors",
                 description="Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux de "
-                            "images positives ratées par type d'ajout, surface, fond, animation d'entrée, "
-                            "phase (entrée ou sortie en cours, repos), nombre d'ajouts et orientation ; "
+                            "images positives ratées par type d'ajout, surface, fond, nombre d'ajouts et "
+                            "orientation ; "
                             "répartition des fausses alertes ; exemples d'images ratées.",
                 input_schema={
                     "type": "object",
