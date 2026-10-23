@@ -37,7 +37,7 @@ from edit_generator.generator import ELEMENT_TYPES
 from edit_generator.ratelimit import QuotaExceeded, api_quotas
 
 from . import metrics
-from .features import EXTRACTORS, VIEWS, extraction_cost, get_features
+from .features import extraction_cost, get_features
 from .frames import FPS, FRAMES_DIR, build, load_index, source_key
 
 EXP_DIR = ROOT / "model_results"
@@ -260,7 +260,7 @@ class Lab:
             return {"dataset_vide": True, "budgets": budgets,
                     "message": "Aucune vidéo annotée : le dataset est à constituer (generate_data)."}
         sids = sorted({r["sample_id"] for r in rows})
-        info = {"fps": FPS, "dataset": self._composition(set(sids)), "extractors": {}, "budgets": budgets}
+        info = {"fps": FPS, "dataset": self._composition(set(sids)), "budgets": budgets}
         if split_id:
             m = self._split_map(split_id)
             info["composition_du_split"] = {
@@ -273,10 +273,6 @@ class Lab:
             # Vidéos générées avant que generate_data n'écarte les rushes déjà utilisés.
             "rushes_bruts_reutilises": {k: n for k, n in clips.most_common() if n > 1},
         }
-        for ext in EXTRACTORS:
-            for view in VIEWS:
-                ms = extraction_cost(ext, view)
-                info["extractors"][f"{ext}:{view}"] = {"en_cache": ms is not None, "ms_par_image": ms}
         return _jsonable(info)
 
     def _used_sources(self) -> set[str]:
