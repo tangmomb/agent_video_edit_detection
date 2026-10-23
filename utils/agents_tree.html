@@ -48,7 +48,8 @@ ul.params li{margin:3px 0}
 details.ex{margin:0 0 8px}
 details.ex>summary{background:none;border:none;padding:2px 0;font-size:13px;color:var(--tool);font-weight:600}
 .exnote{color:var(--muted);font-size:13px;margin:4px 0}
-details.ex pre{margin:0;padding:10px 12px;background:var(--code);border-radius:6px;overflow-x:auto;font:12px/1.45 ui-monospace,Consolas,monospace;max-height:480px}
+details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding:10px 12px;background:var(--code);border-radius:6px;overflow-x:auto;font:12px/1.45 ui-monospace,Consolas,monospace;max-height:480px}
+.exlabel{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px}
 </style></head>
 <body><main>
 <h1>Agents et outils</h1>
@@ -119,7 +120,659 @@ details.ex pre{margin:0;padding:10px 12px;background:var(--code);border-radius:6
     "reserve_rapport_usd": 0.5,
     "disponible_pour_deleguer": 4.08
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_dataset_builder</code></summary><div class="body"><p class="desc">Délègue une génération de données au Dataset Builder ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">dataset_builder</span><span class="meta">mistral-large-4-0 · 12 tours max · 4 outils</span></summary><div class="body"><p class="desc">Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (vidéos, frames, taux de frames positives, frames ambiguës exclues, vidéos sans ajout, répartition des vidéos par orientation et des éléments par type, animation d&#x27;entrée, animation de sortie, surface et fond), diversité (vidéos par thème, clips sources réutilisés), liste des splits existants (volumes, note, paramètres), extracteurs d&#x27;embeddings disponibles et leur coût, budgets restants (génération, tests finaux, quotas d&#x27;API).</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">data_requests</code></summary><div class="body"><p class="desc">Historique des générations passées (volume, paramètres, raison).</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">generate_data</code></summary><div class="body"><p class="desc">Génère de nouvelles vidéos annotées, chacune sur un clip source jamais utilisé, et les ajoute au dataset, puis extrait et étiquette leurs frames. Coûteux en temps et en quota d&#x27;API d&#x27;images : justifie chaque génération.</p><ul class="params"><li><code class="pname">n</code><span class=req>requis</span> <span class="ptype">integer</span> <span class=penum>1…100</span></li><li><code class="pname">reason</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ces données sont nécessaires.</div></li><li><code class="pname">query</code> <span class="ptype">string</span><div class=pdesc>Thème des vidéos sources en anglais (sinon aléatoire).</div></li><li><code class="pname">orientation</code> <span class="ptype">string</span> <span class=penum><code>portrait</code> | <code>landscape</code></span></li><li><code class="pname">type_weights</code> <span class="ptype">object</span><div class=pdesc>Poids relatifs des types : keyword, question, subtitle, lower_third, image, shape, title_card</div></li><li><code class="pname">lang</code> <span class="ptype">string</span> <span class=penum><code>fr</code> | <code>en</code> | <code>mix</code></span></li><li><code class="pname">empty_prob</code> <span class="ptype">number</span> <span class=penum>0…1</span><div class=pdesc>Proportion de vidéos sans aucun ajout (négatifs).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">exclude_videos</code></summary><div class="body"><p class="desc">Retire des vidéos de tous les splits, présents et futurs, sans supprimer de fichier. Réservé aux vidéos défectueuses ou dupliquées.</p><ul class="params"><li><code class="pname">videos</code><span class=req>requis</span> <span class="ptype">object</span><div class=pdesc>{sample_id: raison du défaut}</div></li></ul></div></details></li></ul></details></li></ul></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_model_researcher</code></summary><div class="body"><p class="desc">Délègue un lot d&#x27;expériences au Model Researcher ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">mistral-large-4-0 · 20 tours max · 4 outils</span></summary><div class="body"><p class="desc">Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (vidéos, frames, taux de frames positives, frames ambiguës exclues, vidéos sans ajout, répartition des vidéos par orientation et des éléments par type, animation d&#x27;entrée, animation de sortie, surface et fond), diversité (vidéos par thème, clips sources réutilisés), liste des splits existants (volumes, note, paramètres), extracteurs d&#x27;embeddings disponibles et leur coût, budgets restants (génération, tests finaux, quotas d&#x27;API).</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de train, val et test pour ce split (id renvoyé par make_split).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><p class="desc">Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos générées ensuite n&#x27;y entrent pas). Les vidéos d&#x27;un même clip source restent du même côté. Le test est commun à tous les splits (figé au premier) : seuls train et val sont redécoupés. Renvoie l&#x27;id du split et la composition de train, val et test.</p><ul class="params"><li><code class="pname">note</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ce split (ce qu&#x27;il corrige ou couvre).</div></li><li><code class="pname">val_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en val (défaut 0.2).</div></li><li><code class="pname">test_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en test (défaut 0.2), pour le premier split seulement : ignoré ensuite (test figé).</div></li><li><code class="pname">stratify</code> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Caractéristiques à répartir au plus près des proportions visées dans chaque split : type (d&#x27;élément), animation (d&#x27;entrée), orientation, theme, video_vide. Par défaut toutes ; [] = tirage purement aléatoire.</div></li><li><code class="pname">seed</code> <span class="ptype">integer</span><div class=pdesc>Graine du tirage (défaut 0).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">train_model</code></summary><div class="body"><p class="desc">Entraîne un classifieur binaire (ajout de montage visible ou non) sur des embeddings figés, sur le train du split choisi avec un sous-échantillonnage optionnel (balance), et l&#x27;évalue sur le val de ce split. Renvoie l&#x27;id d&#x27;expérience, le rappel (avec seuil et TP/FP/FN) aux précisions 90/95/99 %, AUC, AP et le coût de calcul (ms/frame). Les embeddings absents du cache sont calculés à la volée (GPU).</p><ul class="params"><li><code class="pname">features</code><span class=req>requis</span> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Liste &#x27;extracteur:vue&#x27;, extracteurs clip_b32, clip_b16, clip_l14, dinov2_s, dinov2_b ; vues full (image entière) ou grid2 (image + 4 quadrants). Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = embeddings concaténés, ex. [&#x27;clip_b32:full&#x27;, &#x27;dinov2_s:full&#x27;] pour CLIP + DINOv2.</div></li><li><code class="pname">model</code> <span class="ptype">string</span> <span class=penum><code>logreg</code> | <code>mlp</code> | <code>hgb</code></span></li><li><code class="pname">temporal</code> <span class="ptype">string</span> <span class=penum><code>none</code> | <code>diff</code></span><div class=pdesc>diff ajoute e_t - e_(t-1) (changement depuis la frame précédente).</div></li><li><code class="pname">params</code> <span class="ptype">object</span><div class=pdesc>logreg: C ; mlp: hidden (liste), alpha ; hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int).</div></li><li><code class="pname">balance</code> <span class="ptype">object</span><div class=pdesc>Sous-échantillonnage de train seulement (val et test intacts) : {groupe: fraction de frames gardée, 0 à 1}. Groupes : keyword, question, subtitle, lower_third, image, shape, title_card, negatif, video_vide, portrait, paysage. Un type d&#x27;élément = frames positives dont tous les ajouts visibles sont de ce type ; negatif = frames sans ajout ; video_vide = frames des vidéos sans aucun ajout. Ex. {&#x27;subtitle&#x27;: 0.5, &#x27;negatif&#x27;: 0.7}. Le dataset n&#x27;est pas modifié.</div></li><li><code class="pname">note</code> <span class="ptype">string</span><div class=pdesc>Hypothèse testée.</div></li><li><code class="pname">split_id</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Split sur lequel entraîner (train) et mesurer (val) : un id renvoyé par make_split (voir dataset_info).</div></li></ul></div></details></li></ul></details></li></ul></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_evaluator</code></summary><div class="body"><p class="desc">Délègue une évaluation, une analyse d&#x27;erreurs ou un test final à l&#x27;Evaluator ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">evaluator</span><span class="meta">mistral-large-4-0 · 15 tours max · 4 outils</span></summary><div class="body"><p class="desc">Evaluator / Error Analyst : mesure, analyse les erreurs, vérifie et promeut les améliorations.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">analyze_errors</code></summary><div class="body"><p class="desc">Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux de frames positives ratées par type d&#x27;ajout, surface, fond, animation d&#x27;entrée, phase (entrée ou sortie en cours, repos), nombre d&#x27;ajouts et orientation ; répartition des fausses alertes ; exemples de frames ratées.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">show_examples</code></summary><div class="body"><p class="desc">Montre des frames de val, ajouts encadrés en rouge : frames avec ajout ratées (kind=missed) ou fausses alertes (kind=false_positive).</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">kind</code> <span class="ptype">string</span> <span class=penum><code>missed</code> | <code>false_positive</code></span></li><li><code class="pname">n</code> <span class="ptype">integer</span> <span class=penum>1…6</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">final_test</code></summary><div class="body"><p class="desc">Évalue une expérience sur le test de son split avec le seuil choisi sur val : rappel, précision, TP/FP/FN, AUC, AP. Nombre d&#x27;appels limité par session : à réserver au candidat final.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul></div></details></li></ul></details></li></ul></details></li></ul></details></li></ul>
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Réponse réelle (run 005 du 23/10/2026), réduite à une entrée de la liste.</p><pre>[
+  {
+    "id": "exp_030",
+    "split_id": "split_001",
+    "features": ["clip_l14:full"],
+    "model": "logreg",
+    "temporal": "none",
+    "params": {"C": 1.0},
+    "balance": {},
+    "note": "clip_l14:full + logreg C=1.0, standard. Hypothèse : ViT-L/14 plus puissant améliore la séparation sur les négatifs difficiles du val v1 ; coût à surveiller (~12…",
+    "val": {
+      "auc": 0.9983,
+      "ap": 0.9962,
+      "positifs": 52,
+      "frames": 199,
+      "rappel_a_precision_0.9": {
+        "threshold": 0.0557,
+        "recall": 0.9808,
+        "precision": 0.9107,
+        "tp": 51,
+        "fp": 5,
+        "fn": 1,
+        "tn": 142
+      },
+      "rappel_a_precision_0.95": {
+        "threshold": 0.0645,
+        "recall": 0.9808,
+        "precision": 0.9623,
+        "tp": 51,
+        "fp": 2,
+        "fn": 1,
+        "tn": 145
+      },
+      "rappel_a_precision_0.99": {
+        "threshold": 0.1307,
+        "recall": 0.9808,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "fn": 1,
+        "tn": 147
+      }
+    },
+    "train_s": 0.0133,
+    "ms_par_frame": 12.0232,
+    "n_features": 768,
+    "n_train": 596,
+    "n_val": 199,
+    "data": {
+      "fps": 1.0,
+      "split_id": "split_001",
+      "train": {"videos": 55, "frames": 596},
+      "val": {"videos": 18, "frames": 199},
+      "test": {"videos": 17, "frames": 162}
+    },
+    "date": "2026-10-23 18:19",
+    "final_test": {
+      "experiment_id": "exp_030",
+      "split_id": "split_001",
+      "precision_visee": 0.95,
+      "seuil_choisi_sur_val": 0.0645,
+      "val": {
+        "threshold": 0.0645,
+        "recall": 0.9808,
+        "precision": 0.9623,
+        "tp": 51,
+        "fp": 2,
+        "fn": 1,
+        "tn": 145
+      },
+      "test": {
+        "threshold": 0.0645,
+        "recall": 1.0,
+        "precision": 0.814,
+        "tp": 35,
+        "fp": 8,
+        "fn": 0,
+        "tn": 119
+      },
+      "test_auc": 0.9991,
+      "test_ap": 0.9969,
+      "final_tests_restants": 1
+    },
+    "en_production": false
+  },
+  "… (38 expériences au total, une entrée par entraînement)"
+]</pre></details></div></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_dataset_builder</code></summary><div class="body"><p class="desc">Délègue une génération de données au Dataset Builder ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Réponse réelle (run 005 du 23/10/2026) : un texte libre (le rapport de l'agent) que le code termine toujours par la « Vérification automatique ».</p><div class="exlabel">Appel</div><pre>{
+  "task": "Contexte : projet de classifieur d'ajouts de montage (overlays) sur frames vidéo échantillonnées à 1 fps. Le dataset actuel fait 40 vidéos / 445 frames avec un taux de positifs de ~21 %. La vérité terrain est connue par génération synthétique (clips libres de droits + overlays aléatoires).\n\nTa missi…"
+}</pre><div class="exlabel">Réponse</div><pre>## Rapport final — Génération de 50 vidéos supplémentaires
+
+**Déroulement** : 18 appels `generate_data` en 3 vagues, **50 vidéos générées, 0 échec, 0 erreur d'outil**. Aucune vidéo n'a été perdue ; les frames ambiguës (ajouts en fondu partiel) ont été exclues automatiquement comme d'habitude (28 frames exclues sur les nouvelles vidéos).
+
+### Ce qui a été généré, par cible prioritaire
+1. **title_card** (cartons plein écran opaques) : 6 vidéos dédiées (3 paysage sur fond uni/gradient, 3 portrait sur mur minimal), poids `title_card:10` → le type passe de **1 à 9 éléments**.
+2. **question sur fond opaque** : 3 vidéos interview/podcast, poids `question:10` → de **4 à 23 éléments**.
+3. **Petites surfaces** : 8 vidéos (urbain cycliste paysage, café latte portrait) avec keyword/shape/image sur-représentés → éléments **&lt;1 % : 4 → 23**, **1-3 % : 32 → 72**.
+4. **Portrait** : 19 des 50 nouvelles vi
+
+[… rapport abrégé …]
+
+--- Vérification automatique (produite par le code, pas par l'agent) ---
+Outils réellement appelés par dataset_builder :
+- dataset_info : 2 réussi(s), 0 échec(s)
+- data_requests : 1 réussi(s), 0 échec(s)
+- generate_data : 18 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">dataset_builder</span><span class="meta">mistral-large-4-0 · 12 tours max · 4 outils</span></summary><div class="body"><p class="desc">Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (vidéos, frames, taux de frames positives, frames ambiguës exclues, vidéos sans ajout, répartition des vidéos par orientation et des éléments par type, animation d&#x27;entrée, animation de sortie, surface et fond), diversité (vidéos par thème, clips sources réutilisés), liste des splits existants (volumes, note, paramètres), extracteurs d&#x27;embeddings disponibles et leur coût, budgets restants (génération, tests finaux, quotas d&#x27;API).</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Réponse réelle (run 005 du 23/10/2026, début de session : aucun split encore), listes abrégées par « … ». Dataset vide : {"dataset_vide": true, "budgets": {…}, "message": "…"}.</p><pre>{
+  "fps": 1.0,
+  "dataset": {
+    "videos": 40,
+    "sources": 36,
+    "frames": 445,
+    "frames_ambigues_exclues": 10,
+    "videos_sans_ajout": 21,
+    "videos_par_orientation": {"paysage": 32, "portrait": 8},
+    "elements_par_type": {
+      "keyword": 23,
+      "subtitle": 21,
+      "image": 12,
+      "lower_third": 7,
+      "shape": 6,
+      "question": 4,
+      "title_card": 1
+    },
+    "elements_par_animation_entree": {
+      "none": 34,
+      "fade": 16,
+      "slide_left": 4,
+      "slide_right": 4,
+      "slide_down": 3,
+      "slide_up+fade": 3,
+      "slide_up": 3,
+      "slide_down+fade": 3,
+      "slide_left+fade": 2,
+      "slide_right+fade": 2
+    },
+    "elements_par_animation_sortie": {"none": 53, "fade": 21},
+    "elements_par_surface": {"1-3%": 32, "3-8%": 25, "&gt;8%": 13, "&lt;1%": 4},
+    "elements_par_fond": {"avec fond": 42, "sans fond": 32},
+    "taux_positifs": 0.2112
+  },
+  "splits": [],
+  "extractors": {
+    "clip_b32:full": {"en_cache": true, "ms_par_frame": 7.52},
+    "clip_b32:grid2": {"en_cache": true, "ms_par_frame": 12.91},
+    "clip_b16:full": {"en_cache": true, "ms_par_frame": 6.27},
+    "…": "7 clés de plus"
+  },
+  "budgets": {
+    "videos_generables_restantes": 250,
+    "final_tests_restants": 2,
+    "quotas_api": {
+      "pixabay": {
+        "appels_dans_la_fenetre": 0,
+        "max_par_fenetre": 98,
+        "fenetre_s": 60,
+        "restant_annonce_par_api": 88,
+        "attente_avant_prochain_appel_s": 0
+      },
+      "unsplash": {
+        "appels_dans_la_fenetre": 7,
+        "max_par_fenetre": 48,
+        "fenetre_s": 3600,
+        "restant_annonce_par_api": 43,
+        "attente_avant_prochain_appel_s": 0
+      }
+    }
+  },
+  "diversite": {
+    "videos": 40,
+    "clips_sources_distincts": 36,
+    "videos_par_theme": {
+      "city street traffic timelapse people walking urban": 6,
+      "nature forest river waterfall landscape scenery": 6,
+      "…": "2 clés de plus"
+    },
+    "…": "1 clé de plus"
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">data_requests</code></summary><div class="body"><p class="desc">Historique des générations passées (volume, paramètres, raison).</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Réponse réelle (run 005 du 23/10/2026) : une entrée par appel à generate_data, toutes sessions.</p><pre>[
+  {
+    "n": 6,
+    "ok": 6,
+    "query": "city street traffic timelapse people walking urban",
+    "orientation": "landscape",
+    "type_weights": {"image": 0.8, "keyword": 1, "lower_third": 1, "question": 1, "shape": 1, "subtitle": 1.2},
+    "reason": "Dataset initial : vidéos urbaines en mouvement (paysage) pour varier les fonds (trafic, piétons, luminosité changeante), avec tous les types d'overlays à poids équilibrés et 30% de vidéos négatives.",
+    "time": 1792695111.0344186
+  },
+  {
+    "n": 5,
+    "ok": 5,
+    "query": "vertical video talking person street lifestyle vlog",
+    "orientation": "portrait",
+    "type_weights": {"image": 0.7, "keyword": 1.5, "lower_third": 1, "question": 1.5, "shape": 1, "subtitle": 1.5},
+    "reason": "Dataset initial : format portrait (9:16) où mots-clés, questions et sous-titres sont fréquents, pour couvrir ce format dominant des réseaux sociaux.",
+    "time": 1792695119.1464074
+  },
+  "… (20 au total)"
+]</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">generate_data</code></summary><div class="body"><p class="desc">Génère de nouvelles vidéos annotées, chacune sur un clip source jamais utilisé, et les ajoute au dataset, puis extrait et étiquette leurs frames. Coûteux en temps et en quota d&#x27;API d&#x27;images : justifie chaque génération.</p><ul class="params"><li><code class="pname">n</code><span class=req>requis</span> <span class="ptype">integer</span> <span class=penum>1…100</span></li><li><code class="pname">reason</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ces données sont nécessaires.</div></li><li><code class="pname">query</code> <span class="ptype">string</span><div class=pdesc>Thème des vidéos sources en anglais (sinon aléatoire).</div></li><li><code class="pname">orientation</code> <span class="ptype">string</span> <span class=penum><code>portrait</code> | <code>landscape</code></span></li><li><code class="pname">type_weights</code> <span class="ptype">object</span><div class=pdesc>Poids relatifs des types : keyword, question, subtitle, lower_third, image, shape, title_card</div></li><li><code class="pname">lang</code> <span class="ptype">string</span> <span class=penum><code>fr</code> | <code>en</code> | <code>mix</code></span></li><li><code class="pname">empty_prob</code> <span class="ptype">number</span> <span class=penum>0…1</span><div class=pdesc>Proportion de vidéos sans aucun ajout (négatifs).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026).</p><div class="exlabel">Appel</div><pre>{
+  "empty_prob": 0,
+  "lang": "mix",
+  "n": 3,
+  "orientation": "landscape",
+  "query": "plain solid color background minimal monochrome gradient smooth",
+  "reason": "Cible prioritaire 1 : cartons plein écran opaques de type chapitre/titre (title_card). Le dataset n'en contient qu'un seul élément ; génération dédiée avec title_card très sur-représenté, fond opaque couvrant toute la frame, pour apprendre et mesurer ce type.",
+  "type_weights": {
+    "image": 0.2,
+    "keyword": 0.3,
+    "lower_third": 0.2,
+    "question": 0.3,
+    "shape": 0.2,
+    "subtitle": 0.3,
+    "title_card": 10
+  }
+}</pre><div class="exlabel">Réponse</div><pre>{
+  "generees": 3,
+  "echecs": 0,
+  "exemples_erreurs": [],
+  "arret": null,
+  "frames_total": 491,
+  "budget_restant": 247,
+  "quotas_api": {
+    "pixabay": {
+      "appels_dans_la_fenetre": 2,
+      "max_par_fenetre": 98,
+      "fenetre_s": 60,
+      "restant_annonce_par_api": 98,
+      "attente_avant_prochain_appel_s": 0
+    },
+    "unsplash": {
+      "appels_dans_la_fenetre": 7,
+      "max_par_fenetre": 48,
+      "fenetre_s": 3600,
+      "restant_annonce_par_api": 43,
+      "attente_avant_prochain_appel_s": 0
+    }
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">exclude_videos</code></summary><div class="body"><p class="desc">Retire des vidéos de tous les splits, présents et futurs, sans supprimer de fichier. Réservé aux vidéos défectueuses ou dupliquées.</p><ul class="params"><li><code class="pname">videos</code><span class=req>requis</span> <span class="ptype">object</span><div class=pdesc>{sample_id: raison du défaut}</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Jamais appelé dans les runs : exemple construit d'après le code (Lab.exclude_videos). La réponse liste toutes les exclusions en vigueur, anciennes comprises. Vidéo inconnue ou raison vide → erreur.</p><div class="exlabel">Appel</div><pre>{"videos": {"s000061": "rendu cassé : l'overlay reste figé hors cadre"}}</pre><div class="exlabel">Réponse</div><pre>{"videos_exclues": {"s000061": "rendu cassé : l'overlay reste figé hors cadre"}}</pre></details></div></details></li></ul></details></li></ul></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_model_researcher</code></summary><div class="body"><p class="desc">Délègue un lot d&#x27;expériences au Model Researcher ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Réponse réelle (run 005 du 23/10/2026) : un texte libre (le rapport de l'agent) que le code termine toujours par la « Vérification automatique ».</p><div class="exlabel">Appel</div><pre>{
+  "task": "Contexte : classifieur binaire frame-par-frame « ajout de montage présent ou non » (overlays : keyword, subtitle, lower_third, image, shape, question, title_card). Frames échantillonnées à 1 fps, frames ambiguës (ajouts en fondu) exclues. Objectif : maximiser le rappel à précision fixée (95 % par dé…"
+}</pre><div class="exlabel">Réponse</div><pre># Rapport — Session split v1 + expériences de référence
+
+## Étape 1 — Split de référence créé : `split_001` (« v1 »)
+
+Créé avec `make_split` (seed 0, val_ratio 0.2, test_ratio 0.2, stratification complète sur type / animation / orientation / thème / vidéo_vide, découpé **par clip source**). Aucune vidéo exclue, aucune vidéo hors split. C'est le premier split figé de la session ; il remplace l'ancien « hash » (exp_001–024) qui n'est plus utilisable.
+
+| Partie | Vidéos | Frames | Taux positifs | Portrait/paysage | Sans ajout |
+|---|---|---|---|---|---|
+| train | 55 | 596 | 22,99 % | 14 / 41 | 24 |
+| **val** | **18** | **199** | **26,13 %** | 7 / 11 | 8 |
+| test | 17 | 162 | — | 6 / 11 | 7 |
+
+Val couvre bien les cas importants : title_card (2), question (3), éléments &lt;1 % (6) et 1–3 % (14), animations slide variées, 8 vidéos sans ajout. Val = 199 frames (~3× l'ancien val de 64 frames). **Te
+
+[… rapport abrégé …]
+
+--- Vérification automatique (produite par le code, pas par l'agent) ---
+Outils réellement appelés par model_researcher :
+- dataset_info : 2 réussi(s), 0 échec(s)
+- list_experiments : 1 réussi(s), 0 échec(s)
+- make_split : 1 réussi(s), 0 échec(s)
+- train_model : 8 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">mistral-large-4-0 · 20 tours max · 4 outils</span></summary><div class="body"><p class="desc">Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (vidéos, frames, taux de frames positives, frames ambiguës exclues, vidéos sans ajout, répartition des vidéos par orientation et des éléments par type, animation d&#x27;entrée, animation de sortie, surface et fond), diversité (vidéos par thème, clips sources réutilisés), liste des splits existants (volumes, note, paramètres), extracteurs d&#x27;embeddings disponibles et leur coût, budgets restants (génération, tests finaux, quotas d&#x27;API).</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de train, val et test pour ce split (id renvoyé par make_split).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026). Avec split_id, la réponse ajoute composition_du_split (sans taux de positifs pour test).</p><div class="exlabel">Appel</div><pre>{"split_id": "split_001"}</pre><div class="exlabel">Réponse</div><pre>{
+  "…": "mêmes clés que dataset_info sans split_id (fps, dataset, splits, extractors, budgets, diversite)",
+  "composition_du_split": {
+    "split_id": "split_001",
+    "train": {
+      "videos": 55,
+      "sources": 52,
+      "frames": 596,
+      "frames_ambigues_exclues": 26,
+      "videos_sans_ajout": 24,
+      "videos_par_orientation": {"paysage": 41, "portrait": 14},
+      "…": "6 clés de plus"
+    },
+    "val": {
+      "videos": 18,
+      "sources": 17,
+      "frames": 199,
+      "frames_ambigues_exclues": 3,
+      "videos_sans_ajout": 8,
+      "videos_par_orientation": {"paysage": 11, "portrait": 7},
+      "…": "6 clés de plus"
+    },
+    "test": {
+      "videos": 17,
+      "sources": 17,
+      "frames": 162,
+      "frames_ambigues_exclues": 9,
+      "videos_sans_ajout": 7,
+      "videos_par_orientation": {"portrait": 6, "paysage": 11},
+      "…": "5 clés de plus"
+    }
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Réponse réelle (run 005 du 23/10/2026), réduite à une entrée de la liste.</p><pre>[
+  {
+    "id": "exp_030",
+    "split_id": "split_001",
+    "features": ["clip_l14:full"],
+    "model": "logreg",
+    "temporal": "none",
+    "params": {"C": 1.0},
+    "balance": {},
+    "note": "clip_l14:full + logreg C=1.0, standard. Hypothèse : ViT-L/14 plus puissant améliore la séparation sur les négatifs difficiles du val v1 ; coût à surveiller (~12…",
+    "val": {
+      "auc": 0.9983,
+      "ap": 0.9962,
+      "positifs": 52,
+      "frames": 199,
+      "rappel_a_precision_0.9": {
+        "threshold": 0.0557,
+        "recall": 0.9808,
+        "precision": 0.9107,
+        "tp": 51,
+        "fp": 5,
+        "fn": 1,
+        "tn": 142
+      },
+      "rappel_a_precision_0.95": {
+        "threshold": 0.0645,
+        "recall": 0.9808,
+        "precision": 0.9623,
+        "tp": 51,
+        "fp": 2,
+        "fn": 1,
+        "tn": 145
+      },
+      "rappel_a_precision_0.99": {
+        "threshold": 0.1307,
+        "recall": 0.9808,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "fn": 1,
+        "tn": 147
+      }
+    },
+    "train_s": 0.0133,
+    "ms_par_frame": 12.0232,
+    "n_features": 768,
+    "n_train": 596,
+    "n_val": 199,
+    "data": {
+      "fps": 1.0,
+      "split_id": "split_001",
+      "train": {"videos": 55, "frames": 596},
+      "val": {"videos": 18, "frames": 199},
+      "test": {"videos": 17, "frames": 162}
+    },
+    "date": "2026-10-23 18:19",
+    "final_test": {
+      "experiment_id": "exp_030",
+      "split_id": "split_001",
+      "precision_visee": 0.95,
+      "seuil_choisi_sur_val": 0.0645,
+      "val": {
+        "threshold": 0.0645,
+        "recall": 0.9808,
+        "precision": 0.9623,
+        "tp": 51,
+        "fp": 2,
+        "fn": 1,
+        "tn": 145
+      },
+      "test": {
+        "threshold": 0.0645,
+        "recall": 1.0,
+        "precision": 0.814,
+        "tp": 35,
+        "fp": 8,
+        "fn": 0,
+        "tn": 119
+      },
+      "test_auc": 0.9991,
+      "test_ap": 0.9969,
+      "final_tests_restants": 1
+    },
+    "en_production": false
+  },
+  "… (38 expériences au total, une entrée par entraînement)"
+]</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><p class="desc">Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos générées ensuite n&#x27;y entrent pas). Les vidéos d&#x27;un même clip source restent du même côté. Le test est commun à tous les splits (figé au premier) : seuls train et val sont redécoupés. Renvoie l&#x27;id du split et la composition de train, val et test.</p><ul class="params"><li><code class="pname">note</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ce split (ce qu&#x27;il corrige ou couvre).</div></li><li><code class="pname">val_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en val (défaut 0.2).</div></li><li><code class="pname">test_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en test (défaut 0.2), pour le premier split seulement : ignoré ensuite (test figé).</div></li><li><code class="pname">stratify</code> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Caractéristiques à répartir au plus près des proportions visées dans chaque split : type (d&#x27;élément), animation (d&#x27;entrée), orientation, theme, video_vide. Par défaut toutes ; [] = tirage purement aléatoire.</div></li><li><code class="pname">seed</code> <span class="ptype">integer</span><div class=pdesc>Graine du tirage (défaut 0).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026), compositions abrégées.</p><div class="exlabel">Appel</div><pre>{
+  "note": "Split de référence v1 de la session : 90 vidéos (957 frames, ~23% positifs), découpé par clip source, stratifié sur type…",
+  "test_ratio": 0.2,
+  "val_ratio": 0.2
+}</pre><div class="exlabel">Réponse</div><pre>{
+  "split_id": "split_001",
+  "params": {
+    "val_ratio": 0.2,
+    "test_ratio": 0.2,
+    "stratify": ["type", "animation", "… (5 au total)"],
+    "seed": 0
+  },
+  "videos_exclues": 0,
+  "train": {
+    "videos": 55,
+    "sources": 52,
+    "frames": 596,
+    "frames_ambigues_exclues": 26,
+    "videos_sans_ajout": 24,
+    "videos_par_orientation": {"paysage": 41, "portrait": 14},
+    "…": "6 clés de plus"
+  },
+  "val": {
+    "videos": 18,
+    "sources": 17,
+    "frames": 199,
+    "frames_ambigues_exclues": 3,
+    "videos_sans_ajout": 8,
+    "videos_par_orientation": {"paysage": 11, "portrait": 7},
+    "…": "6 clés de plus"
+  },
+  "test": {
+    "videos": 17,
+    "sources": 17,
+    "frames": 162,
+    "frames_ambigues_exclues": 9,
+    "videos_sans_ajout": 7,
+    "videos_par_orientation": {"portrait": 6, "paysage": 11},
+    "…": "5 clés de plus"
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">train_model</code></summary><div class="body"><p class="desc">Entraîne un classifieur binaire (ajout de montage visible ou non) sur des embeddings figés, sur le train du split choisi avec un sous-échantillonnage optionnel (balance), et l&#x27;évalue sur le val de ce split. Renvoie l&#x27;id d&#x27;expérience, le rappel (avec seuil et TP/FP/FN) aux précisions 90/95/99 %, AUC, AP et le coût de calcul (ms/frame). Les embeddings absents du cache sont calculés à la volée (GPU).</p><ul class="params"><li><code class="pname">features</code><span class=req>requis</span> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Liste &#x27;extracteur:vue&#x27;, extracteurs clip_b32, clip_b16, clip_l14, dinov2_s, dinov2_b ; vues full (image entière) ou grid2 (image + 4 quadrants). Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = embeddings concaténés, ex. [&#x27;clip_b32:full&#x27;, &#x27;dinov2_s:full&#x27;] pour CLIP + DINOv2.</div></li><li><code class="pname">model</code> <span class="ptype">string</span> <span class=penum><code>logreg</code> | <code>mlp</code> | <code>hgb</code></span></li><li><code class="pname">temporal</code> <span class="ptype">string</span> <span class=penum><code>none</code> | <code>diff</code></span><div class=pdesc>diff ajoute e_t - e_(t-1) (changement depuis la frame précédente).</div></li><li><code class="pname">params</code> <span class="ptype">object</span><div class=pdesc>logreg: C ; mlp: hidden (liste), alpha ; hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int).</div></li><li><code class="pname">balance</code> <span class="ptype">object</span><div class=pdesc>Sous-échantillonnage de train seulement (val et test intacts) : {groupe: fraction de frames gardée, 0 à 1}. Groupes : keyword, question, subtitle, lower_third, image, shape, title_card, negatif, video_vide, portrait, paysage. Un type d&#x27;élément = frames positives dont tous les ajouts visibles sont de ce type ; negatif = frames sans ajout ; video_vide = frames des vidéos sans aucun ajout. Ex. {&#x27;subtitle&#x27;: 0.5, &#x27;negatif&#x27;: 0.7}. Le dataset n&#x27;est pas modifié.</div></li><li><code class="pname">note</code> <span class="ptype">string</span><div class=pdesc>Hypothèse testée.</div></li><li><code class="pname">split_id</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Split sur lequel entraîner (train) et mesurer (val) : un id renvoyé par make_split (voir dataset_info).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026).</p><div class="exlabel">Appel</div><pre>{
+  "features": ["clip_b32:full"],
+  "model": "logreg",
+  "note": "Baseline : clip_b32:full + logreg C=1.0, standard, sans rééquilibrage. Référence sur le nouveau split v1 (val 199 frames).",
+  "params": {"C": 1.0},
+  "split_id": "split_001"
+}</pre><div class="exlabel">Réponse</div><pre>{
+  "experiment_id": "exp_025",
+  "val": {
+    "auc": 0.9899,
+    "ap": 0.9836,
+    "positifs": 52,
+    "frames": 199,
+    "rappel_a_precision_0.9": {
+      "threshold": 0.0342,
+      "recall": 0.9615,
+      "precision": 0.9091,
+      "tp": 50,
+      "fp": 5,
+      "fn": 2,
+      "tn": 142
+    },
+    "rappel_a_precision_0.95": {
+      "threshold": 0.0401,
+      "recall": 0.9615,
+      "precision": 0.9615,
+      "tp": 50,
+      "fp": 2,
+      "fn": 2,
+      "tn": 145
+    },
+    "rappel_a_precision_0.99": {"threshold": 0.1212, "recall": 0.9615, "precision": 1.0, "tp": 50, "fp": 0, "fn": 2, "tn": 147}
+  },
+  "train_s": 0.0205,
+  "ms_par_frame": 4.8428,
+  "n_features": 512,
+  "n_train": 596,
+  "n_val": 199,
+  "data": {
+    "fps": 1.0,
+    "split_id": "split_001",
+    "train": {"videos": 55, "frames": 596},
+    "val": {"videos": 18, "frames": 199},
+    "test": {"videos": 17, "frames": 162}
+  },
+  "date": "2026-10-23 18:18"
+}</pre></details></div></details></li></ul></details></li></ul></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_evaluator</code></summary><div class="body"><p class="desc">Délègue une évaluation, une analyse d&#x27;erreurs ou un test final à l&#x27;Evaluator ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Réponse réelle (run 005 du 23/10/2026) : un texte libre (le rapport de l'agent) que le code termine toujours par la « Vérification automatique ».</p><div class="exlabel">Appel</div><pre>{
+  "task": "Contexte : classifieur binaire « ajout de montage présent ou non » sur frames à 1 fps. Objectif : maximiser le rappel à précision fixée à 95 % sur le split val du split figé « split_001 » (val = 18 vidéos / 199 frames / 52 positifs). Le test (17 vidéos / 162 frames) est RÉSERVÉ au test final — ne le…"
+}</pre><div class="exlabel">Réponse</div><pre>Toutes les données sont collectées. Je n'ai pas touché au test et n'ai modifié aucun modèle. Voici le rapport.
+
+---
+
+# Rapport d'évaluation — exp_030 vs exp_025 (split_001, décisions sur val uniquement)
+
+## 1. Analyse d'erreurs d'exp_030 (clip_l14:full, logreg C=1.0, seuil val = 0,0645)
+
+**Bilan au seuil P95 :** rappel 98,08 % (51 TP / 2 FP / 1 FN / 145 TN), précision 96,23 %, AUC 0,9983, AP 0,9962, 12,0 ms/frame.
+
+### FN (1 frame manquée)
+Découpage agrégé (analyze_errors) :
+
+| Dimension | Résultat |
+|---|---|
+| Type | seul raté : **1/8 `shape`** ; image 0/13, lower_third 0/13, subtitle 0/14, question 0/7, keyword 0/5, title_card 0/3 |
+| Surface | seul raté : **1/6 dans la classe &lt;1 %** ; 0 raté en 1-3 %, 3-8 %, &gt;8 % |
+| Fond | seul raté : **1/23 « sans fond opaque »** ; 0/29 avec fond |
+| Animation d'entrée | seul raté : **1/32 `none`** (aucun raté en fade/slide, quelle que soit la comb
+
+[… rapport abrégé …]
+
+--- Vérification automatique (produite par le code, pas par l'agent) ---
+Outils réellement appelés par evaluator :
+- list_experiments : 1 réussi(s), 0 échec(s)
+- analyze_errors : 2 réussi(s), 0 échec(s)
+- show_examples : 4 réussi(s), 0 échec(s)</pre></details></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">evaluator</span><span class="meta">mistral-large-4-0 · 15 tours max · 4 outils</span></summary><div class="body"><p class="desc">Evaluator / Error Analyst : mesure, analyse les erreurs, vérifie et promeut les améliorations.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Réponse réelle (run 005 du 23/10/2026), réduite à une entrée de la liste.</p><pre>[
+  {
+    "id": "exp_030",
+    "split_id": "split_001",
+    "features": ["clip_l14:full"],
+    "model": "logreg",
+    "temporal": "none",
+    "params": {"C": 1.0},
+    "balance": {},
+    "note": "clip_l14:full + logreg C=1.0, standard. Hypothèse : ViT-L/14 plus puissant améliore la séparation sur les négatifs difficiles du val v1 ; coût à surveiller (~12…",
+    "val": {
+      "auc": 0.9983,
+      "ap": 0.9962,
+      "positifs": 52,
+      "frames": 199,
+      "rappel_a_precision_0.9": {
+        "threshold": 0.0557,
+        "recall": 0.9808,
+        "precision": 0.9107,
+        "tp": 51,
+        "fp": 5,
+        "fn": 1,
+        "tn": 142
+      },
+      "rappel_a_precision_0.95": {
+        "threshold": 0.0645,
+        "recall": 0.9808,
+        "precision": 0.9623,
+        "tp": 51,
+        "fp": 2,
+        "fn": 1,
+        "tn": 145
+      },
+      "rappel_a_precision_0.99": {
+        "threshold": 0.1307,
+        "recall": 0.9808,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "fn": 1,
+        "tn": 147
+      }
+    },
+    "train_s": 0.0133,
+    "ms_par_frame": 12.0232,
+    "n_features": 768,
+    "n_train": 596,
+    "n_val": 199,
+    "data": {
+      "fps": 1.0,
+      "split_id": "split_001",
+      "train": {"videos": 55, "frames": 596},
+      "val": {"videos": 18, "frames": 199},
+      "test": {"videos": 17, "frames": 162}
+    },
+    "date": "2026-10-23 18:19",
+    "final_test": {
+      "experiment_id": "exp_030",
+      "split_id": "split_001",
+      "precision_visee": 0.95,
+      "seuil_choisi_sur_val": 0.0645,
+      "val": {
+        "threshold": 0.0645,
+        "recall": 0.9808,
+        "precision": 0.9623,
+        "tp": 51,
+        "fp": 2,
+        "fn": 1,
+        "tn": 145
+      },
+      "test": {
+        "threshold": 0.0645,
+        "recall": 1.0,
+        "precision": 0.814,
+        "tp": 35,
+        "fp": 8,
+        "fn": 0,
+        "tn": 119
+      },
+      "test_auc": 0.9991,
+      "test_ap": 0.9969,
+      "final_tests_restants": 1
+    },
+    "en_production": false
+  },
+  "… (38 expériences au total, une entrée par entraînement)"
+]</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">analyze_errors</code></summary><div class="body"><p class="desc">Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux de frames positives ratées par type d&#x27;ajout, surface, fond, animation d&#x27;entrée, phase (entrée ou sortie en cours, repos), nombre d&#x27;ajouts et orientation ; répartition des fausses alertes ; exemples de frames ratées.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026), découpages abrégés.</p><div class="exlabel">Appel</div><pre>{"experiment_id": "exp_030", "precision": 0.95}</pre><div class="exlabel">Réponse</div><pre>{
+  "experiment_id": "exp_030",
+  "precision_visee": 0.95,
+  "threshold": 0.0645,
+  "recall": 0.9808,
+  "precision": 0.9623,
+  "tp": 51,
+  "fp": 2,
+  "fn": 1,
+  "tn": 145,
+  "positifs_rates_par_type": {
+    "image": "0/13 ratées",
+    "keyword": "0/5 ratées",
+    "lower_third": "0/13 ratées",
+    "question": "0/7 ratées",
+    "shape": "1/8 ratées",
+    "subtitle": "0/14 ratées",
+    "title_card": "0/3 ratées"
+  },
+  "positifs_rates_par_plus_grande_surface": {"1-3%": "0/19 ratées", "3-8%": "0/6 ratées", "&lt;1%": "1/6 ratées", "&gt;8%": "0/21 ratées"},
+  "positifs_rates_avec_fond": {"avec fond": "0/29 ratées", "sans fond": "1/23 ratées"},
+  "positifs_rates_par_animation_entree": {
+    "fade": "0/11 ratées",
+    "none": "1/32 ratées",
+    "slide_down": "0/2 ratées",
+    "slide_down+fade": "0/1 ratées",
+    "slide_left": "0/10 ratées",
+    "slide_left+fade": "0/1 ratées",
+    "slide_right": "0/1 ratées",
+    "slide_right+fade": "0/1 ratées",
+    "slide_up+fade": "0/3 ratées"
+  },
+  "positifs_rates_par_phase": {"entrée slide_down": "0/1 ratées", "repos": "1/51 ratées"},
+  "positifs_rates_par_nb_elements": {"1": "1/39 ratées", "2": "0/10 ratées", "3": "0/3 ratées"},
+  "positifs_rates_par_orientation": {"paysage": "0/22 ratées", "portrait": "1/30 ratées"},
+  "faux_positifs_par_orientation": {"paysage": 2},
+  "faux_positifs_par_video": {"s000061": 2},
+  "exemples_rates": [
+    {
+      "frame": "img/s000054/00003.jpg",
+      "t": 2.0,
+      "elements": [
+        {
+          "type": "shape",
+          "text": null,
+          "area_ratio": 0.001,
+          "has_box": false,
+          "animation": "none",
+          "phase": "repos"
+        }
+      ]
+    }
+  ]
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">show_examples</code></summary><div class="body"><p class="desc">Montre des frames de val, ajouts encadrés en rouge : frames avec ajout ratées (kind=missed) ou fausses alertes (kind=false_positive).</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">kind</code> <span class="ptype">string</span> <span class=penum><code>missed</code> | <code>false_positive</code></span></li><li><code class="pname">n</code> <span class="ptype">integer</span> <span class=penum>1…6</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026) : une légende par frame suivie de l'image, envoyée au modèle comme image (ajouts encadrés en rouge).</p><div class="exlabel">Appel</div><pre>{"experiment_id": "exp_030", "kind": "false_positive", "n": 6, "precision": 0.95}</pre><div class="exlabel">Réponse</div><pre>[
+  "faux positif s000061 t=1.0 p=0.13 (seuil 0.06)",
+  "&lt;image images/call004_turn02_02.jpg&gt;",
+  "faux positif s000061 t=4.0 p=0.06 (seuil 0.06)",
+  "&lt;image images/call004_turn02_03.jpg&gt;"
+]</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">final_test</code></summary><div class="body"><p class="desc">Évalue une expérience sur le test de son split avec le seuil choisi sur val : rappel, précision, TP/FP/FN, AUC, AP. Nombre d&#x27;appels limité par session : à réserver au candidat final.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">Appel et réponse réels (run 005 du 23/10/2026). Plus de test disponible → erreur.</p><div class="exlabel">Appel</div><pre>{"experiment_id": "exp_030", "precision": 0.95}</pre><div class="exlabel">Réponse</div><pre>{
+  "experiment_id": "exp_030",
+  "split_id": "split_001",
+  "precision_visee": 0.95,
+  "seuil_choisi_sur_val": 0.0645,
+  "val": {
+    "threshold": 0.0645,
+    "recall": 0.9808,
+    "precision": 0.9623,
+    "tp": 51,
+    "fp": 2,
+    "fn": 1,
+    "tn": 145
+  },
+  "test": {"threshold": 0.0645, "recall": 1.0, "precision": 0.814, "tp": 35, "fp": 8, "fn": 0, "tn": 119},
+  "test_auc": 0.9991,
+  "test_ap": 0.9969,
+  "final_tests_restants": 1
+}</pre></details></div></details></li></ul></details></li></ul></details></li></ul></details></li></ul>
 </main><script>
 document.getElementById('open').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=true);
 document.getElementById('close').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=false);
