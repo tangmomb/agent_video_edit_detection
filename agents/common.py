@@ -15,12 +15,11 @@ c'est-à-dire détecter le plus de frames avec ajout en gardant au plus 5 % de f
 avec un coût de calcul modeste (quelques dizaines de ms/frame sur GPU). Le seuil de décision est \
 choisi sur val puis appliqué tel quel sur test. AUC et AP servent de repères secondaires.
 
-Données : vidéos synthétiques (clips libres de droits + overlays aléatoires) dont la vérité \
+Données : vidéos synthétiques (rushes bruts libres de droits + overlays aléatoires) dont la vérité \
 terrain est connue. Le Dataset Builder les génère sans se soucier des splits ; le Model Researcher \
-découpe ensuite le dataset en train/val/test (make_split) : un split est nommé, figé, fait par clip \
-source, et les vidéos générées après sa création n'y entrent pas. Sans split, on ne peut ni \
-entraîner ni tester (l'ancien découpage « hash » des expériences exp_001 à exp_024 n'était pas figé \
-et n'est plus utilisable). Chaque expérience retient son split : deux \
+découpe ensuite le dataset en train/val/test (make_split) : un split est nommé, figé, fait par rush \
+brut, et les vidéos générées après sa création n'y entrent pas. Sans split, on ne peut ni \
+entraîner ni tester. Chaque expérience retient son split : deux \
 expériences ne se comparent que si elles ont le même split. Les décisions se prennent sur val ; \
 test est réservé à la vérification finale d'un candidat. Le split val est petit : une différence \
 de quelques points peut être du bruit.
@@ -38,32 +37,53 @@ refusée en changeant seulement ses paramètres.
 que rien d'autre n'a été fait."""
 
 
-def dataset_info_tool(lab: Lab, with_split: bool = False) -> Tool:
+# Ce que chaque agent lit de dataset_info : le Dataset Builder les thèmes et les budgets de
+# génération, le Model Researcher les extracteurs et la composition d'un split.
+DATASET_INFO_KEYS = {"dataset_builder": ("dataset", "diversite", "budgets"),
+                     "model_researcher": ("fps", "dataset", "extractors", "composition_du_split")}
+
+
+def dataset_info_tool(lab: Lab, agent: str) -> Tool:
+    keys = DATASET_INFO_KEYS[agent]
     props = {}
-    if with_split:
+    if agent == "model_researcher":
         props["split_id"] = {"type": "string",
                              "description": "Ajoute la composition détaillée de train, val et test pour ce "
                                             "split (id renvoyé par make_split)."}
+
+    def fn(split_id: str | None = None) -> dict:
+        info = lab.dataset_info(split_id)
+        if info.get("dataset_vide"):
+            return info
+        out = {k: info[k] for k in keys if k in info}
+        if "budgets" in out:
+            out["budgets"] = {k: v for k, v in out["budgets"].items() if k != "final_tests_restants"}
+        return out
+
+    contenu = ("diversité (vidéos par thème, rushes bruts réutilisés), budgets restants (génération, "
+               "quotas d'API)" if agent == "dataset_builder" else
+               "extracteurs d'embeddings disponibles et leur coût")
     return Tool(
         name="dataset_info",
-        description="État du dataset : composition globale (vidéos, frames, taux de frames positives, "
-                    "frames ambiguës exclues, vidéos sans ajout, répartition des vidéos par orientation et "
+        description="État du dataset : composition globale (clips générés, rushes bruts uniques, images "
+                    "extraites des clips, pourcentage d'images avec ajout, frames ambiguës exclues, clips sans "
+                    "et avec ajout, répartition des vidéos par orientation et "
                     "des éléments par type, animation d'entrée, animation de sortie, surface et fond), "
-                    "diversité (vidéos par thème, clips sources réutilisés), liste des splits existants "
-                    "(volumes, note, paramètres), extracteurs d'embeddings disponibles et leur coût, "
-                    "budgets restants (génération, tests finaux, quotas d'API).",
+                    + contenu + ".",
         input_schema={"type": "object", "properties": props},
-        fn=lab.dataset_info,
+        fn=fn,
     )
 
 
 def list_experiments_tool(lab: Lab) -> Tool:
     return Tool(
         name="list_experiments",
-        description="Historique complet des expériences (toutes sessions) : split utilisé, config "
-                    "(embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val "
-                    "(rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos "
-                    "et frames par split, fps), date, résultat du test final.",
-        input_schema={"type": "object", "properties": {}},
-        fn=lab.list_experiments,
+        description="Splits figés (id, clips générés en train/val/test, note, paramètres, date, clips "
+                    "exclus, clips générés après le split) et expériences de toutes les sessions, en "
+                    "format court : split, config (embeddings, modèle, hyperparamètres, rééquilibrage de "
+                    "train, hypothèse), val (AUC, AP, rappel au seuil de précision 95 % avec FP/FN), "
+                    "ms/frame, test final, mise en production.",
+        input_schema={"type": "object", "properties": {
+            "split_id": {"type": "string", "description": "Ne garder que les expériences de ce split."}}},
+        fn=lab.experiments_overview,
     )

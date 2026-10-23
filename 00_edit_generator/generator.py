@@ -1,4 +1,4 @@
-"""Génération d'un échantillon : clip source + overlays aléatoires + annotations."""
+"""Génération d'un échantillon : rush brut + overlays aléatoires + annotations."""
 
 import math
 import random

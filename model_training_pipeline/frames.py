@@ -1,7 +1,7 @@
 """Construit le dataset de frames étiquetées à partir des échantillons edit_generator.
 
 Chaque ligne de index.jsonl :
-  frame, sample_id, t, source (clip source : le split se fait par clip, voir lab.make_split),
+  frame, sample_id, t, source (rush brut : le split se fait par rush, voir lab.make_split),
   visible      : ids des éléments pleinement visibles (opacité >= 0.9)
   partial      : ids en cours de fondu (0.05 < opacité < 0.9)
   label_any    : 1 si au moins un élément pleinement visible (la cible du classifieur)

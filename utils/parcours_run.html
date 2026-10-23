@@ -44,7 +44,7 @@ code{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(-
 <h3>L'orchestrateur lit l'état du projet <span class="who">agent · orchestrator</span></h3>
 <p>Son prompt lui demande de lire l'état avant de décider. En pratique, son premier tour appelle :</p>
 <ul>
-<li><code>global_status</code> : état du dataset (vidéos, frames, splits, vidéos générables et tests finaux restants) et $ dépensés ;</li>
+<li><code>global_status</code> : état du dataset (clips générés, rushes bruts uniques, frames, splits, vidéos générables et tests finaux restants) et $ dépensés ;</li>
 <li><code>list_experiments</code> : toutes les expériences passées, de toutes les sessions. Un run ne repart donc pas de zéro.</li>
 </ul>
 <p class="ref"><code>agents/orchestrator.py:25</code> · <code>agents/orchestrator.py:74</code> · <code>model_training_pipeline/lab.py:234</code></p>

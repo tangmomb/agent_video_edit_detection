@@ -36,7 +36,7 @@ def recall_at_precision(y: np.ndarray, probs: np.ndarray, target: float) -> dict
 def summary(y: np.ndarray, probs: np.ndarray) -> dict:
     out = {"auc": roc_auc_score(y, probs) if len(set(y)) > 1 else None,
            "ap": average_precision_score(y, probs) if y.any() else None,
-           "positifs": int(y.sum()), "frames": len(y)}
+           "positifs": int(y.sum()), "images_extraites_des_clips": len(y)}
     for p in PRECISION_TARGETS:
         out[f"rappel_a_precision_{p}"] = recall_at_precision(y, probs, p) or "précision non atteinte"
     return out

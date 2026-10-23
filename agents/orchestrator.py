@@ -72,7 +72,19 @@ def make(lab: Lab, session: Session) -> Agent:
         return ask
 
     def global_status() -> dict:
-        return {"dataset": lab.dataset_info(),
+        # Volumes seulement : le détail de composition (types, animations, thèmes, extracteurs)
+        # sert aux sous-agents, qui le lisent par leur propre dataset_info.
+        info = lab.dataset_info()
+        if info.get("dataset_vide"):
+            dataset = info
+        else:
+            d = info["dataset"]
+            dataset = {"rushes_bruts_uniques": d["rushes_bruts_uniques"], "clips_generes": d["clips_generes"],
+                       "images_extraites_des_clips": d["images_extraites_des_clips"],
+                       "clips_sans_ajout": d["clips_sans_ajout"], "clips_avec_ajout": d["clips_avec_ajout"],
+                       "pourcentage_images_avec_ajout": d["pourcentage_images_avec_ajout"],
+                       "budgets": {k: v for k, v in info["budgets"].items() if k != "quotas_api"}}
+        return {"dataset": dataset,
                 "budget_session_usd": {"depense": round(session.spent, 2), "total": session.budget_usd,
                                        "reserve_rapport_usd": round(session.reserve_usd, 2),
                                        "disponible_pour_deleguer": round(max(
@@ -86,10 +98,11 @@ def make(lab: Lab, session: Session) -> Agent:
         max_turns=30,
         tools=[
             Tool(name="global_status",
-                 description="État global : dataset (composition globale : vidéos, frames, taux de "
-                             "positifs, répartition par orientation, type d'élément, animations d'entrée et "
-                             "de sortie, surface, fond ; splits existants ; diversité ; budgets), budget de session "
-                             "dépensé.",
+                 description="État global : volumes du dataset (clips générés, rushes bruts uniques, images "
+                             "extraites des clips, clips sans et avec ajout, pourcentage d'images avec "
+                             "ajout), budgets restants (génération, tests finaux), budget de session. "
+                             "Les splits sont dans list_experiments ; le détail de composition (types, "
+                             "animations, thèmes) n'est visible que des sous-agents.",
                  input_schema={"type": "object", "properties": {}}, fn=global_status),
             list_experiments_tool(lab),
             Tool(name="ask_dataset_builder",

@@ -15,7 +15,8 @@ l'information temporelle, et du rééquilibrage de train (balance) quand un type
 négatifs sont sur-représentés. Tu ne génères pas de données et tu ne mesures jamais sur test : \
 seul l'Evaluator y accède.
 
-Splits : décide-les à partir de la composition du dataset (dataset_info), jamais des erreurs d'un \
+Splits : les splits existants sont dans list_experiments ; décide-les à partir de la composition du \
+dataset (dataset_info), jamais des erreurs d'un \
 modèle. Crée un split quand aucun n'existe, quand le dataset a nettement grossi (videos_hors_split) \
 ou quand val ne couvre pas les cas importants (types d'ajout, animations, orientation, thèmes comme \
 les négatifs difficiles) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
@@ -43,12 +44,12 @@ def make(lab: Lab) -> Agent:
         system=SYSTEM,
         max_turns=20,
         tools=[
-            dataset_info_tool(lab, with_split=True),
+            dataset_info_tool(lab, "model_researcher"),
             list_experiments_tool(lab),
             Tool(
                 name="make_split",
                 description="Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos "
-                            "générées ensuite n'y entrent pas). Les vidéos d'un même clip source restent du "
+                            "générées ensuite n'y entrent pas). Les vidéos d'un même rush brut restent du "
                             "même côté. Le test est commun à tous les splits (figé au premier) : seuls train "
                             "et val sont redécoupés. Renvoie l'id du split et la composition de train, val et test.",
                 input_schema={
@@ -75,9 +76,9 @@ def make(lab: Lab) -> Agent:
                 name="train_model",
                 description="Entraîne un classifieur binaire (ajout de montage visible ou non) sur des "
                             "embeddings figés, sur le train du split choisi avec un sous-échantillonnage "
-                            "optionnel (balance), et l'évalue sur le val de ce split. Renvoie l'id d'expérience, le rappel "
-                            "(avec seuil et TP/FP/FN) aux précisions 90/95/99 %, AUC, AP et le coût de "
-                            "calcul (ms/frame). Les embeddings absents du cache sont calculés à la volée (GPU).",
+                            "optionnel (balance), et l'évalue sur le val de ce split. Renvoie l'id d'expérience, AUC, AP, "
+                            "le rappel au seuil de précision 95 % (avec FP/FN), le coût de calcul "
+                            "(ms/frame) et l'effet du rééquilibrage. Les embeddings absents du cache sont calculés à la volée (GPU).",
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -106,7 +107,7 @@ def make(lab: Lab) -> Agent:
                         "note": {"type": "string", "description": "Hypothèse testée."},
                         "split_id": {"type": "string",
                                      "description": "Split sur lequel entraîner (train) et mesurer (val) : "
-                                                    "un id renvoyé par make_split (voir dataset_info)."},
+                                                    "un id renvoyé par make_split (voir list_experiments)."},
                     },
                     "required": ["features", "split_id"],
                 },

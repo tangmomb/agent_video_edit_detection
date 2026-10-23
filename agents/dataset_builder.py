@@ -11,13 +11,13 @@ SYSTEM = CONTEXT + """
 Ton rôle : Dataset Builder. Tu constitues et enrichis le dataset à la demande de l'orchestrateur. \
 Tu n'entraînes ni n'évalues de modèle, et tu ne t'occupes pas des splits train/val/test : c'est le \
 Model Researcher qui les constitue à partir du dataset complet. Ton but est un dataset riche et \
-varié, où chaque cas (type d'ajout, animation, orientation, taille, fond, thème, vidéos sans ajout) \
+varié, où chaque cas (type d'ajout, animation, orientation, taille, fond, thème, clips sans ajout) \
 est assez représenté pour être appris et mesuré.
 
 Méthode : commence par dataset_info (bloc dataset : composition globale) et l'historique des \
 générations, puis génère exactement ce qui est demandé (volume, thèmes, orientation, types \
 d'éléments sur-représentés) sans dépasser le budget. Préfère plusieurs petites générations ciblées \
-à une grosse générique, et comble en priorité les cas rares. Un clip source n'est jamais \
+à une grosse générique, et comble en priorité les cas rares. Un rush brut n'est jamais \
 réutilisé : un thème déjà très exploité (voir diversite.videos_par_theme dans dataset_info) finit \
 par ne plus rien donner, et l'erreur « Aucune vidéo Pixabay… » signifie qu'il faut changer de \
 thème ou d'orientation.
@@ -38,16 +38,18 @@ def make(lab: Lab) -> Agent:
         system=SYSTEM,
         max_turns=12,
         tools=[
-            dataset_info_tool(lab),
+            dataset_info_tool(lab, "dataset_builder"),
             Tool(
                 name="data_requests",
-                description="Historique des générations passées (volume, paramètres, raison).",
+                description="Historique des générations passées, regroupé par thème : appels, clips "
+                            "demandés, clips obtenus, orientations. Moins de clips obtenus que demandés : "
+                            "le thème s'épuise.",
                 input_schema={"type": "object", "properties": {}},
-                fn=lab.data_requests,
+                fn=lab.data_requests_by_theme,
             ),
             Tool(
                 name="generate_data",
-                description="Génère de nouvelles vidéos annotées, chacune sur un clip source jamais "
+                description="Génère de nouvelles vidéos annotées, chacune sur un rush brut jamais "
                             "utilisé, et les ajoute au dataset, puis extrait et étiquette leurs frames. "
                             "Coûteux en temps et en quota d'API d'images : justifie chaque génération.",
                 input_schema={
@@ -56,7 +58,7 @@ def make(lab: Lab) -> Agent:
                         "n": {"type": "integer", "minimum": 1, "maximum": 100},
                         "reason": {"type": "string", "description": "Pourquoi ces données sont nécessaires."},
                         "query": {"type": "string",
-                                  "description": "Thème des vidéos sources en anglais (sinon aléatoire)."},
+                                  "description": "Thème des rushes bruts en anglais (sinon aléatoire)."},
                         "orientation": {"type": "string", "enum": ["portrait", "landscape"]},
                         "type_weights": {"type": "object", "additionalProperties": {"type": "number"},
                                          "description": "Poids relatifs des types : " + ", ".join(ELEMENT_TYPES)},

@@ -45,7 +45,7 @@ python -m model_training_pipeline info      # état du dataset
 ```
 
 Cible binaire `label_any` (au moins un ajout pleinement visible), frames en fondu exclues.
-Split train/val/test par vidéo *source* (pas de fuite entre échantillons tirés du même clip).
+Split train/val/test par rush brut (pas de fuite entre échantillons tirés du même rush).
 Métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val et
 appliqué tel quel sur test ; AUC et AP en repères (`model_training_pipeline/metrics.py`).
 
@@ -75,7 +75,7 @@ Organisation :
 - `agents/<agent>.py` : prompt + sous-ensemble d'outils du lab propres à chaque agent ;
   le Dataset Builder génère sans se soucier des splits, le Model Researcher découpe le dataset en
   splits train/val/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
-  clip source, stratifiés par défaut sur type, animation, orientation, thème et vidéos vides ;
+  rush brut, stratifiés par défaut sur type, animation, orientation, thème et vidéos vides ;
   l'ancien découpage `hash`, non figé, est refusé). Le test est figé au premier split
   (`data/splits/test_set.json`) : les splits suivants ne redécoupent que train/val. Seul le
   Dataset Builder peut exclure une vidéo défectueuse (`exclude_videos`, `data/excluded.json`),
