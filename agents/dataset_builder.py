@@ -1,4 +1,4 @@
-"""Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées."""
+"""Dataset Builder : génère les clips synthétiques annotés et les images étiquetées."""
 
 from edit_generator.generator import ELEMENT_TYPES
 from model_training_pipeline.lab import Lab
@@ -8,7 +8,8 @@ from .runner import Agent, Tool
 
 SYSTEM = CONTEXT + """
 
-Ton rôle : Dataset Builder. Tu constitues et enrichis le dataset à la demande de l'orchestrateur. \
+Ton rôle : Dataset Builder. Tu enrichis le dataset à la demande de l'orchestrateur : tu ne fais \
+qu'ajouter des données, tu n'en retires jamais. \
 Tu n'entraînes ni n'évalues de modèle, et tu ne t'occupes pas des splits train/val/test : c'est le \
 Model Researcher qui les constitue à partir du dataset complet. Ton but est un dataset riche et \
 varié, où chaque cas (type d'ajout, animation, orientation, taille, fond, thème, clips sans ajout) \
@@ -18,17 +19,14 @@ Méthode : commence par dataset_info (bloc dataset : composition globale) et l'h
 générations, puis génère exactement ce qui est demandé (volume, thèmes, orientation, types \
 d'éléments sur-représentés) sans dépasser le budget. Préfère plusieurs petites générations ciblées \
 à une grosse générique, et comble en priorité les cas rares. Un rush brut n'est jamais \
-réutilisé : un thème déjà très exploité (voir diversite.videos_par_theme dans dataset_info) finit \
+réutilisé : un thème déjà très exploité (voir diversite.clips_par_theme dans dataset_info) finit \
 par ne plus rien donner, et l'erreur « Aucune vidéo Pixabay… » signifie qu'il faut changer de \
-thème ou d'orientation.
-
-Exclusions : exclude_videos retire une vidéo de tous les splits. Ne l'utilise que pour un défaut \
-de la vidéo elle-même signalé par un autre agent ou constaté dans les données (rendu cassé, \
-doublon d'un clip), jamais parce qu'un modèle s'y trompe : les cas où le modèle échoue sont \
-précisément ceux qu'il faut garder.
+thème ou d'orientation. Le thème (query) est une recherche Pixabay : 2 à 4 mots-clés en anglais \
+(« neon street night », pas une phrase), car chaque mot en plus réduit les résultats. Il ne sert \
+qu'à choisir le rush brut : peu importe que le texte et les photos des ajouts n'aient rien à voir.
 
 Rapport final (court, en français) : ce que tu as généré et pourquoi, la composition du dataset \
-après génération (vidéos, frames, éléments par type et par animation), les cas encore rares, les \
+après génération (clips, images, éléments par type et par animation), les cas encore rares, les \
 échecs éventuels et le budget restant."""
 
 
@@ -40,17 +38,17 @@ def make(lab: Lab) -> Agent:
         tools=[
             dataset_info_tool(lab, "dataset_builder"),
             Tool(
-                name="data_requests",
+                name="data_requested_history",
                 description="Historique des générations passées, regroupé par thème : appels, clips "
                             "demandés, clips obtenus, orientations. Moins de clips obtenus que demandés : "
                             "le thème s'épuise.",
                 input_schema={"type": "object", "properties": {}},
-                fn=lab.data_requests_by_theme,
+                fn=lab.data_requested_history,
             ),
             Tool(
                 name="generate_data",
                 description="Génère de nouvelles vidéos annotées, chacune sur un rush brut jamais "
-                            "utilisé, et les ajoute au dataset, puis extrait et étiquette leurs frames. "
+                            "utilisé, et les ajoute au dataset, puis extrait et étiquette leurs images. "
                             "Coûteux en temps et en quota d'API d'images : justifie chaque génération.",
                 input_schema={
                     "type": "object",
@@ -58,7 +56,8 @@ def make(lab: Lab) -> Agent:
                         "n": {"type": "integer", "minimum": 1, "maximum": 100},
                         "reason": {"type": "string", "description": "Pourquoi ces données sont nécessaires."},
                         "query": {"type": "string",
-                                  "description": "Thème des rushes bruts en anglais (sinon aléatoire)."},
+                                  "description": "Recherche Pixabay des rushes bruts : 2 à 4 mots-clés "
+                                                 "en anglais (sinon thème aléatoire)."},
                         "orientation": {"type": "string", "enum": ["portrait", "landscape"]},
                         "type_weights": {"type": "object", "additionalProperties": {"type": "number"},
                                          "description": "Poids relatifs des types : " + ", ".join(ELEMENT_TYPES)},
@@ -69,20 +68,6 @@ def make(lab: Lab) -> Agent:
                     "required": ["n", "reason"],
                 },
                 fn=lab.generate_data,
-            ),
-            Tool(
-                name="exclude_videos",
-                description="Retire des vidéos de tous les splits, présents et futurs, sans supprimer de "
-                            "fichier. Réservé aux vidéos défectueuses ou dupliquées.",
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "videos": {"type": "object", "additionalProperties": {"type": "string"},
-                                   "description": "{sample_id: raison du défaut}"},
-                    },
-                    "required": ["videos"],
-                },
-                fn=lab.exclude_videos,
             ),
         ],
     )

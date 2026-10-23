@@ -299,7 +299,9 @@ def generate_sample(seed: int, out_root: Path = SAMPLES_DIR, config: GenerationC
         extra = {"accept": accept_source} if accept_source else {}
         pick = video_source.pick(rng, query, orientation, cfg.min_duration, cfg.short_side, **extra)
         src_path, source, words = pick.path, pick.source, pick.words
-        photo_query = query
+        # Les photos incrustées n'ont pas à coller au thème du rush : une requête courte tirée au
+        # hasard trouve toujours des résultats sur Unsplash, ce que la requête du rush ne garantit pas.
+        photo_query = rng.choice(content.QUERY_POOL)[0]
 
     meta = probe(src_path)
     portrait = meta["height"] > meta["width"]

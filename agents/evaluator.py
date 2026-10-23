@@ -42,9 +42,9 @@ def make(lab: Lab) -> Agent:
             Tool(
                 name="analyze_errors",
                 description="Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux de "
-                            "frames positives ratées par type d'ajout, surface, fond, animation d'entrée, "
+                            "images positives ratées par type d'ajout, surface, fond, animation d'entrée, "
                             "phase (entrée ou sortie en cours, repos), nombre d'ajouts et orientation ; "
-                            "répartition des fausses alertes ; exemples de frames ratées.",
+                            "répartition des fausses alertes ; exemples d'images ratées.",
                 input_schema={
                     "type": "object",
                     "properties": {"experiment_id": {"type": "string"}, "precision": PRECISION},
@@ -54,7 +54,7 @@ def make(lab: Lab) -> Agent:
             ),
             Tool(
                 name="show_examples",
-                description="Montre des frames de val, ajouts encadrés en rouge : frames avec ajout ratées "
+                description="Montre des images de val, ajouts encadrés en rouge : images avec ajout ratées "
                             "(kind=missed) ou fausses alertes (kind=false_positive).",
                 input_schema={
                     "type": "object",

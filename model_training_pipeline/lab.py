@@ -47,18 +47,18 @@ SPLITS_DIR = DATA_DIR / "splits"
 # Clips du test, figés au premier split : les splits suivants ne refont que train/val, et les
 # vidéos générées ensuite n'entrent jamais en test (le Model Researcher ne peut pas l'influencer).
 TEST_SET = SPLITS_DIR / "test_set.json"
-# Vidéos retirées de tous les splits (défaut de rendu, doublon) : exclude_videos, Dataset Builder.
+# Vidéos retirées de tous les splits (défaut de rendu, doublon) : exclude_clips, Model Researcher.
 EXCLUDED = DATA_DIR / "excluded.json"
 # Découpage d'avant make_split, non figé : refusé pour entraîner et tester.
 LEGACY_SPLIT = "hash"
 SPLITS = ("train", "val", "test")
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
-STRATIFY_KEYS = ("type", "animation", "orientation", "theme", "video_vide")
+STRATIFY_KEYS = ("type", "animation", "orientation", "theme", "clip_vide")
 MODELS = ("logreg", "mlp", "hgb")
-# Groupes de frames qu'on peut sous-échantillonner dans train (train_model, paramètre balance) :
-# un type d'élément = frames positives dont tous les ajouts visibles sont de ce type ;
-# negatif = frames sans ajout ; video_vide = frames des vidéos sans aucun ajout ; orientation.
-BALANCE_GROUPS = (*ELEMENT_TYPES, "negatif", "video_vide", "portrait", "paysage")
+# Groupes d'images qu'on peut sous-échantillonner dans train (train_model, paramètre balance) :
+# un type d'élément = images positives dont tous les ajouts visibles sont de ce type ;
+# negatif = images sans ajout ; clip_vide = images des clips sans aucun ajout ; orientation.
+BALANCE_GROUPS = (*ELEMENT_TYPES, "negatif", "clip_vide", "portrait", "paysage")
 MAX_QUOTA_FAILURES = 3  # échecs de quota d'affilée avant d'interrompre une génération
 
 
@@ -74,31 +74,32 @@ def _jsonable(o):
     return o
 
 
-def _point(op) -> dict | str:
-    """Point de fonctionnement réduit à ce qui sert à décider."""
+def _compact_val(val: dict) -> dict:
+    """Val au point de précision par défaut (95 %) : seuil, rappel, erreurs. La précision n'est
+    pas reprise (au moins 95 % par construction), les volumes du val sont ceux du split."""
+    out = {"auc": val["auc"], "ap": val["ap"]}
+    op = val[f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"]
     if not isinstance(op, dict):
-        return op  # "précision non atteinte"
-    return {k: op[k] for k in ("threshold", "recall", "precision", "fp", "fn")}
+        return {**out, "p95": op}  # "précision non atteinte"
+    return {**out, "seuil_p95": op["threshold"], "recall": op["recall"], "fp": op["fp"], "fn": op["fn"]}
 
 
 def _compact(e: dict) -> dict:
-    """Expérience en format court pour les agents : config, val au point de précision par défaut
-    (95 %), coût, test final. Le détail (90/99 %, volumes, durées) reste dans model_results/."""
-    val = e["val"]
-    out = {k: e[k] for k in ("id", "split_id", "features", "model", "temporal", "params", "balance", "note")
-           if k in e}
-    out["val"] = {"auc": val["auc"], "ap": val["ap"], "positifs": val["positifs"],
-                  # anciennes expériences : "frames"
-                  "images_extraites_des_clips": val.get("images_extraites_des_clips", val.get("frames")),
-                  f"rappel_a_precision_{metrics.DEFAULT_PRECISION}":
-                      _point(val[f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"])}
-    out["ms_par_frame"] = round(float(e["ms_par_frame"]), 1)
+    """Expérience en format court pour les agents, sans son split (elle est rangée dessous) :
+    config, hypothèse, val à 95 %, coût, test final. Le détail (90/99 %, volumes, durées) reste
+    dans model_results/."""
+    out = {k: e[k] for k in ("id", "features", "model", "temporal", "params") if k in e}
+    if e.get("balance"):
+        out["balance"] = e["balance"]
+    out["hypothese"] = e.get("note", "")
+    out["val"] = _compact_val(e["val"])
+    out["ms_par_image"] = round(float(e["ms_par_frame"]), 1)
     if "final_test" in e:
-        ft = e["final_test"]
-        out["final_test"] = {"precision_visee": ft["precision_visee"], "test": _point(ft["test"]),
-                             "test_auc": ft["test_auc"], "test_ap": ft["test_ap"]}
-    if "en_production" in e:
-        out["en_production"] = e["en_production"]
+        t, ft = e["final_test"]["test"], e["final_test"]
+        out["test"] = {"recall": t["recall"], "precision": t["precision"], "fp": t["fp"], "fn": t["fn"],
+                       "auc": ft["test_auc"], "ap": ft["test_ap"]}
+    if e.get("en_production"):
+        out["en_production"] = True
     return out
 
 
@@ -132,8 +133,8 @@ def _video_traits(ann: dict, keys: list[str]) -> set[str]:
             out.add(f"orientation:{_orient(ann)}")
         elif k == "theme":
             out.add(f"theme:{ann.get('topic') or 'inconnu'}")
-        elif k == "video_vide" and not ann["elements"]:
-            out.add("video_vide")
+        elif k == "clip_vide" and not ann["elements"]:
+            out.add("clip_vide")
     return out
 
 
@@ -233,10 +234,10 @@ class Lab:
 
         clear = [r for r in rows if not r["ambiguous"]]
         out = {"rushes_bruts_uniques": len({r["source"] for r in rows}), "clips_generes": len(sids),
-               "images_extraites_des_clips": len(clear), "frames_ambigues_exclues": len(rows) - len(clear),
+               "images_extraites_des_clips": len(clear), "images_ambigues_exclues": len(rows) - len(clear),
                "clips_sans_ajout": sum(not a["elements"] for a in anns),
                "clips_avec_ajout": sum(bool(a["elements"]) for a in anns),
-               "videos_par_orientation": dict(Counter(_orient(a) for a in anns)),
+               "clips_par_orientation": dict(Counter(_orient(a) for a in anns)),
                "elements_par_type": count(lambda a, el: el["type"]),
                "elements_par_animation_entree": count(lambda a, el: _anim_in(el)),
                "elements_par_animation_sortie": count(lambda a, el: el["animation"]["out"]["type"]),
@@ -256,14 +257,14 @@ class Lab:
             sp = json.loads((SPLITS_DIR / f"{sid}.json").read_text(encoding="utf-8"))
             out.append({"split_id": sid, **{s: sum(v == s for v in m.values()) for s in SPLITS},
                         "note": sp["note"], "date": sp["date"], "params": sp["params"],
-                        "videos_exclues": len(sp["excluded"]),
+                        "clips_exclus": len(sp["excluded"]),
                         # vidéos générées après la création du split
-                        "videos_hors_split": len(all_sids - set(m) - set(sp["excluded"]))})
+                        "clips_hors_split": len(all_sids - set(m) - set(sp["excluded"]))})
         return out
 
     def dataset_info(self, split_id: str | None = None) -> dict:
         rows = self.rows
-        budgets = {"videos_generables_restantes": self.data_budget - self.generated,
+        budgets = {"clips_generables_restants": self.data_budget - self.generated,
                    "final_tests_restants": self.final_tests_left, "quotas_api": api_quotas()}
         if not rows:
             return {"dataset_vide": True, "budgets": budgets,
@@ -280,14 +281,14 @@ class Lab:
         clips = Counter(source_key(self._ann(s)) for s in sids)
         info["diversite"] = {
             "rushes_bruts_uniques": len(clips), "clips_generes": len(sids),
-            "videos_par_theme": dict(themes.most_common()),
+            "clips_par_theme": dict(themes.most_common()),
             # Vidéos générées avant que generate_data n'écarte les rushes déjà utilisés.
             "rushes_bruts_reutilises": {k: n for k, n in clips.most_common() if n > 1},
         }
         for ext in EXTRACTORS:
             for view in VIEWS:
                 ms = extraction_cost(ext, view)
-                info["extractors"][f"{ext}:{view}"] = {"en_cache": ms is not None, "ms_par_frame": ms}
+                info["extractors"][f"{ext}:{view}"] = {"en_cache": ms is not None, "ms_par_image": ms}
         return _jsonable(info)
 
     def _used_sources(self) -> set[str]:
@@ -341,7 +342,7 @@ class Lab:
                                  "type_weights": type_weights, "lang": lang, "empty_prob": cfg.empty_prob, "reason": reason, "time": time.time()}) + "\n")
         return {"generees": ok, "echecs": len(errors), "exemples_erreurs": errors[:3],
                 "arret": stopped,
-                "frames_total": len(self.rows), "budget_restant": self.data_budget - self.generated,
+                "images_total": len(self.rows), "budget_restant": self.data_budget - self.generated,
                 "quotas_api": api_quotas()}
 
     def data_requests(self) -> list[dict]:
@@ -350,7 +351,7 @@ class Lab:
             return []
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
-    def data_requests_by_theme(self) -> dict:
+    def data_requested_history(self) -> dict:
         """Historique des générations regroupé par thème : un thème où on obtient moins de clips
         que demandé est en voie d'épuisement (ses rushes ne servent qu'une fois)."""
         out: dict[str, dict] = {}
@@ -365,20 +366,20 @@ class Lab:
                 t["orientations"].append(o)
         return out
 
-    def exclude_videos(self, videos: dict) -> dict:
+    def exclude_clips(self, clips: dict) -> dict:
         """Retire des vidéos de tous les splits, présents et futurs : {sample_id: raison}. Réservé
         aux défauts constatés sur la vidéo elle-même (rendu cassé, doublon), jamais aux erreurs
         d'un modèle. Les fichiers ne sont pas supprimés."""
         all_sids = {r["sample_id"] for r in self.rows}
-        if not videos:
-            raise ValueError("aucune vidéo à exclure")
-        if set(videos) - all_sids:
-            raise ValueError(f"vidéos inconnues : {sorted(set(videos) - all_sids)}")
-        if any(not str(v).strip() for v in videos.values()):
+        if not clips:
+            raise ValueError("aucun clip à exclure")
+        if set(clips) - all_sids:
+            raise ValueError(f"clips inconnus : {sorted(set(clips) - all_sids)}")
+        if any(not str(v).strip() for v in clips.values()):
             raise ValueError("chaque exclusion doit avoir une raison")
-        excluded = {**self._excluded(), **{k: str(v) for k, v in videos.items()}}
+        excluded = {**self._excluded(), **{k: str(v) for k, v in clips.items()}}
         EXCLUDED.write_text(json.dumps(excluded, ensure_ascii=False, indent=2), encoding="utf-8")
-        return {"videos_exclues": excluded}
+        return {"clips_exclus": excluded}
 
     def make_split(self, note: str, val_ratio: float = 0.2, test_ratio: float = 0.2,
                    stratify: list[str] | None = None, seed: int = 0) -> dict:
@@ -445,7 +446,7 @@ class Lab:
         if frozen is None:
             self._test_clips()  # fige le test de ce premier split
         m = self._split_map(split_id)
-        return _jsonable({"split_id": split_id, "params": params, "videos_exclues": len(exclude),
+        return _jsonable({"split_id": split_id, "params": params, "clips_exclus": len(exclude),
                           **{s: self._composition({k for k, v in m.items() if v == s},
                                                   with_positives=s != "test") for s in SPLITS}})
 
@@ -498,7 +499,7 @@ class Lab:
         with open(d / "model.pkl", "wb") as fh:
             pickle.dump(clf, fh)
         # Format court : la config est celle de l'appel, le détail reste dans metrics.json.
-        short = {k: v for k, v in _compact(result).items() if k in ("val", "ms_par_frame")}
+        short = {"val": _compact_val(result["val"]), "ms_par_image": round(float(result["ms_par_frame"]), 1)}
         if balance_report:
             short["reequilibrage_train"] = balance_report
         return _jsonable({"experiment_id": exp_id, **short})
@@ -533,8 +534,8 @@ class Lab:
             "positifs_rates_par_nb_elements": rates(lambda r: {min(len(r["visible"]), 4)}),
             "positifs_rates_par_orientation": rates(lambda r: {self._orientation(r)}),
             "faux_positifs_par_orientation": dict(Counter(self._orientation(r) for r in fp_rows)),
-            "faux_positifs_par_video": dict(Counter(r["sample_id"] for r in fp_rows).most_common(8)),
-            "exemples_rates": [{"frame": r["frame"], "t": r["t"],
+            "faux_positifs_par_clip": dict(Counter(r["sample_id"] for r in fp_rows).most_common(8)),
+            "exemples_rates": [{"image": r["frame"], "t": r["t"],
                                 "elements": [{k: e[k] for k in ("type", "text", "area_ratio", "has_box",
                                                                 "animation", "phase")}
                                              for e in self._visible(r)]} for r in fn_rows[:10]],
@@ -586,10 +587,30 @@ class Lab:
         return out
 
     def experiments_overview(self, split_id: str | None = None) -> dict:
-        """Splits figés et expériences en format court : ce que renvoie l'outil list_experiments."""
-        return {"splits": self._split_summaries(),
-                "experiences": [_compact(e) for e in self.list_experiments()
-                                if split_id is None or e.get("split_id") == split_id]}
+        """Ce que renvoie l'outil list_experiments : chaque split avec ses expériences en format
+        court. Un split sans expérience n'apparaît que s'il est le plus récent (celui sur lequel
+        entraîner)."""
+        exps = self.list_experiments()
+        summaries = self._split_summaries()
+        latest = summaries[-1]["split_id"] if summaries else None
+        y = self._y()
+        out = []
+        for sp in summaries:
+            sid = sp["split_id"]
+            mine = [_compact(e) for e in exps if e.get("split_id") == sid]
+            if (split_id and sid != split_id) or (not split_id and not mine and sid != latest):
+                continue
+            va = self._idx("val", sid)
+            entry = {"split_id": sid, **{s: sp[s] for s in SPLITS},
+                     "val_images": len(va), "val_positifs": int(y[va].sum()),
+                     "clips_hors_split": sp["clips_hors_split"]}
+            if sp["clips_exclus"]:
+                entry["clips_exclus"] = sp["clips_exclus"]
+            note = sp["note"]
+            entry["note"] = note if len(note) <= 120 else note[:120].rstrip() + "…"
+            entry["experiences"] = mine
+            out.append(entry)
+        return {"splits": out}
 
     def final_test(self, experiment_id: str, precision: float = metrics.DEFAULT_PRECISION) -> dict:
         if self.final_tests_left <= 0:
@@ -675,7 +696,7 @@ class Lab:
         ann = self._ann(r["sample_id"])
         groups = {self._orientation(r)}
         if not ann["elements"]:
-            groups.add("video_vide")
+            groups.add("clip_vide")
         if not r["label_any"]:
             groups.add("negatif")
         else:
@@ -706,9 +727,9 @@ class Lab:
             if kept:
                 keep.append(i)
         if not keep:
-            raise ValueError("le rééquilibrage ne laisse aucune frame de train")
-        report = {g: f"{after[g]}/{before[g]} frames gardées" for g in sorted(balance)}
-        report["frames_train"] = f"{len(keep)}/{len(tr)}"
+            raise ValueError("le rééquilibrage ne laisse aucune image de train")
+        report = {g: f"{after[g]}/{before[g]} images gardées" for g in sorted(balance)}
+        report["images_train"] = f"{len(keep)}/{len(tr)}"
         return np.array(keep, dtype=int), report
 
     def _data_snapshot(self, split_id: str) -> dict:

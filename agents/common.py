@@ -4,15 +4,15 @@ from model_training_pipeline.lab import Lab
 
 from .runner import Tool
 
-CONTEXT = """Projet : un classifieur d'images qui dit si une frame de vidéo contient un ajout de \
+CONTEXT = """Projet : un classifieur d'images qui dit si une image extraite d'un clip contient un ajout de \
 montage (mot-clé, question, sous-titre, bandeau, image incrustée, forme, carton plein écran \
-de type chapitre ou question sur fond opaque) ou non. Les frames sont \
-échantillonnées à 1 par seconde ; une frame est positive si au moins un ajout y est pleinement \
-visible. Les frames ambiguës (un ajout en fondu) sont exclues de l'entraînement et de la mesure.
+de type chapitre ou question sur fond opaque) ou non. Les images sont \
+échantillonnées à 1 par seconde ; une image est positive si au moins un ajout y est pleinement \
+visible. Les images ambiguës (un ajout en fondu) sont exclues de l'entraînement et de la mesure.
 
 Objectif : le meilleur rappel possible à précision fixée (95 % par défaut) sur le split val, \
-c'est-à-dire détecter le plus de frames avec ajout en gardant au plus 5 % de fausses alertes, \
-avec un coût de calcul modeste (quelques dizaines de ms/frame sur GPU). Le seuil de décision est \
+c'est-à-dire détecter le plus d'images avec ajout en gardant au plus 5 % de fausses alertes, \
+avec un coût de calcul modeste (quelques dizaines de ms/image sur GPU). Le seuil de décision est \
 choisi sur val puis appliqué tel quel sur test. AUC et AP servent de repères secondaires.
 
 Données : vidéos synthétiques (rushes bruts libres de droits + overlays aléatoires) dont la vérité \
@@ -66,7 +66,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
     return Tool(
         name="dataset_info",
         description="État du dataset : composition globale (clips générés, rushes bruts uniques, images "
-                    "extraites des clips, pourcentage d'images avec ajout, frames ambiguës exclues, clips sans "
+                    "extraites des clips, pourcentage d'images avec ajout, images ambiguës exclues, clips sans "
                     "et avec ajout, répartition des vidéos par orientation et "
                     "des éléments par type, animation d'entrée, animation de sortie, surface et fond), "
                     + contenu + ".",
@@ -78,12 +78,13 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
 def list_experiments_tool(lab: Lab) -> Tool:
     return Tool(
         name="list_experiments",
-        description="Splits figés (id, clips générés en train/val/test, note, paramètres, date, clips "
-                    "exclus, clips générés après le split) et expériences de toutes les sessions, en "
-                    "format court : split, config (embeddings, modèle, hyperparamètres, rééquilibrage de "
-                    "train, hypothèse), val (AUC, AP, rappel au seuil de précision 95 % avec FP/FN), "
-                    "ms/frame, test final, mise en production.",
+        description="Splits figés et, sous chacun, ses expériences (toutes sessions). Split : clips "
+                    "générés en train/val/test, images et positifs du val, clips générés après le split, "
+                    "note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, "
+                    "rééquilibrage), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), "
+                    "ms/image, test final, en_production si c'est le modèle en production. Un split sans "
+                    "expérience n'apparaît que s'il est le plus récent.",
         input_schema={"type": "object", "properties": {
-            "split_id": {"type": "string", "description": "Ne garder que les expériences de ce split."}}},
+            "split_id": {"type": "string", "description": "Ne renvoyer que ce split et ses expériences."}}},
         fn=lab.experiments_overview,
     )
