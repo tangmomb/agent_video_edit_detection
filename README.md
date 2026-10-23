@@ -81,8 +81,10 @@ Organisation :
   Builder ne fait qu'ajouter des données ; le Model Researcher peut exclure un clip défectueux
   (`exclude_clips`, `data/excluded.json`), ce qui ne vaut que pour les splits créés ensuite. Seul l'Evaluator mesure sur test.
   Aucun agent ne met de modèle en production : en fin de run, le code (`Lab().select_production()`)
-  écrit dans `production.json` l'expérience de meilleur rappel val à précision 95 % sur le plus gros
-  split (le plus de vidéos) — départage par AP, AUC puis ms/frame — et l'ajoute au rapport. On peut
+  écrit dans `production.json`, sur le plus gros split (le plus de clips), l'expérience de meilleur
+  rappel val à précision 95 % parmi celles qui ont réussi leur test final (précision visée tenue sur
+  test) — départage par AP, AUC puis temps de calcul. Sans modèle testé avec succès, il prend le
+  meilleur sur val et le marque « non vérifié sur test » dans le rapport. On peut
   forcer un autre choix avec `Lab().save_model(exp_id, precision, note)` ;
 - `agents/orchestrator.py` : délègue via `ask_dataset_builder` / `ask_model_researcher` /
   `ask_evaluator` ; chaque délégation repart d'une conversation vide (l'état vit sur disque).

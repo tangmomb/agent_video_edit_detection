@@ -628,22 +628,26 @@ class Lab:
         (d / "final_test.json").write_text(json.dumps(_jsonable(result), indent=2), encoding="utf-8")
         return _jsonable(result)
 
-    def save_model(self, experiment_id: str, precision: float, note: str) -> dict:
+    def save_model(self, experiment_id: str, precision: float, note: str,
+                   test: dict | None = None) -> dict:
         _, _, _, op = self._val_at(experiment_id, precision)
         config = json.loads((EXP_DIR / experiment_id / "config.json").read_text(encoding="utf-8"))
         split_id = config.get("split_id", LEGACY_SPLIT)
         self._split_map(split_id)  # refuse le split 'hash' : son test n'a jamais été figé
         prod = {"experiment_id": experiment_id, "split_id": split_id,
                 "precision_visee": precision, "threshold": op["threshold"],
-                "val_recall": op["recall"], "val_precision": op["precision"], "note": note, "time": time.time()}
+                "val_recall": op["recall"], "val_precision": op["precision"],
+                "test": test or self._test_status(experiment_id, precision), "note": note, "time": time.time()}
         (EXP_DIR / "production.json").write_text(json.dumps(_jsonable(prod), indent=2), encoding="utf-8")
         return _jsonable(prod)
 
     def select_production(self, precision: float = metrics.DEFAULT_PRECISION) -> dict:
-        """Choix automatique du modèle de production, fait par le code en fin de run : parmi les
-        expériences du plus gros split (le plus de vidéos ; à égalité, le plus récent), celle de
-        meilleur rappel sur val à la précision visée ; égalités départagées par AP, AUC puis
-        ms/frame. Écrit production.json (via save_model) et renvoie le classement."""
+        """Choix automatique du modèle de production, fait par le code en fin de run, parmi les
+        expériences du plus gros split (le plus de clips ; à égalité, le plus récent) : celle de
+        meilleur rappel sur val à la précision visée parmi celles qui ont réussi leur test final
+        (précision visée tenue sur test). À défaut, la meilleure non testée, puis la meilleure
+        tout court, marquées comme non vérifiées. Égalités départagées par AP, AUC puis temps de
+        calcul. Écrit production.json (via save_model) et renvoie le classement."""
         splits = self._split_summaries()
         if not splits:
             return {"error": "aucun split figé : rien à mettre en production"}
@@ -656,15 +660,34 @@ class Lab:
             op = metrics.recall_at_precision(y, probs, precision)
             ranked.append({"experiment_id": e["id"], "val_recall": op["recall"] if op else 0.0,
                            "ap": e["val"]["ap"] or 0.0, "auc": e["val"]["auc"] or 0.0,
-                           "ms_par_frame": e["ms_par_frame"]})
+                           "ms_par_frame": e["ms_par_frame"], "test": self._test_status(e["id"], precision)})
         if not ranked:
             return {"error": f"aucune expérience sur le plus gros split ({big})"}
         ranked.sort(key=lambda r: (-r["val_recall"], -r["ap"], -r["auc"], r["ms_par_frame"]))
-        best = ranked[0]
+        order = {"réussi": 0, "non testé": 1, "échoué": 2}
+        best = min(ranked, key=lambda r: order[r["test"]["statut"]])  # min garde l'ordre val à égalité
+        verifie = best["test"]["statut"] == "réussi"
         prod = self.save_model(best["experiment_id"], precision,
-                               f"choix automatique de fin de run : meilleur rappel val à précision "
-                               f"{precision} sur {big} (le plus gros split)")
-        return _jsonable({"split_id": big, "production": prod, "classement": ranked})
+                               f"choix automatique de fin de run sur {big} (le plus gros split) : "
+                               + ("meilleur rappel val parmi les modèles qui ont réussi leur test final"
+                                  if verifie else "NON VÉRIFIÉ sur test (aucun modèle n'a réussi son test "
+                                  f"final), meilleur rappel val ({best['test']['statut']})"),
+                               test=best["test"])
+        return _jsonable({"split_id": big, "production": prod, "verifie_sur_test": verifie,
+                          "classement": ranked})
+
+    def _test_status(self, experiment_id: str, precision: float) -> dict:
+        """Résultat du test final d'une expérience pour une précision visée : réussi si la
+        précision visée est tenue sur test au seuil choisi sur val."""
+        path = EXP_DIR / experiment_id / "final_test.json"
+        if not path.exists():
+            return {"statut": "non testé"}
+        ft = json.loads(path.read_text(encoding="utf-8"))
+        if ft["precision_visee"] != precision:
+            return {"statut": "non testé", "detail": f"testé à une autre précision visée ({ft['precision_visee']})"}
+        t = ft["test"]
+        return {"statut": "réussi" if t["precision"] >= precision else "échoué",
+                "recall": t["recall"], "precision": t["precision"]}
 
     # ------------------------------------------------------------------ interne
     @staticmethod
