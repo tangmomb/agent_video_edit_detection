@@ -25,8 +25,8 @@ et seul exclude_clips retire un clip des splits. Ne refais jamais un split pour 
 score val : un val choisi pour être facile ne mesure plus rien. \
 Vérifie la composition de val et test (dataset_info avec split_id) avant d'entraîner.
 
-Exclusions : exclude_clips retire tout de suite un clip de tous les splits, existants et futurs. \
-Ne l'utilise que pour un défaut du clip lui-même (rendu cassé, doublon), jamais parce qu'un modèle \
+Exclusions : exclude_clips retire un clip des splits créés ensuite ; les splits existants ne \
+changent pas, il faut donc un nouveau split pour qu'elle compte. Ne l'utilise que pour un défaut du clip lui-même (rendu cassé, doublon), jamais parce qu'un modèle \
 s'y trompe : les cas où le modèle échoue sont précisément ceux qu'il faut garder, et retirer un \
 clip difficile du val fausse la mesure. Justifie chaque exclusion dans ton rapport.
 
@@ -38,7 +38,7 @@ dessus pour avoir une référence. Arrête-toi quand le lot demandé est fait ou
 bougent plus.
 
 Rapport final (court, en français) : le split utilisé (et pourquoi si tu l'as créé) ; pour chaque \
-expérience, son id, l'hypothèse et le résultat (rappel à 95 % de précision, AUC, AP, ms/image) ; le \
+expérience, son id, l'hypothèse et le résultat (rappel à 95 % de précision, AUC, AP) ; le \
 meilleur candidat selon toi et pourquoi ; ce que tu essaierais ensuite et les données qui te \
 manquent, le cas échéant."""
 
@@ -82,12 +82,12 @@ def make(lab: Lab) -> Agent:
                 description="Entraîne un classifieur binaire (ajout de montage visible ou non) sur des "
                             "embeddings figés, sur le train du split choisi avec un sous-échantillonnage "
                             "optionnel (balance), et l'évalue sur le val de ce split. Renvoie l'id d'expérience, AUC, AP, "
-                            "le rappel au seuil de précision 95 % (avec FP/FN), le coût de calcul "
-                            "(ms/image) et l'effet du rééquilibrage. Les embeddings absents du cache sont calculés à la volée (GPU).",
+                            "le rappel au seuil de précision 95 % (avec FP/FN) et l'effet du "
+                            "rééquilibrage. Les embeddings absents du cache sont calculés à la volée (GPU).",
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "features": {"type": "array", "items": {"type": "string"},
+                        "embeddings": {"type": "array", "items": {"type": "string"},
                                      "description": "Liste 'extracteur:vue', extracteurs " + ", ".join(EXTRACTORS)
                                                     + " ; vues full (image entière) ou grid2 (image + 4 quadrants). "
                                                     "Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = "
@@ -115,15 +115,15 @@ def make(lab: Lab) -> Agent:
                                      "description": "Split sur lequel entraîner (train) et mesurer (val) : "
                                                     "un id renvoyé par make_split (voir list_experiments)."},
                     },
-                    "required": ["features", "split_id"],
+                    "required": ["embeddings", "split_id"],
                 },
                 fn=lab.train_model,
             ),
             Tool(
                 name="exclude_clips",
-                description="Retire des clips de tous les splits, présents et futurs, sans supprimer de "
-                            "fichier. Réservé aux clips défectueux ou dupliqués ; s'applique tout de suite aux "
-                            "splits existants.",
+                description="Retire des clips des splits créés ensuite (make_split), sans supprimer de "
+                            "fichier ; les splits existants ne changent pas. Réservé aux clips défectueux "
+                            "ou dupliqués.",
                 input_schema={
                     "type": "object",
                     "properties": {

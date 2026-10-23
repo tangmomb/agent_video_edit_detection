@@ -135,8 +135,8 @@ def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, client
         f"`{choice['production']['experiment_id']}` sur `{choice['split_id']}` (le plus gros split), seuil "
         f"{choice['production']['threshold']} : meilleur rappel val à précision "
         f"{choice['production']['precision_visee']}. Classement :\n\n"
-        + "\n".join(f"- {r['experiment_id']} : rappel val {r['val_recall']}, AP {r['ap']}, AUC {r['auc']}, "
-                    f"{r['ms_par_frame']} ms/image" for r in choice["classement"]))
+        + "\n".join(f"- {r['experiment_id']} : rappel val {r['val_recall']}, AP {r['ap']}, AUC {r['auc']}"
+                    for r in choice["classement"]))
     session.finish(report=report)
     (session.run_dir / "report.md").write_text(report, encoding="utf-8")
     print(f"\n--- coût de la session : {session.spent:.2f} $ — journaux : {session.run_dir}")

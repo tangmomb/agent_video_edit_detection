@@ -47,7 +47,7 @@ SPLITS_DIR = DATA_DIR / "splits"
 # Clips du test, figés au premier split : les splits suivants ne refont que train/val, et les
 # vidéos générées ensuite n'entrent jamais en test (le Model Researcher ne peut pas l'influencer).
 TEST_SET = SPLITS_DIR / "test_set.json"
-# Vidéos retirées de tous les splits (défaut de rendu, doublon) : exclude_clips, Model Researcher.
+# Clips retirés des splits créés ensuite (défaut de rendu, doublon) : exclude_clips, Model Researcher.
 EXCLUDED = DATA_DIR / "excluded.json"
 # Découpage d'avant make_split, non figé : refusé pour entraîner et tester.
 LEGACY_SPLIT = "hash"
@@ -84,16 +84,18 @@ def _compact_val(val: dict) -> dict:
     return {**out, "seuil_p95": op["threshold"], "recall": op["recall"], "fp": op["fp"], "fn": op["fn"]}
 
 
-def _compact(e: dict) -> dict:
+def _compact(e: dict, errors: dict | None = None) -> dict:
     """Expérience en format court pour les agents, sans son split (elle est rangée dessous) :
-    config, hypothèse, val à 95 %, coût, test final. Le détail (90/99 %, volumes, durées) reste
-    dans model_results/."""
-    out = {k: e[k] for k in ("id", "features", "model", "temporal", "params") if k in e}
+    config, hypothèse, val à 95 % et ses erreurs (errors, voir Lab._val_errors), test final. Le détail (90/99 %, volumes, durées) reste dans model_results/."""
+    out = {"id": e["id"]} if "id" in e else {}
+    out["embeddings"] = e["features"]
+    out.update({k: e[k] for k in ("model", "temporal", "params") if k in e})
     if e.get("balance"):
         out["balance"] = e["balance"]
     out["hypothese"] = e.get("note", "")
     out["val"] = _compact_val(e["val"])
-    out["ms_par_image"] = round(float(e["ms_par_frame"]), 1)
+    if errors is not None:
+        out["erreurs_val"] = errors
     if "final_test" in e:
         t, ft = e["final_test"]["test"], e["final_test"]
         out["test"] = {"recall": t["recall"], "precision": t["precision"], "fp": t["fp"], "fn": t["fn"],
@@ -158,8 +160,9 @@ class Lab:
         return self._rows
 
     def _split_map(self, split_id: str) -> dict[str, str]:
-        """sample_id -> train/val/test. Les vidéos exclues par le split, ou générées après sa
-        création, n'y figurent pas."""
+        """sample_id -> train/val/test. Les clips exclus à la création du split, ou générés après,
+        n'y figurent pas. Une exclusion postérieure ne change pas un split existant : son val et
+        son test restent ceux sur lesquels ses expériences ont été mesurées."""
         if split_id == LEGACY_SPLIT:
             raise ValueError("le split 'hash' n'est plus utilisable (il n'était pas figé) : crée un split "
                              "avec make_split et ré-entraîne dessus")
@@ -167,7 +170,7 @@ class Lab:
         if not path.exists():
             raise ValueError(f"split inconnu : {split_id} (splits existants dans list_experiments ; sinon make_split)")
         sp = json.loads(path.read_text(encoding="utf-8"))
-        excluded = set(sp["excluded"]) | set(self._excluded())
+        excluded = set(sp["excluded"])
         return {r["sample_id"]: sp["clips"][r["source"]] for r in self.rows
                 if r["source"] in sp["clips"] and r["sample_id"] not in excluded}
 
@@ -367,9 +370,10 @@ class Lab:
         return out
 
     def exclude_clips(self, clips: dict) -> dict:
-        """Retire des vidéos de tous les splits, présents et futurs : {sample_id: raison}. Réservé
-        aux défauts constatés sur la vidéo elle-même (rendu cassé, doublon), jamais aux erreurs
-        d'un modèle. Les fichiers ne sont pas supprimés."""
+        """Retire des clips des splits créés ensuite : {sample_id: raison}. Les splits existants ne
+        changent pas, pour qu'une exclusion ne puisse pas rendre un val déjà mesuré plus facile.
+        Réservé aux défauts constatés sur le clip lui-même (rendu cassé, doublon), jamais aux
+        erreurs d'un modèle. Les fichiers ne sont pas supprimés."""
         all_sids = {r["sample_id"] for r in self.rows}
         if not clips:
             raise ValueError("aucun clip à exclure")
@@ -379,7 +383,8 @@ class Lab:
             raise ValueError("chaque exclusion doit avoir une raison")
         excluded = {**self._excluded(), **{k: str(v) for k, v in clips.items()}}
         EXCLUDED.write_text(json.dumps(excluded, ensure_ascii=False, indent=2), encoding="utf-8")
-        return {"clips_exclus": excluded}
+        return {"clips_exclus": excluded,
+                "effet": "appliqué aux splits créés à partir de maintenant (make_split) ; splits existants inchangés"}
 
     def make_split(self, note: str, val_ratio: float = 0.2, test_ratio: float = 0.2,
                    stratify: list[str] | None = None, seed: int = 0) -> dict:
@@ -454,7 +459,7 @@ class Lab:
         path = EXP_DIR / "production.json"
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
-    def train_model(self, features: list[str], model: str = "logreg", temporal: str = "none",
+    def train_model(self, embeddings: list[str], model: str = "logreg", temporal: str = "none",
                     params: dict | None = None, balance: dict | None = None, note: str = "",
                     split_id: str | None = None) -> dict:
         if not split_id:
@@ -466,7 +471,7 @@ class Lab:
             raise ValueError("splits train/val vides : il faut d'abord générer des données")
         params = params or {}
         tr, balance_report = self._balance(tr, balance or {})
-        X, feat_ms = self._X(features, temporal, self._prev())
+        X, feat_ms = self._X(embeddings, temporal, self._prev())
         y = self._y()
 
         clf = self._make(model, params)
@@ -486,7 +491,8 @@ class Lab:
         }
         if balance_report:
             result["reequilibrage_train"] = balance_report
-        config = {"split_id": split_id, "features": features, "model": model, "temporal": temporal,
+        # Clé "features" gardée dans config.json : l'interface et final_test la relisent.
+        config = {"split_id": split_id, "features": embeddings, "model": model, "temporal": temporal,
                   "params": params, "balance": balance or {}, "note": note}
         d = EXP_DIR / exp_id
         d.mkdir(parents=True)
@@ -499,7 +505,7 @@ class Lab:
         with open(d / "model.pkl", "wb") as fh:
             pickle.dump(clf, fh)
         # Format court : la config est celle de l'appel, le détail reste dans metrics.json.
-        short = {"val": _compact_val(result["val"]), "ms_par_image": round(float(result["ms_par_frame"]), 1)}
+        short = {"val": _compact_val(result["val"])}
         if balance_report:
             short["reequilibrage_train"] = balance_report
         return _jsonable({"experiment_id": exp_id, **short})
@@ -597,12 +603,22 @@ class Lab:
         out = []
         for sp in summaries:
             sid = sp["split_id"]
-            mine = [_compact(e) for e in exps if e.get("split_id") == sid]
+            mine = [_compact(e, self._val_errors(e["id"])) for e in exps if e.get("split_id") == sid]
             if (split_id and sid != split_id) or (not split_id and not mine and sid != latest):
                 continue
             va = self._idx("val", sid)
-            entry = {"split_id": sid, **{s: sp[s] for s in SPLITS},
-                     "val_images": len(va), "val_positifs": int(y[va].sum()),
+            # Rushes par partie, recomptés sur les clips réellement assignés : rushes_shared (rushes
+            # présents dans plusieurs parties) doit rester à 0, sinon val/test fuient dans train.
+            m = self._split_map(sid)
+            parts: dict[str, set[str]] = {}
+            for r in self.rows:
+                if r["sample_id"] in m:
+                    parts.setdefault(r["source"], set()).add(m[r["sample_id"]])
+            entry = {"split_id": sid,
+                     **{f"rushes_{s}": sum(ps == {s} for ps in parts.values()) for s in SPLITS},
+                     "rushes_shared": sum(len(ps) > 1 for ps in parts.values()),
+                     **{f"clips_{s}": sp[s] for s in SPLITS},
+                     "val_images": len(va), "val_images_positives": int(y[va].sum()),
                      "clips_hors_split": sp["clips_hors_split"]}
             if sp["clips_exclus"]:
                 entry["clips_exclus"] = sp["clips_exclus"]
@@ -755,6 +771,28 @@ class Lab:
         if op is None:
             raise ValueError(f"précision {precision} jamais atteinte sur val par {experiment_id}")
         return preds["frames"], y, probs, op
+
+    def _val_errors(self, experiment_id: str) -> dict | None:
+        """Résumé des erreurs val au seuil de précision par défaut, pour list_experiments : ajouts
+        ratés par type (une image ratée compte pour chaque type visible), clips à fausses alertes
+        avec leur thème. Le détail est dans analyze_errors."""
+        try:
+            frames, y, probs, op = self._val_at(experiment_id, metrics.DEFAULT_PRECISION)
+        except ValueError:
+            return None  # précision jamais atteinte
+        by_frame = {r["frame"]: r for r in self.rows}
+        pred = probs >= op["threshold"]
+        fn, fp = Counter(), Counter()
+        for f, yi, pi in zip(frames, y, pred):
+            if f not in by_frame:
+                continue
+            if yi and not pi:
+                fn.update({e["type"] for e in self._visible(by_frame[f])})
+            elif pi and not yi:
+                fp[by_frame[f]["sample_id"]] += 1
+        return {"fn_par_type": dict(fn.most_common()),
+                "fp_par_clip": [{"clip": c, "fp": n, "theme": self._ann(c).get("topic")}
+                                for c, n in fp.most_common(5)]}
 
     def _visible(self, r: dict) -> list[dict]:
         """Éléments pleinement visibles sur la frame, avec surface relative, présence d'un fond,
