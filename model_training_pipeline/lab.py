@@ -6,8 +6,13 @@ Règles :
 - cible binaire label_any (au moins un ajout pleinement visible) ; les frames ambiguës (un
   élément en fondu) sont exclues de l'entraînement et de l'évaluation ;
 - métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val ;
-- les décisions se prennent sur le split *val* ; le split *test* n'est accessible que par
-  final_test, en nombre limité par session ;
+- la génération ignore les splits ; un split est un découpage train/val/test nommé et figé,
+  fait par clip source (make_split, stockés dans data/splits/) : les vidéos générées après sa
+  création n'y entrent pas. Chaque expérience retient son split : on ne compare que des
+  expériences faites sur le même split. L'ancien découpage « hash » (hash du clip) n'est plus
+  utilisable : il grossissait à chaque génération, donc son val changeait sans changer de nom ;
+- les décisions se prennent sur *val* ; *test* n'est accessible que par final_test, en
+  nombre limité par session ;
 - chaque entraînement est enregistré dans model_results/<exp_id>/ (à la racine du projet).
 """
 
@@ -29,15 +34,31 @@ from sklearn.preprocessing import StandardScaler
 
 from edit_generator import annotations
 from edit_generator.config import DATA_DIR, ROOT, SAMPLES_DIR
+from edit_generator.generator import ELEMENT_TYPES
 from edit_generator.ratelimit import QuotaExceeded, api_quotas
 
 from . import metrics
 from .features import EXTRACTORS, VIEWS, extraction_cost, get_features
-from .frames import FPS, FRAMES_DIR, build, load_index, source_key, split_for
+from .frames import FPS, FRAMES_DIR, build, load_index, source_key
 
 EXP_DIR = ROOT / "model_results"
 DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des générations, à côté des vidéos
+SPLITS_DIR = DATA_DIR / "splits"
+# Clips du test, figés au premier split : les splits suivants ne refont que train/val, et les
+# vidéos générées ensuite n'entrent jamais en test (le Model Researcher ne peut pas l'influencer).
+TEST_SET = SPLITS_DIR / "test_set.json"
+# Vidéos retirées de tous les splits (défaut de rendu, doublon) : exclude_videos, Dataset Builder.
+EXCLUDED = DATA_DIR / "excluded.json"
+# Découpage d'avant make_split, non figé : refusé pour entraîner et tester (expériences exp_001-024).
+LEGACY_SPLIT = "hash"
+SPLITS = ("train", "val", "test")
+# Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
+STRATIFY_KEYS = ("type", "animation", "orientation", "theme", "video_vide")
 MODELS = ("logreg", "mlp", "hgb")
+# Groupes de frames qu'on peut sous-échantillonner dans train (train_model, paramètre balance) :
+# un type d'élément = frames positives dont tous les ajouts visibles sont de ce type ;
+# negatif = frames sans ajout ; video_vide = frames des vidéos sans aucun ajout ; orientation.
+BALANCE_GROUPS = (*ELEMENT_TYPES, "negatif", "video_vide", "portrait", "paysage")
 MAX_QUOTA_FAILURES = 3  # échecs de quota d'affilée avant d'interrompre une génération
 
 
@@ -57,8 +78,39 @@ def _area_bucket(a: float) -> str:
     return "<1%" if a < 0.01 else "1-3%" if a < 0.03 else "3-8%" if a < 0.08 else ">8%"
 
 
+def _has_box(el: dict) -> bool:
+    """L'élément est posé sur un fond (encadré de texte, bandeau, carton plein écran)."""
+    return bool(el["style"].get("box") or el["type"] == "lower_third")
+
+
+def _anim_in(el: dict) -> str:
+    ain = el["animation"]["in"]
+    return ain["type"] + ("+fade" if ain.get("fade") else "")
+
+
+def _orient(ann: dict) -> str:
+    return "portrait" if ann["video"]["height"] > ann["video"]["width"] else "paysage"
+
+
+def _video_traits(ann: dict, keys: list[str]) -> set[str]:
+    """Caractéristiques d'une vidéo selon les clés de stratification (STRATIFY_KEYS)."""
+    out = set()
+    for k in keys:
+        if k == "type":
+            out |= {f"type:{el['type']}" for el in ann["elements"]}
+        elif k == "animation":
+            out |= {f"animation:{_anim_in(el)}" for el in ann["elements"]}
+        elif k == "orientation":
+            out.add(f"orientation:{_orient(ann)}")
+        elif k == "theme":
+            out.add(f"theme:{ann.get('topic') or 'inconnu'}")
+        elif k == "video_vide" and not ann["elements"]:
+            out.add("video_vide")
+    return out
+
+
 class Lab:
-    def __init__(self, data_budget: int = 300, final_test_budget: int = 2, max_per_request: int = 100):
+    def __init__(self, data_budget: int = 250, final_test_budget: int = 2, max_per_request: int = 100):
         self.data_budget = data_budget
         self.max_per_request = max_per_request
         self.generated = 0
@@ -76,10 +128,40 @@ class Lab:
             self._rows = load_index()
         return self._rows
 
-    def _idx(self, split: str) -> np.ndarray:
+    def _split_map(self, split_id: str) -> dict[str, str]:
+        """sample_id -> train/val/test. Les vidéos exclues par le split, ou générées après sa
+        création, n'y figurent pas."""
+        if split_id == LEGACY_SPLIT:
+            raise ValueError("le split 'hash' n'est plus utilisable (il n'était pas figé) : crée un split "
+                             "avec make_split et ré-entraîne dessus")
+        path = SPLITS_DIR / f"{split_id}.json"
+        if not path.exists():
+            raise ValueError(f"split inconnu : {split_id} (splits existants dans dataset_info ; sinon make_split)")
+        sp = json.loads(path.read_text(encoding="utf-8"))
+        excluded = set(sp["excluded"]) | set(self._excluded())
+        return {r["sample_id"]: sp["clips"][r["source"]] for r in self.rows
+                if r["source"] in sp["clips"] and r["sample_id"] not in excluded}
+
+    def _excluded(self) -> dict[str, str]:
+        return json.loads(EXCLUDED.read_text(encoding="utf-8")) if EXCLUDED.exists() else {}
+
+    def _test_clips(self) -> set[str] | None:
+        """Clips du test figé ; à défaut, ceux du premier split existant (splits d'avant test_set)."""
+        if TEST_SET.exists():
+            return set(json.loads(TEST_SET.read_text(encoding="utf-8"))["clips"])
+        first = sorted(SPLITS_DIR.glob("split_*.json"))
+        if not first:
+            return None
+        sp = json.loads(first[0].read_text(encoding="utf-8"))
+        clips = sorted(c for c, v in sp["clips"].items() if v == "test")
+        TEST_SET.write_text(json.dumps({"from": sp["split_id"], "clips": clips}, indent=2), encoding="utf-8")
+        return set(clips)
+
+    def _idx(self, split: str, split_id: str) -> np.ndarray:
         """Frames non ambiguës du split (celles sur lesquelles on entraîne et on mesure)."""
-        return np.array([i for i, r in enumerate(self.rows) if r["split"] == split and not r["ambiguous"]],
-                        dtype=int)
+        m = self._split_map(split_id)
+        return np.array([i for i, r in enumerate(self.rows)
+                         if m.get(r["sample_id"]) == split and not r["ambiguous"]], dtype=int)
 
     def _y(self) -> np.ndarray:
         return np.array([r["label_any"] for r in self.rows])
@@ -112,48 +194,92 @@ class Lab:
         return X, ms
 
     # ------------------------------------------------------------------ outils
-    def dataset_info(self) -> dict:
+    def _composition(self, sids: set[str], with_positives: bool = True) -> dict:
+        """Composition d'un ensemble de vidéos : volumes et répartitions des éléments."""
+        rows = [r for r in self.rows if r["sample_id"] in sids]
+        anns = [self._ann(s) for s in sorted(sids)]
+        els = [(a, el) for a in anns for el in a["elements"]]
+
+        def count(key):
+            return dict(Counter(key(a, el) for a, el in els).most_common())
+
+        clear = [r for r in rows if not r["ambiguous"]]
+        out = {"videos": len(sids), "sources": len({r["source"] for r in rows}),
+               "frames": len(clear), "frames_ambigues_exclues": len(rows) - len(clear),
+               "videos_sans_ajout": sum(not a["elements"] for a in anns),
+               "videos_par_orientation": dict(Counter(_orient(a) for a in anns)),
+               "elements_par_type": count(lambda a, el: el["type"]),
+               "elements_par_animation_entree": count(lambda a, el: _anim_in(el)),
+               "elements_par_animation_sortie": count(lambda a, el: el["animation"]["out"]["type"]),
+               "elements_par_surface": count(lambda a, el: _area_bucket(
+                   el["bbox"][2] * el["bbox"][3] / (a["video"]["width"] * a["video"]["height"]))),
+               "elements_par_fond": count(lambda a, el: "avec fond" if _has_box(el) else "sans fond")}
+        if with_positives:
+            out["taux_positifs"] = sum(r["label_any"] for r in clear) / len(clear) if clear else None
+        return out
+
+    def _split_summaries(self) -> list[dict]:
+        out = []
+        all_sids = {r["sample_id"] for r in self.rows}
+        for sid in sorted(p.stem for p in SPLITS_DIR.glob("split_*.json")):
+            m = self._split_map(sid)
+            sp = json.loads((SPLITS_DIR / f"{sid}.json").read_text(encoding="utf-8"))
+            out.append({"split_id": sid, **{s: sum(v == s for v in m.values()) for s in SPLITS},
+                        "note": sp["note"], "date": sp["date"], "params": sp["params"],
+                        "videos_exclues": len(sp["excluded"]),
+                        # vidéos générées après la création du split
+                        "videos_hors_split": len(all_sids - set(m) - set(sp["excluded"]))})
+        return out
+
+    def dataset_info(self, split_id: str | None = None) -> dict:
         rows = self.rows
         budgets = {"videos_generables_restantes": self.data_budget - self.generated,
                    "final_tests_restants": self.final_tests_left, "quotas_api": api_quotas()}
         if not rows:
             return {"dataset_vide": True, "budgets": budgets,
                     "message": "Aucune vidéo annotée : le dataset est à constituer (generate_data)."}
-        y = self._y()
-        info = {"fps": FPS, "splits": {}, "extractors": {}, "budgets": budgets}
-        for split in ("train", "val", "test"):
-            all_idx = [i for i, r in enumerate(rows) if r["split"] == split]
-            if not all_idx:
-                continue
-            idx = self._idx(split)
-            sids = {rows[i]["sample_id"] for i in all_idx}
-            types = Counter(el["type"] for s in sids for el in self._ann(s)["elements"])
-            entry = {"videos": len(sids), "sources": len({rows[i]["source"] for i in all_idx}),
-                     "frames": len(idx), "frames_ambigues_exclues": len(all_idx) - len(idx),
-                     "elements_par_type": dict(types)}
-            if split != "test":
-                entry["taux_positifs"] = float(y[idx].mean()) if len(idx) else None
-            info["splits"][split] = entry
+        sids = sorted({r["sample_id"] for r in rows})
+        info = {"fps": FPS, "dataset": self._composition(set(sids)), "splits": self._split_summaries(),
+                "extractors": {}, "budgets": budgets}
+        if split_id:
+            m = self._split_map(split_id)
+            info["composition_du_split"] = {
+                "split_id": split_id,
+                **{s: self._composition({k for k, v in m.items() if v == s}, with_positives=s != "test")
+                   for s in SPLITS}}
+        themes = Counter(self._ann(s).get("topic") or "inconnu" for s in sids)
+        clips = Counter(source_key(self._ann(s)) for s in sids)
+        info["diversite"] = {
+            "videos": len(sids), "clips_sources_distincts": len(clips),
+            "videos_par_theme": dict(themes.most_common()),
+            # Vidéos générées avant que generate_data n'écarte les clips déjà utilisés.
+            "clips_reutilises": {k: n for k, n in clips.most_common() if n > 1},
+        }
         for ext in EXTRACTORS:
             for view in VIEWS:
                 ms = extraction_cost(ext, view)
                 info["extractors"][f"{ext}:{view}"] = {"en_cache": ms is not None, "ms_par_frame": ms}
         return _jsonable(info)
 
+    def _used_sources(self) -> set[str]:
+        return {source_key(annotations.load(p.parent)) for p in SAMPLES_DIR.glob("s*/annotations.json")}
+
     def generate_data(self, n: int, reason: str, query: str | None = None, orientation: str | None = None,
                       type_weights: dict | None = None, lang: str = "mix",
-                      empty_prob: float | None = None, split: str | None = None) -> dict:
+                      empty_prob: float | None = None) -> dict:
         from edit_generator.generator import GenerationConfig, generate_sample
         from edit_generator.sources import default_photo_source, default_video_source
 
-        if split not in (None, "train", "val", "test"):
-            return {"error": f"split inconnu : {split} (train, val ou test)"}
         n = min(int(n), self.max_per_request, self.data_budget - self.generated)
         if n <= 0:
             return {"error": "budget de génération épuisé pour cette session"}
-        # Le split dépend de la vidéo source : pour cibler un split, on ne retient que les sources
-        # qui y tombent.
-        accept = (lambda src: split_for(source_key({"source": src})) == split) if split else None
+        # Un clip source ne sert qu'une fois : deux vidéos sur le même fond gonflent le dataset sans
+        # le diversifier, et le split se fait par clip.
+        used = self._used_sources()
+
+        def accept(src: dict) -> bool:
+            return source_key({"source": src}) not in used
+
         seeds = [int(p.name[1:]) for p in SAMPLES_DIR.glob("s*") if p.name[1:].isdigit()]
         start = max(seeds, default=0) + 1
         cfg = GenerationConfig(lang=lang)
@@ -165,8 +291,9 @@ class Lab:
         ok, errors, quota_streak, stopped = 0, [], 0, None
         for seed in range(start, start + n):
             try:
-                generate_sample(seed, SAMPLES_DIR, cfg, query=query, orientation=orientation,
-                                video_source=videos, photo_source=photos, accept_source=accept)
+                out = generate_sample(seed, SAMPLES_DIR, cfg, query=query, orientation=orientation,
+                                      video_source=videos, photo_source=photos, accept_source=accept)
+                used.add(source_key(annotations.load(out)))
                 ok += 1
                 quota_streak = 0
             except QuotaExceeded as e:
@@ -181,8 +308,8 @@ class Lab:
         build()
         self._rows = None
         with open(DATA_REQUESTS, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"n": n, "ok": ok, "query": query, "orientation": orientation, "split": split,
-                                 "type_weights": type_weights, "reason": reason, "time": time.time()}) + "\n")
+            fh.write(json.dumps({"n": n, "ok": ok, "query": query, "orientation": orientation,
+                                 "type_weights": type_weights, "lang": lang, "empty_prob": cfg.empty_prob, "reason": reason, "time": time.time()}) + "\n")
         return {"generees": ok, "echecs": len(errors), "exemples_erreurs": errors[:3],
                 "arret": stopped,
                 "frames_total": len(self.rows), "budget_restant": self.data_budget - self.generated,
@@ -194,18 +321,106 @@ class Lab:
             return []
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
+    def exclude_videos(self, videos: dict) -> dict:
+        """Retire des vidéos de tous les splits, présents et futurs : {sample_id: raison}. Réservé
+        aux défauts constatés sur la vidéo elle-même (rendu cassé, doublon), jamais aux erreurs
+        d'un modèle. Les fichiers ne sont pas supprimés."""
+        all_sids = {r["sample_id"] for r in self.rows}
+        if not videos:
+            raise ValueError("aucune vidéo à exclure")
+        if set(videos) - all_sids:
+            raise ValueError(f"vidéos inconnues : {sorted(set(videos) - all_sids)}")
+        if any(not str(v).strip() for v in videos.values()):
+            raise ValueError("chaque exclusion doit avoir une raison")
+        excluded = {**self._excluded(), **{k: str(v) for k, v in videos.items()}}
+        EXCLUDED.write_text(json.dumps(excluded, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"videos_exclues": excluded}
+
+    def make_split(self, note: str, val_ratio: float = 0.2, test_ratio: float = 0.2,
+                   stratify: list[str] | None = None, seed: int = 0) -> dict:
+        """Crée un split train/val/test figé. Toutes les vidéos d'un même clip source vont du même
+        côté. Chaque caractéristique de stratify (type d'élément, animation, thème...) est
+        répartie au plus près des proportions visées (stratification itérative, caractéristiques
+        les plus rares d'abord) ; par défaut toutes, [] pour un tirage purement aléatoire.
+        Le test est figé au premier split (TEST_SET) : ensuite, test_ratio est ignoré et seuls
+        train et val sont redécoupés."""
+        # Par défaut tout est stratifié : sans ça, un thème rare (ex. les négatifs difficiles
+        # « texte dans la scène ») peut tomber entièrement en test et jamais en val (run 004).
+        stratify = list(STRATIFY_KEYS) if stratify is None else list(stratify)
+        exclude = self._excluded()
+        if not note.strip():
+            raise ValueError("note obligatoire : pourquoi ce split")
+        if not (0 < val_ratio < 1 and 0 < test_ratio < 1 and val_ratio + test_ratio <= 0.6):
+            raise ValueError("val_ratio et test_ratio doivent être > 0, avec val + test <= 0.6")
+        if set(stratify) - set(STRATIFY_KEYS):
+            raise ValueError(f"stratify parmi {STRATIFY_KEYS}")
+        all_sids = {r["sample_id"] for r in self.rows}
+        frozen = self._test_clips()
+
+        clips: dict[str, set[str]] = {}  # clip source -> caractéristiques de ses vidéos
+        for sid in sorted(all_sids - set(exclude)):
+            ann = self._ann(sid)
+            clips.setdefault(source_key(ann), set()).update(_video_traits(ann, stratify))
+        if len(clips) < 3:
+            raise ValueError("il faut au moins 3 clips sources pour faire un split")
+        ratios = {"train": 1 - val_ratio - test_ratio, "val": val_ratio, "test": test_ratio}
+        total = Counter(t for traits in clips.values() for t in traits)
+        rng = np.random.default_rng(seed)
+        order = list(clips)
+        rng.shuffle(order)
+        order.sort(key=lambda c: min((total[t] for t in clips[c]), default=10 ** 9))
+        n_clips, got, assign = len(clips), Counter(), {}
+        cap = {s: max(1, round(ratios[s] * n_clips)) for s in SPLITS}  # volumes visés, en clips
+        got_t: dict[str, Counter] = {s: Counter() for s in SPLITS}
+        if frozen is not None:  # test imposé : ses clips d'abord, le reste en train/val
+            for c in [c for c in order if c in frozen]:
+                assign[c] = "test"
+                got["test"] += 1
+                got_t["test"].update(clips[c])
+            order = [c for c in order if c not in frozen]
+            cap["test"] = got["test"]
+        cap["train"] = n_clips - cap["val"] - cap["test"]
+        for c in order:
+            def deficit(s):
+                # Déficits relatifs (rapportés à la cible) : en absolu, un cas rare (vu une seule
+                # fois) partirait toujours en train, le split le plus gros.
+                trait = sum(1 - got_t[s][t] / (ratios[s] * total[t]) for t in clips[c])
+                return trait, 1 - got[s] / (ratios[s] * n_clips), rng.random()
+            s = max([s for s in SPLITS if got[s] < cap[s] and (s != "test" or frozen is None)], key=deficit)
+            assign[c] = s
+            got[s] += 1
+            got_t[s].update(clips[c])
+
+        SPLITS_DIR.mkdir(parents=True, exist_ok=True)
+        split_id = f"split_{len(list(SPLITS_DIR.glob('split_*.json'))) + 1:03d}"
+        params = {"val_ratio": val_ratio, "test_ratio": None if frozen is not None else test_ratio,
+                  "test_fige": frozen is not None, "stratify": stratify, "seed": seed}
+        (SPLITS_DIR / f"{split_id}.json").write_text(json.dumps(
+            {"split_id": split_id, "note": note, "date": time.strftime("%Y-%m-%d %H:%M"), "params": params,
+             "excluded": exclude, "clips": assign}, ensure_ascii=False, indent=2), encoding="utf-8")
+        if frozen is None:
+            self._test_clips()  # fige le test de ce premier split
+        m = self._split_map(split_id)
+        return _jsonable({"split_id": split_id, "params": params, "videos_exclues": len(exclude),
+                          **{s: self._composition({k for k, v in m.items() if v == s},
+                                                  with_positives=s != "test") for s in SPLITS}})
+
     def production(self) -> dict | None:
         path = EXP_DIR / "production.json"
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     def train_model(self, features: list[str], model: str = "logreg", temporal: str = "none",
-                    params: dict | None = None, note: str = "") -> dict:
+                    params: dict | None = None, balance: dict | None = None, note: str = "",
+                    split_id: str | None = None) -> dict:
+        if not split_id:
+            raise ValueError("split_id obligatoire : un split créé par make_split (voir dataset_info)")
         if model not in MODELS:
             raise ValueError(f"model dans {MODELS}")
-        tr, va = self._idx("train"), self._idx("val")
+        tr, va = self._idx("train", split_id), self._idx("val", split_id)
         if not len(tr) or not len(va):
             raise ValueError("splits train/val vides : il faut d'abord générer des données")
         params = params or {}
+        tr, balance_report = self._balance(tr, balance or {})
         X, feat_ms = self._X(features, temporal, self._prev())
         y = self._y()
 
@@ -221,10 +436,13 @@ class Lab:
         result = {
             "val": metrics.summary(y[va], probs), "train_s": train_s,
             "ms_par_frame": feat_ms + pred_ms, "n_features": X.shape[1],
-            "n_train": len(tr), "n_val": len(va), "data": self._data_snapshot(),
+            "n_train": len(tr), "n_val": len(va), "data": self._data_snapshot(split_id),
             "date": time.strftime("%Y-%m-%d %H:%M"),
         }
-        config = {"features": features, "model": model, "temporal": temporal, "params": params, "note": note}
+        if balance_report:
+            result["reequilibrage_train"] = balance_report
+        config = {"split_id": split_id, "features": features, "model": model, "temporal": temporal,
+                  "params": params, "balance": balance or {}, "note": note}
         d = EXP_DIR / exp_id
         d.mkdir(parents=True)
         (d / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
@@ -262,12 +480,15 @@ class Lab:
                 lambda r: {_area_bucket(max(e["area_ratio"] for e in self._visible(r)))}),
             "positifs_rates_avec_fond": rates(
                 lambda r: {"avec fond" if any(e["has_box"] for e in self._visible(r)) else "sans fond"}),
+            "positifs_rates_par_animation_entree": rates(lambda r: {e["animation"] for e in self._visible(r)}),
+            "positifs_rates_par_phase": rates(lambda r: {e["phase"] for e in self._visible(r)}),
             "positifs_rates_par_nb_elements": rates(lambda r: {min(len(r["visible"]), 4)}),
             "positifs_rates_par_orientation": rates(lambda r: {self._orientation(r)}),
             "faux_positifs_par_orientation": dict(Counter(self._orientation(r) for r in fp_rows)),
             "faux_positifs_par_video": dict(Counter(r["sample_id"] for r in fp_rows).most_common(8)),
             "exemples_rates": [{"frame": r["frame"], "t": r["t"],
-                                "elements": [{k: e[k] for k in ("type", "text", "area_ratio", "has_box")}
+                                "elements": [{k: e[k] for k in ("type", "text", "area_ratio", "has_box",
+                                                                "animation", "phase")}
                                              for e in self._visible(r)]} for r in fn_rows[:10]],
         })
 
@@ -320,18 +541,19 @@ class Lab:
         if self.final_tests_left <= 0:
             return {"error": "plus de final_test disponible dans cette session"}
         _, _, _, op = self._val_at(experiment_id, precision)
-        self.final_tests_left -= 1
         d = EXP_DIR / experiment_id
         config = json.loads((d / "config.json").read_text(encoding="utf-8"))
+        split_id = config.get("split_id", LEGACY_SPLIT)
+        te = self._idx("test", split_id)  # avant de décompter : un split refusé ne coûte pas de test
+        self.final_tests_left -= 1
         with open(d / "model.pkl", "rb") as fh:
             clf = pickle.load(fh)
         X, _ = self._X(config["features"], config["temporal"], self._prev())
-        te = self._idx("test")
         y = self._y()[te]
         probs = clf.predict_proba(X[te])[:, 1]
         s = metrics.summary(y, probs)
-        result = {"experiment_id": experiment_id, "precision_visee": precision,
-                  "seuil_choisi_sur_val": op["threshold"], "val": op,
+        result = {"experiment_id": experiment_id, "split_id": split_id,
+                  "precision_visee": precision, "seuil_choisi_sur_val": op["threshold"], "val": op,
                   "test": metrics.operating_point(y, probs, op["threshold"]),
                   "test_auc": s["auc"], "test_ap": s["ap"], "final_tests_restants": self.final_tests_left}
         (d / "final_test.json").write_text(json.dumps(_jsonable(result), indent=2), encoding="utf-8")
@@ -339,10 +561,41 @@ class Lab:
 
     def save_model(self, experiment_id: str, precision: float, note: str) -> dict:
         _, _, _, op = self._val_at(experiment_id, precision)
-        prod = {"experiment_id": experiment_id, "precision_visee": precision, "threshold": op["threshold"],
+        config = json.loads((EXP_DIR / experiment_id / "config.json").read_text(encoding="utf-8"))
+        split_id = config.get("split_id", LEGACY_SPLIT)
+        self._split_map(split_id)  # refuse le split 'hash' : son test n'a jamais été figé
+        prod = {"experiment_id": experiment_id, "split_id": split_id,
+                "precision_visee": precision, "threshold": op["threshold"],
                 "val_recall": op["recall"], "val_precision": op["precision"], "note": note, "time": time.time()}
         (EXP_DIR / "production.json").write_text(json.dumps(_jsonable(prod), indent=2), encoding="utf-8")
         return _jsonable(prod)
+
+    def select_production(self, precision: float = metrics.DEFAULT_PRECISION) -> dict:
+        """Choix automatique du modèle de production, fait par le code en fin de run : parmi les
+        expériences du plus gros split (le plus de vidéos ; à égalité, le plus récent), celle de
+        meilleur rappel sur val à la précision visée ; égalités départagées par AP, AUC puis
+        ms/frame. Écrit production.json (via save_model) et renvoie le classement."""
+        splits = self._split_summaries()
+        if not splits:
+            return {"error": "aucun split figé : rien à mettre en production"}
+        big = max(splits, key=lambda s: (sum(s[k] for k in SPLITS), s["split_id"]))["split_id"]
+        ranked = []
+        for e in self.list_experiments():
+            if e.get("split_id") != big:
+                continue
+            _, y, probs, _ = self._val_at(e["id"], 0.0)  # toutes les prédictions val de l'expérience
+            op = metrics.recall_at_precision(y, probs, precision)
+            ranked.append({"experiment_id": e["id"], "val_recall": op["recall"] if op else 0.0,
+                           "ap": e["val"]["ap"] or 0.0, "auc": e["val"]["auc"] or 0.0,
+                           "ms_par_frame": e["ms_par_frame"]})
+        if not ranked:
+            return {"error": f"aucune expérience sur le plus gros split ({big})"}
+        ranked.sort(key=lambda r: (-r["val_recall"], -r["ap"], -r["auc"], r["ms_par_frame"]))
+        best = ranked[0]
+        prod = self.save_model(best["experiment_id"], precision,
+                               f"choix automatique de fin de run : meilleur rappel val à précision "
+                               f"{precision} sur {big} (le plus gros split)")
+        return _jsonable({"split_id": big, "production": prod, "classement": ranked})
 
     # ------------------------------------------------------------------ interne
     @staticmethod
@@ -363,11 +616,52 @@ class Lab:
                                                  class_weight="balanced", random_state=0)
         return make_pipeline(*steps, clf)
 
-    def _data_snapshot(self) -> dict:
+    def _balance_groups(self, r: dict) -> set[str]:
+        """Groupes de rééquilibrage d'une frame (voir BALANCE_GROUPS)."""
+        ann = self._ann(r["sample_id"])
+        groups = {self._orientation(r)}
+        if not ann["elements"]:
+            groups.add("video_vide")
+        if not r["label_any"]:
+            groups.add("negatif")
+        else:
+            types = {el["type"] for el in ann["elements"] if el["id"] in r["visible"]}
+            if len(types) == 1:
+                groups.add(types.pop())
+        return groups
+
+    def _balance(self, tr: np.ndarray, balance: dict) -> tuple[np.ndarray, dict]:
+        """Sous-échantillonne les frames de train : balance = {groupe: fraction gardée}. Une frame
+        dans plusieurs groupes garde la plus petite fraction. Tirage déterministe (graine 0)."""
+        if not balance:
+            return tr, {}
+        unknown = set(balance) - set(BALANCE_GROUPS)
+        if unknown:
+            raise ValueError(f"groupes inconnus {sorted(unknown)} ; groupes possibles : {BALANCE_GROUPS}")
+        if any(not 0 <= float(v) <= 1 for v in balance.values()):
+            raise ValueError("chaque fraction gardée doit être entre 0 et 1")
+        rng = np.random.default_rng(0)
+        keep, before, after = [], Counter(), Counter()
+        for i in tr:
+            groups = self._balance_groups(self.rows[i]) & set(balance)
+            frac = min((float(balance[g]) for g in groups), default=1.0)
+            kept = rng.random() < frac
+            for g in groups:
+                before[g] += 1
+                after[g] += kept
+            if kept:
+                keep.append(i)
+        if not keep:
+            raise ValueError("le rééquilibrage ne laisse aucune frame de train")
+        report = {g: f"{after[g]}/{before[g]} frames gardées" for g in sorted(balance)}
+        report["frames_train"] = f"{len(keep)}/{len(tr)}"
+        return np.array(keep, dtype=int), report
+
+    def _data_snapshot(self, split_id: str) -> dict:
         """Volume de données au moment de l'entraînement, pour comparer les expériences entre elles."""
-        out = {"fps": FPS}
-        for split in ("train", "val", "test"):
-            idx = self._idx(split)
+        out = {"fps": FPS, "split_id": split_id}
+        for split in SPLITS:
+            idx = self._idx(split, split_id)
             out[split] = {"videos": len({self.rows[i]["sample_id"] for i in idx}), "frames": len(idx)}
         return out
 
@@ -385,16 +679,26 @@ class Lab:
         return preds["frames"], y, probs, op
 
     def _visible(self, r: dict) -> list[dict]:
-        """Éléments pleinement visibles sur la frame, avec surface relative et présence d'un fond."""
+        """Éléments pleinement visibles sur la frame, avec surface relative, présence d'un fond,
+        animation d'entrée et phase (entrée / sortie en cours, ou repos)."""
         ann = self._ann(r["sample_id"])
         W, H = ann["video"]["width"], ann["video"]["height"]
         out = []
         for el in ann["elements"]:
             if el["id"] in r["visible"]:
                 b = annotations.bbox_at(el, r["t"]) or el["bbox"]
+                ain, aout = el["animation"]["in"], el["animation"]["out"]
+                anim = ain["type"] + ("+fade" if ain.get("fade") else "")
+                if r["t"] - el["t_start"] < ain["duration"]:
+                    phase = f"entrée {anim}"
+                elif el["t_end"] - r["t"] < aout["duration"]:
+                    phase = f"sortie {aout['type']}"
+                else:
+                    phase = "repos"
                 out.append({"type": el["type"], "text": el.get("text"),
                             "area_ratio": round(b[2] * b[3] / (W * H), 4),
-                            "has_box": bool(el["style"].get("box") or el["type"] == "lower_third")})
+                            "has_box": _has_box(el),
+                            "animation": anim, "phase": phase})
         return out
 
     def _orientation(self, r: dict) -> str:

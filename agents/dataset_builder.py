@@ -9,19 +9,27 @@ from .runner import Agent, Tool
 SYSTEM = CONTEXT + """
 
 Ton rôle : Dataset Builder. Tu constitues et enrichis le dataset à la demande de l'orchestrateur. \
-Tu n'entraînes ni n'évalues de modèle.
+Tu n'entraînes ni n'évalues de modèle, et tu ne t'occupes pas des splits train/val/test : c'est le \
+Model Researcher qui les constitue à partir du dataset complet. Ton but est un dataset riche et \
+varié, où chaque cas (type d'ajout, animation, orientation, taille, fond, thème, vidéos sans ajout) \
+est assez représenté pour être appris et mesuré.
 
-Méthode : commence par dataset_info et l'historique des générations, puis génère exactement ce qui \
-est demandé (volume, thèmes, orientation, types d'éléments sur-représentés) sans dépasser le budget. \
-Préfère plusieurs petites générations ciblées à une grosse générique. Vérifie après coup que les \
-splits restent équilibrés (assez de vidéos sources en val et test). Sans paramètre split, chaque \
-vidéo tombe en train, val ou test selon sa vidéo source (environ 60/20/20) : pour renforcer \
-l'entraînement sur un type d'ajout ou des négatifs difficiles, utilise split="train", sinon une \
-partie des vidéos ciblées part en val/test. Réserve split="val" ou "test" aux demandes explicites \
-d'agrandir ces splits.
+Méthode : commence par dataset_info (bloc dataset : composition globale) et l'historique des \
+générations, puis génère exactement ce qui est demandé (volume, thèmes, orientation, types \
+d'éléments sur-représentés) sans dépasser le budget. Préfère plusieurs petites générations ciblées \
+à une grosse générique, et comble en priorité les cas rares. Un clip source n'est jamais \
+réutilisé : un thème déjà très exploité (voir diversite.videos_par_theme dans dataset_info) finit \
+par ne plus rien donner, et l'erreur « Aucune vidéo Pixabay… » signifie qu'il faut changer de \
+thème ou d'orientation.
 
-Rapport final (court, en français) : ce que tu as généré et pourquoi, l'état du dataset après \
-génération (vidéos et frames par split, éléments par type), les échecs éventuels et le budget restant."""
+Exclusions : exclude_videos retire une vidéo de tous les splits. Ne l'utilise que pour un défaut \
+de la vidéo elle-même signalé par un autre agent ou constaté dans les données (rendu cassé, \
+doublon d'un clip), jamais parce qu'un modèle s'y trompe : les cas où le modèle échoue sont \
+précisément ceux qu'il faut garder.
+
+Rapport final (court, en français) : ce que tu as généré et pourquoi, la composition du dataset \
+après génération (vidéos, frames, éléments par type et par animation), les cas encore rares, les \
+échecs éventuels et le budget restant."""
 
 
 def make(lab: Lab) -> Agent:
@@ -39,8 +47,8 @@ def make(lab: Lab) -> Agent:
             ),
             Tool(
                 name="generate_data",
-                description="Génère de nouvelles vidéos annotées (réparties en train/val/test selon la vidéo "
-                            "source, ou toutes dans le split demandé) puis ré-extrait et étiquette les frames. "
+                description="Génère de nouvelles vidéos annotées, chacune sur un clip source jamais "
+                            "utilisé, et les ajoute au dataset, puis extrait et étiquette leurs frames. "
                             "Coûteux en temps et en quota d'API d'images : justifie chaque génération.",
                 input_schema={
                     "type": "object",
@@ -55,14 +63,24 @@ def make(lab: Lab) -> Agent:
                         "lang": {"type": "string", "enum": ["fr", "en", "mix"]},
                         "empty_prob": {"type": "number", "minimum": 0, "maximum": 1,
                                        "description": "Proportion de vidéos sans aucun ajout (négatifs)."},
-                        "split": {"type": "string", "enum": ["train", "val", "test"],
-                                  "description": "Met toutes les vidéos de cette génération dans ce split, en "
-                                                 "ne choisissant que des vidéos sources qui y tombent. Par "
-                                                 "défaut : réparties selon la source (~60/20/20)."},
                     },
                     "required": ["n", "reason"],
                 },
                 fn=lab.generate_data,
+            ),
+            Tool(
+                name="exclude_videos",
+                description="Retire des vidéos de tous les splits, présents et futurs, sans supprimer de "
+                            "fichier. Réservé aux vidéos défectueuses ou dupliquées.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "videos": {"type": "object", "additionalProperties": {"type": "string"},
+                                   "description": "{sample_id: raison du défaut}"},
+                    },
+                    "required": ["videos"],
+                },
+                fn=lab.exclude_videos,
             ),
         ],
     )

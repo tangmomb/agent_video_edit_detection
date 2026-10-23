@@ -31,8 +31,10 @@ class PixabayVideos:
              short_side: int, accept: Callable[[dict], bool] | None = None) -> VideoPick:
         """accept(source) filtre les vidéos candidates sur leurs métadonnées (kind, video_id)."""
         # Le portrait est rare sur Pixabay : en dernier recours on accepte l'autre orientation.
-        # Avec un filtre accept, on parcourt plus de pages : il écarte une partie des résultats.
-        pages = [(rng.randint(1, 3), True), (1, True)] + ([(2, True), (3, True)] if accept else []) + [(1, False)]
+        # Avec un filtre accept, on parcourt plus de pages : il écarte une partie des résultats
+        # (clips déjà utilisés, autre split).
+        extra = [(p, True) for p in range(2, 6)] if accept else []
+        pages = [(rng.randint(1, 3), True), (1, True)] + extra + [(1, False)]
         for page, strict in pages:
             hits = [h for h in self.client.search_videos(query, page=page)
                     if h.get("duration", 0) >= min_duration
@@ -45,7 +47,8 @@ class PixabayVideos:
                                  {"kind": "pixabay", "video_id": h["id"], "url": h.get("pageURL"),
                                   "author": h.get("user"), "query": query}, words)
         raise RuntimeError(f"Aucune vidéo Pixabay pour '{query}' ({orientation})"
-                           + (" qui passe le filtre de source (split demandé)." if accept else "."))
+                           + (" qui passe le filtre de source (clip déjà utilisé ou autre split) : "
+                              "change de thème." if accept else "."))
 
 
 class UnsplashPhotos:

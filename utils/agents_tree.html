@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agents et outils</title><style>
+:root{--bg:#f7f6f3;--panel:#fff;--fg:#1d1d1f;--muted:#6b6b70;--line:#d9d7d1;--code:#f0eee9;
+--agent:#2f5bd3;--tool:#2e7d4f;--deleg:#b35c00;--req:#c0392b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151517;--panel:#1e1e21;
+--fg:#ececee;--muted:#9a9aa0;--line:#34343a;--code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;
+--deleg:#f0a24a;--req:#ff7a6b}}
+:root[data-theme="dark"]{--bg:#151517;--panel:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#34343a;
+--code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;--deleg:#f0a24a;--req:#ff7a6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+.toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+button{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--line);background:var(--panel);
+color:var(--fg);border-radius:6px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+ul.tree{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(--line)}
+main>ul.tree{border-left:none;padding-left:0}
+li.node{margin:6px 0;position:relative}
+ul.tree ul.tree>li.node::before,ul.tree>li.node::before{content:"";position:absolute;left:-22px;top:17px;width:16px;border-top:1px solid var(--line)}
+main>ul.tree>li.node::before{display:none}
+summary{cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;
+background:var(--panel);border:1px solid var(--line);border-radius:8px;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸";color:var(--muted);font-size:12px;width:10px}
+details[open]>summary::before{content:"▾"}
+.badge{font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:1px 7px;border-radius:10px;
+border:1px solid currentColor;font-weight:600}
+.badge.agent{color:var(--agent)}.badge.tool{color:var(--tool)}.badge.delegate{color:var(--deleg)}
+.aname{font-weight:650;font-size:16px}
+.tname{font-weight:600}
+.meta{color:var(--muted);font-size:13px;margin-left:auto}
+.body{padding:6px 12px 2px 30px}
+.desc{margin:0 0 6px}
+code{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px}
+summary code{background:none;padding:0;font-size:14px}
+ul.params{margin:0 0 6px;padding-left:18px;font-size:14px}
+ul.params li{margin:3px 0}
+.ptype{color:var(--muted);font-size:13px}
+.penum{color:var(--muted);font-size:13px}
+.req{color:var(--req);font-size:11px;margin-left:6px;text-transform:uppercase}
+.pdesc{color:var(--muted)}
+.noparam{color:var(--muted);font-size:13px;font-style:italic;margin-bottom:6px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:12px}
+details.ex{margin:0 0 8px}
+details.ex>summary{background:none;border:none;padding:2px 0;font-size:13px;color:var(--tool);font-weight:600}
+.exnote{color:var(--muted);font-size:13px;margin:4px 0}
+details.ex pre{margin:0;padding:10px 12px;background:var(--code);border-radius:6px;overflow-x:auto;font:12px/1.45 ui-monospace,Consolas,monospace;max-height:480px}
+</style></head>
+<body><main>
+<h1>Agents et outils</h1>
+<p class="sub">Généré depuis le code de <code>agents/</code> : l'orchestrateur délègue aux trois sous-agents via ses outils <code>ask_*</code>.</p>
+<div class="toolbar"><button id="open">Tout déplier</button><button id="close">Tout replier</button></div>
+<div class="legend"><span><span class="badge agent">agent</span> agent Mistral</span>
+<span><span class="badge tool">outil</span> appel au labo</span>
+<span><span class="badge delegate">délègue</span> lance un sous-agent</span></div>
+<ul class="tree"><li class="node agent"><details open><summary><span class="badge agent">agent</span><span class="aname">orchestrator</span><span class="meta">mistral-large-4-0 · 30 tours max · 5 outils</span></summary><div class="body"><p class="desc">Orchestrateur : décide de la prochaine expérience et délègue aux trois autres agents.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">global_status</code></summary><div class="body"><p class="desc">État global : dataset (composition globale : vidéos, frames, taux de positifs, répartition par orientation, type d&#x27;élément, animations d&#x27;entrée et de sortie, surface, fond ; splits existants ; diversité ; budgets), budget de session dépensé.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple de réponse</summary><p class="exnote">État réel du projet le 23/10/2026 (listes abrégées par « … », budget de session illustratif). Dataset vide : <code>dataset</code> vaut alors <code>{"dataset_vide": true, "budgets": {…}, "message": "…"}</code>.</p><pre>{
+  "dataset": {
+    "fps": 1.0,
+    "dataset": {
+      "videos": 136,
+      "sources": 132,
+      "frames": 1462,
+      "frames_ambigues_exclues": 44,
+      "videos_sans_ajout": 72,
+      "videos_par_orientation": {"paysage": 103, "portrait": 33},
+      "elements_par_type": {"subtitle": 71, "keyword": 65, "image": 32, "question": 25,
+                            "shape": 25, "lower_third": 15, "title_card": 9},
+      "elements_par_animation_entree": {"none": 127, "fade": 53, "slide_up+fade": 11, "…": "…"},
+      "elements_par_animation_sortie": {"none": 160, "fade": 82},
+      "elements_par_surface": {"&lt;1%": 32, "1-3%": 96, "3-8%": 68, "&gt;8%": 46},
+      "elements_par_fond": {"sans fond": 126, "avec fond": 116},
+      "taux_positifs": 0.1997
+    },
+    "splits": [
+      {"split_id": "split_001", "train": 55, "val": 18, "test": 17,
+       "note": "Split de référence v1 : 90 vidéos, découpé par clip source…",
+       "date": "2026-10-23 18:18",
+       "params": {"val_ratio": 0.2, "test_ratio": 0.2,
+                  "stratify": ["type", "animation", "orientation", "theme", "video_vide"], "seed": 0},
+       "videos_exclues": 0, "videos_hors_split": 46},
+      {"split_id": "split_002", "train": 77, "val": 33, "test": 26,
+       "note": "split_002 (v2) : inclut les 136 vidéos actuelles, val élargi à ~25 %…",
+       "date": "2026-10-23 18:28",
+       "params": {"val_ratio": 0.25, "test_ratio": 0.18, "stratify": ["…"], "seed": 1},
+       "videos_exclues": 0, "videos_hors_split": 0}
+    ],
+    "extractors": {
+      "clip_b32:full":  {"en_cache": true, "ms_par_frame": 4.5},
+      "clip_b32:grid2": {"en_cache": true, "ms_par_frame": 16.26},
+      "clip_l14:full":  {"en_cache": true, "ms_par_frame": 10.91},
+      "dinov2_b:grid2": {"en_cache": true, "ms_par_frame": 23.91},
+      "…": "…"
+    },
+    "budgets": {
+      "videos_generables_restantes": 250,
+      "final_tests_restants": 2,
+      "quotas_api": {
+        "pixabay":  {"appels_dans_la_fenetre": 0, "max_par_fenetre": 98, "fenetre_s": 60,
+                     "restant_annonce_par_api": 99, "attente_avant_prochain_appel_s": 0},
+        "unsplash": {"appels_dans_la_fenetre": 0, "max_par_fenetre": 48, "fenetre_s": 3600,
+                     "restant_annonce_par_api": 15, "attente_avant_prochain_appel_s": 0}
+      }
+    },
+    "diversite": {
+      "videos": 136,
+      "clips_sources_distincts": 132,
+      "videos_par_theme": {"city street traffic timelapse people walking urban": 6,
+                           "nature forest river waterfall landscape scenery": 6, "…": "…"},
+      "clips_reutilises": {"…": 2}
+    }
+  },
+  "budget_session_usd": {
+    "depense": 0.42,
+    "total": 5.0,
+    "reserve_rapport_usd": 0.5,
+    "disponible_pour_deleguer": 4.08
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_dataset_builder</code></summary><div class="body"><p class="desc">Délègue une génération de données au Dataset Builder ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">dataset_builder</span><span class="meta">mistral-large-4-0 · 12 tours max · 4 outils</span></summary><div class="body"><p class="desc">Dataset Builder : génère les vidéos synthétiques annotées et les frames étiquetées.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (vidéos, frames, taux de frames positives, frames ambiguës exclues, vidéos sans ajout, répartition des vidéos par orientation et des éléments par type, animation d&#x27;entrée, animation de sortie, surface et fond), diversité (vidéos par thème, clips sources réutilisés), liste des splits existants (volumes, note, paramètres), extracteurs d&#x27;embeddings disponibles et leur coût, budgets restants (génération, tests finaux, quotas d&#x27;API).</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">data_requests</code></summary><div class="body"><p class="desc">Historique des générations passées (volume, paramètres, raison).</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">generate_data</code></summary><div class="body"><p class="desc">Génère de nouvelles vidéos annotées, chacune sur un clip source jamais utilisé, et les ajoute au dataset, puis extrait et étiquette leurs frames. Coûteux en temps et en quota d&#x27;API d&#x27;images : justifie chaque génération.</p><ul class="params"><li><code class="pname">n</code><span class=req>requis</span> <span class="ptype">integer</span> <span class=penum>1…100</span></li><li><code class="pname">reason</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ces données sont nécessaires.</div></li><li><code class="pname">query</code> <span class="ptype">string</span><div class=pdesc>Thème des vidéos sources en anglais (sinon aléatoire).</div></li><li><code class="pname">orientation</code> <span class="ptype">string</span> <span class=penum><code>portrait</code> | <code>landscape</code></span></li><li><code class="pname">type_weights</code> <span class="ptype">object</span><div class=pdesc>Poids relatifs des types : keyword, question, subtitle, lower_third, image, shape, title_card</div></li><li><code class="pname">lang</code> <span class="ptype">string</span> <span class=penum><code>fr</code> | <code>en</code> | <code>mix</code></span></li><li><code class="pname">empty_prob</code> <span class="ptype">number</span> <span class=penum>0…1</span><div class=pdesc>Proportion de vidéos sans aucun ajout (négatifs).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">exclude_videos</code></summary><div class="body"><p class="desc">Retire des vidéos de tous les splits, présents et futurs, sans supprimer de fichier. Réservé aux vidéos défectueuses ou dupliquées.</p><ul class="params"><li><code class="pname">videos</code><span class=req>requis</span> <span class="ptype">object</span><div class=pdesc>{sample_id: raison du défaut}</div></li></ul></div></details></li></ul></details></li></ul></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_model_researcher</code></summary><div class="body"><p class="desc">Délègue un lot d&#x27;expériences au Model Researcher ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">mistral-large-4-0 · 20 tours max · 4 outils</span></summary><div class="body"><p class="desc">Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (vidéos, frames, taux de frames positives, frames ambiguës exclues, vidéos sans ajout, répartition des vidéos par orientation et des éléments par type, animation d&#x27;entrée, animation de sortie, surface et fond), diversité (vidéos par thème, clips sources réutilisés), liste des splits existants (volumes, note, paramètres), extracteurs d&#x27;embeddings disponibles et leur coût, budgets restants (génération, tests finaux, quotas d&#x27;API).</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de train, val et test pour ce split (id renvoyé par make_split).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><p class="desc">Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos générées ensuite n&#x27;y entrent pas). Les vidéos d&#x27;un même clip source restent du même côté. Le test est commun à tous les splits (figé au premier) : seuls train et val sont redécoupés. Renvoie l&#x27;id du split et la composition de train, val et test.</p><ul class="params"><li><code class="pname">note</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ce split (ce qu&#x27;il corrige ou couvre).</div></li><li><code class="pname">val_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en val (défaut 0.2).</div></li><li><code class="pname">test_ratio</code> <span class="ptype">number</span> <span class=penum>0.05…0.4</span><div class=pdesc>Part des clips en test (défaut 0.2), pour le premier split seulement : ignoré ensuite (test figé).</div></li><li><code class="pname">stratify</code> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Caractéristiques à répartir au plus près des proportions visées dans chaque split : type (d&#x27;élément), animation (d&#x27;entrée), orientation, theme, video_vide. Par défaut toutes ; [] = tirage purement aléatoire.</div></li><li><code class="pname">seed</code> <span class="ptype">integer</span><div class=pdesc>Graine du tirage (défaut 0).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">train_model</code></summary><div class="body"><p class="desc">Entraîne un classifieur binaire (ajout de montage visible ou non) sur des embeddings figés, sur le train du split choisi avec un sous-échantillonnage optionnel (balance), et l&#x27;évalue sur le val de ce split. Renvoie l&#x27;id d&#x27;expérience, le rappel (avec seuil et TP/FP/FN) aux précisions 90/95/99 %, AUC, AP et le coût de calcul (ms/frame). Les embeddings absents du cache sont calculés à la volée (GPU).</p><ul class="params"><li><code class="pname">features</code><span class=req>requis</span> <span class="ptype">array&lt;string&gt;</span><div class=pdesc>Liste &#x27;extracteur:vue&#x27;, extracteurs clip_b32, clip_b16, clip_l14, dinov2_s, dinov2_b ; vues full (image entière) ou grid2 (image + 4 quadrants). Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = embeddings concaténés, ex. [&#x27;clip_b32:full&#x27;, &#x27;dinov2_s:full&#x27;] pour CLIP + DINOv2.</div></li><li><code class="pname">model</code> <span class="ptype">string</span> <span class=penum><code>logreg</code> | <code>mlp</code> | <code>hgb</code></span></li><li><code class="pname">temporal</code> <span class="ptype">string</span> <span class=penum><code>none</code> | <code>diff</code></span><div class=pdesc>diff ajoute e_t - e_(t-1) (changement depuis la frame précédente).</div></li><li><code class="pname">params</code> <span class="ptype">object</span><div class=pdesc>logreg: C ; mlp: hidden (liste), alpha ; hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int).</div></li><li><code class="pname">balance</code> <span class="ptype">object</span><div class=pdesc>Sous-échantillonnage de train seulement (val et test intacts) : {groupe: fraction de frames gardée, 0 à 1}. Groupes : keyword, question, subtitle, lower_third, image, shape, title_card, negatif, video_vide, portrait, paysage. Un type d&#x27;élément = frames positives dont tous les ajouts visibles sont de ce type ; negatif = frames sans ajout ; video_vide = frames des vidéos sans aucun ajout. Ex. {&#x27;subtitle&#x27;: 0.5, &#x27;negatif&#x27;: 0.7}. Le dataset n&#x27;est pas modifié.</div></li><li><code class="pname">note</code> <span class="ptype">string</span><div class=pdesc>Hypothèse testée.</div></li><li><code class="pname">split_id</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Split sur lequel entraîner (train) et mesurer (val) : un id renvoyé par make_split (voir dataset_info).</div></li></ul></div></details></li></ul></details></li></ul></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_evaluator</code></summary><div class="body"><p class="desc">Délègue une évaluation, une analyse d&#x27;erreurs ou un test final à l&#x27;Evaluator ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">evaluator</span><span class="meta">mistral-large-4-0 · 15 tours max · 4 outils</span></summary><div class="body"><p class="desc">Evaluator / Error Analyst : mesure, analyse les erreurs, vérifie et promeut les améliorations.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Historique complet des expériences (toutes sessions) : split utilisé, config (embeddings, modèle, hyperparamètres, rééquilibrage de train, hypothèse), métriques val (rappel à précision 90/95/99 %, AUC, AP, ms/frame), volume de données utilisé (vidéos et frames par split, fps), date, résultat du test final.</p><div class="noparam">aucun paramètre</div></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">analyze_errors</code></summary><div class="body"><p class="desc">Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux de frames positives ratées par type d&#x27;ajout, surface, fond, animation d&#x27;entrée, phase (entrée ou sortie en cours, repos), nombre d&#x27;ajouts et orientation ; répartition des fausses alertes ; exemples de frames ratées.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">show_examples</code></summary><div class="body"><p class="desc">Montre des frames de val, ajouts encadrés en rouge : frames avec ajout ratées (kind=missed) ou fausses alertes (kind=false_positive).</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">kind</code> <span class="ptype">string</span> <span class=penum><code>missed</code> | <code>false_positive</code></span></li><li><code class="pname">n</code> <span class="ptype">integer</span> <span class=penum>1…6</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">final_test</code></summary><div class="body"><p class="desc">Évalue une expérience sur le test de son split avec le seuil choisi sur val : rappel, précision, TP/FP/FN, AUC, AP. Nombre d&#x27;appels limité par session : à réserver au candidat final.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul></div></details></li></ul></details></li></ul></details></li></ul></details></li></ul>
+</main><script>
+document.getElementById('open').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=true);
+document.getElementById('close').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=false);
+</script></body></html>

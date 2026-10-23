@@ -111,6 +111,29 @@ def render_lower_third(title: str, subtitle: str, font_title: Path, font_sub: Pa
     return _finish(img, shadow)
 
 
+def render_title_card(text: str, kicker: str | None, font_text: Path, font_kicker: Path, size: int,
+                      W: int, H: int, bg: Color, fg: Color, accent: Color,
+                      bg2: Color | None = None) -> tuple[Image.Image, Box]:
+    """Carton opaque plein cadre (fond uni, ou dégradé vertical bg -> bg2), texte centré."""
+    img = Image.new("RGBA", (W, H), bg)
+    if bg2:
+        d = ImageDraw.Draw(img)
+        for y in range(H):
+            k = y / max(H - 1, 1)
+            d.line([(0, y), (W, y)], fill=tuple(int(a + (b - a) * k) for a, b in zip(bg, bg2)))
+    main, mbox = render_text(text, font_text, size, fg, max_width=W * 0.8)
+    parts = [(main, mbox)]
+    if kicker:
+        parts.insert(0, render_text(kicker, font_kicker, int(size * 0.55), accent))
+    gap = int(size * 0.3)
+    total = sum(b[3] - b[1] for _, b in parts) + gap * (len(parts) - 1)
+    y = (H - total) // 2
+    for im, (x0, y0, x1, y1) in parts:
+        img.alpha_composite(im, ((W - (x1 - x0)) // 2 - x0, y - y0))
+        y += y1 - y0 + gap
+    return img, (0, 0, W, H)
+
+
 def render_picture(src: Image.Image, width: int, border: int = 0,
                    border_color: Color = (255, 255, 255, 255), radius: int = 0,
                    shadow: bool = True) -> tuple[Image.Image, Box]:

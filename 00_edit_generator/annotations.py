@@ -2,7 +2,7 @@
 
 Un élément annoté :
 {
-  "id": "el_03", "type": "keyword|question|subtitle|lower_third|image|shape",
+  "id": "el_03", "type": "keyword|question|subtitle|lower_third|image|shape|title_card",
   "content": "ASTUCE" | {...},
   "t_start": 1.2, "t_end": 3.8,                      # secondes, dans la vidéo produite
   "bbox": [x, y, w, h],                              # position au repos, pixels

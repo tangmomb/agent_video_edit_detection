@@ -2,22 +2,28 @@
 
 Un `Agent` = un prompt système + une liste d'outils + un modèle. Une `Session` exécute des agents
 sur l'API Mistral (chat completions + function calling) avec un budget partagé et journalise tout
-le pipeline dans runs/<horodatage>/ (à la racine du projet) : pipeline.json (réécrit à chaque
+le pipeline dans runs/<NNN>_<horodatage>/ (à la racine du projet) : pipeline.json (réécrit à chaque
 étape), plus report.md pour le rapport final.
 
-pipeline.json = {"run": {...paramètres, statut, coût, tokens...}, "steps": [...]}, les étapes
-dans l'ordre chronologique. Chaque étape porte `call` (n° d'appel d'agent) et `parent` (appel
-qui l'a délégué), d'où l'arbre orchestrateur → sous-agents. Types d'étape :
+pipeline.json = {"run": {...paramètres, statut, coût, tokens...}, "agents": {nom: {system,
+tools}}, "steps": [...]}, les étapes dans l'ordre chronologique. Chaque étape porte `call` (n°
+d'appel d'agent) et `parent` (appel qui l'a délégué), d'où l'arbre orchestrateur → sous-agents.
+Types d'étape :
 - start : un agent reçoit une tâche ;
 - turn : une réponse du modèle (raisonnement, texte, outils demandés, tokens, coût cumulé) ;
 - tool : un appel d'outil (paramètres, résultat complet, sortie console, durée, erreur) ;
+- user : message ajouté par le code avant le tour suivant (images d'outils, relance de fin) ;
 - end : rapport final de l'agent ;
 - error : exception inattendue (avec traceback).
+Le contexte envoyé au modèle à chaque tour se reconstitue donc exactement : system + tools de
+l'agent, puis task, puis les étapes turn/tool/user de cet appel. Les images renvoyées par les
+outils sont enregistrées dans images/ et référencées par leur chemin.
 
 Chaque appel d'agent repart d'une conversation vide : l'état durable (dataset, expériences,
 production) vit sur disque, pas dans les conversations.
 """
 
+import base64
 import io
 import json
 import os
@@ -42,6 +48,12 @@ PRICES = {
     LARGE: {"input": 1.36, "cached_input": 0.14, "output": 4.18},
     SMALL: {"input": 0.15, "output": 0.60},
 }
+
+
+def _next_run_number() -> int:
+    """Numéro du prochain run : 1 + le plus grand préfixe NNN_ des dossiers de runs/."""
+    nums = [int(p.name.split("_")[0]) for p in RUNS_DIR.glob("[0-9][0-9][0-9]_*") if p.is_dir()]
+    return max(nums, default=0) + 1
 
 
 @dataclass
@@ -104,30 +116,38 @@ def _now() -> str:
 
 class Session:
     def __init__(self, budget_usd: float, client=None, run_dir: Path | None = None, verbose: bool = True,
-                 params: dict | None = None):
+                 params: dict | None = None, report_reserve_usd: float | None = None):
         if client is None:
             from mistralai.client import Mistral
             client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
         self.client = client
         self.budget_usd = budget_usd
+        # Part du budget réservée à l'orchestrateur pour conclure : les sous-agents s'arrêtent avant,
+        # et l'orchestrateur ne peut plus déléguer une fois la réserve entamée (run 004 : coupé
+        # sans rapport final).
+        self.reserve_usd = (report_reserve_usd if report_reserve_usd is not None
+                            else min(max(0.05, 0.15 * budget_usd), 0.5 * budget_usd))
         self.spent = 0.0
         self.calls = 0
         self.verbose = verbose
-        self.run_dir = run_dir or RUNS_DIR / time.strftime("%Y%m%d-%H%M%S")
+        self.run_dir = run_dir or RUNS_DIR / f"{_next_run_number():03d}_{time.strftime('%Y%m%d-%H%M%S')}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self._stack: list[int] = []  # appels d'agent en cours (le dernier est le plus profond)
         self.trace = {
             "run": {"status": "running", "started": _now(), "ended": None,
-                    "budget_usd": budget_usd, **(params or {}), "cost_usd": 0.0,
+                    "budget_usd": budget_usd, "reserve_rapport_usd": round(self.reserve_usd, 4),
+                    **(params or {}), "cost_usd": 0.0,
                     "tokens": {"input": 0, "cached_input": 0, "output": 0},
                     "agent_calls": 0, "report": None, "error": None},
+            "agents": {},  # nom -> {system, tools} : ce que chaque agent reçoit en plus de ses messages
             "steps": [],
         }
         self._save()
 
     @property
-    def budget_low(self) -> bool:
-        return self.spent >= 0.8 * self.budget_usd
+    def reserve_reached(self) -> bool:
+        """Le budget hors réserve est consommé : plus de délégation, place au rapport final."""
+        return self.spent >= self.budget_usd - self.reserve_usd
 
     @staticmethod
     def _cost(model: str, tokens: dict) -> float:
@@ -155,6 +175,14 @@ class Session:
                                     "parent": parent, "agent": agent, "type": type_, **data})
         self._save()
 
+    def _save_image(self, call: int, turn: int, k: int, source: dict) -> str:
+        """Enregistre une image renvoyée par un outil ; renvoie son chemin relatif au dossier du run."""
+        ext = {"image/jpeg": "jpg", "image/png": "png"}.get(source["media_type"], "bin")
+        rel = f"images/call{call:03d}_turn{turn:02d}_{k:02d}.{ext}"
+        (self.run_dir / "images").mkdir(exist_ok=True)
+        (self.run_dir / rel).write_bytes(base64.b64decode(source["data"]))
+        return rel
+
     def finish(self, report: str | None = None, error: BaseException | None = None) -> None:
         """Clôt pipeline.json : statut, heure de fin, rapport ou erreur."""
         run = self.trace["run"]
@@ -175,47 +203,79 @@ class Session:
         step = lambda type_, **data: self._step(call, agent.name, type_, **data)
         t_agent = time.perf_counter()
 
+        tool_schemas = [t.schema() for t in agent.tools]
+        # Prompt système et schémas d'outils : fixes pendant un run, enregistrés une fois par agent.
+        self.trace["agents"].setdefault(agent.name, {"system": agent.system, "tools": tool_schemas})
         step("start", task=task, max_turns=agent.max_turns, model=agent.model, reasoning=agent.reasoning)
         self._say(f"\n=== {agent.name} ===\n{task}")
         tools = {t.name: t for t in agent.tools}
+        n_images = 0
         messages = [{"role": "system", "content": agent.system}, {"role": "user", "content": task}]
         final = ""
         used: list[tuple[str, str | None]] = []  # (outil, erreur ou None) pour la vérification
+        # Les sous-agents s'arrêtent à budget - réserve ; l'orchestrateur peut aller jusqu'au budget.
+        limit = self.budget_usd if len(self._stack) == 1 else self.budget_usd - self.reserve_usd
+
+        last_cost = 0.0  # coût du dernier appel : estimation du prochain
+
+        def complete(turn: int, tool_choice: str):
+            nonlocal last_cost
+            t0 = time.perf_counter()
+            response = self.client.chat.complete(
+                model=agent.model,
+                max_tokens=16000,
+                messages=messages,
+                tools=tool_schemas,
+                tool_choice=tool_choice,
+                reasoning_effort=agent.reasoning,
+            )
+            choice = response.choices[0]
+            msg = choice.message
+            tokens = _tokens(response.usage)
+            cost = self._cost(agent.model, tokens)
+            self.spent += cost
+            last_cost = cost
+            for k, v in tokens.items():
+                self.trace["run"]["tokens"][k] += v
+            messages.append(msg)  # message complet, raisonnement compris (à rejouer tel quel)
+            thinking, texts = _split(msg.content)
+            calls = msg.tool_calls or []
+            for t in texts:
+                self._say(f"[{agent.name}] {t}")
+            step("turn", turn=turn, stop=choice.finish_reason, thinking=thinking, text=texts,
+                 tool_calls=[{"name": c.function.name, "input": c.function.arguments} for c in calls],
+                 tokens=tokens, turn_cost_usd=round(cost, 5), cost_usd=round(self.spent, 4),
+                 duration_s=round(time.perf_counter() - t0, 2))
+            final = "\n\n".join(texts)
+            if choice.finish_reason == "length":
+                final += "\n\n[réponse tronquée : limite de tokens atteinte]"
+            return calls, final
+
+        def add_user(content: list[dict], logged: list[str]) -> None:
+            """Message ajouté par le code : fusionné au précédent s'il vient déjà de l'utilisateur
+            (pas deux messages user d'affilée), et journalisé car il fait partie du contexte."""
+            last = messages[-1]
+            if isinstance(last, dict) and last.get("role") == "user" and isinstance(last["content"], list):
+                last["content"] += content
+            else:
+                messages.append({"role": "user", "content": content})
+            step("user", content=logged)
+
+        def last_report(turn: int, reason: str) -> str:
+            """Dernier tour sans outils : l'agent rédige son rapport au lieu d'être coupé net."""
+            text = (f"[{reason} Tu ne peux plus appeler d'outil. Rédige maintenant ton rapport final, "
+                    "uniquement à partir de ce que tes outils ont renvoyé, en signalant ce qui reste à faire.]")
+            add_user([{"type": "text", "text": text}], [text])
+            _, final = complete(turn, "none")
+            return final or f"Agent arrêté ({reason}) sans rapport."
+
         try:
             for turn in range(1, agent.max_turns + 1):
-                t0 = time.perf_counter()
-                response = self.client.chat.complete(
-                    model=agent.model,
-                    max_tokens=16000,
-                    messages=messages,
-                    tools=[t.schema() for t in agent.tools],
-                    tool_choice="auto",
-                    reasoning_effort=agent.reasoning,
-                )
-                choice = response.choices[0]
-                msg = choice.message
-                tokens = _tokens(response.usage)
-                cost = self._cost(agent.model, tokens)
-                self.spent += cost
-                for k, v in tokens.items():
-                    self.trace["run"]["tokens"][k] += v
-                messages.append(msg)  # message complet, raisonnement compris (à rejouer tel quel)
-                thinking, texts = _split(msg.content)
-                calls = msg.tool_calls or []
-                for t in texts:
-                    self._say(f"[{agent.name}] {t}")
-                step("turn", turn=turn, stop=choice.finish_reason, thinking=thinking, text=texts,
-                     tool_calls=[{"name": c.function.name, "input": c.function.arguments} for c in calls],
-                     tokens=tokens, turn_cost_usd=round(cost, 5), cost_usd=round(self.spent, 4),
-                     duration_s=round(time.perf_counter() - t0, 2))
-
+                calls, final = complete(turn, "auto")
                 if not calls:
-                    final = "\n\n".join(texts)
-                    if choice.finish_reason == "length":
-                        final += "\n\n[réponse tronquée : limite de tokens atteinte]"
                     break
 
-                images = []  # l'API n'accepte les images que dans un message user
+                images, image_paths = [], []  # l'API n'accepte les images que dans un message user
                 for c in calls:
                     name, args = c.function.name, c.function.arguments
                     self._say(f"[{agent.name} → {name}] {str(args)[:200]}")
@@ -233,36 +293,43 @@ class Session:
                         tb = traceback.format_exc()
                     finally:
                         sys.stdout = saved_stdout
+                    paths = []
                     if isinstance(content, list):
                         imgs = [b for b in content if b["type"] == "image"]
                         images += [{"type": "image_url",
                                     "image_url": f"data:{b['source']['media_type']};base64,{b['source']['data']}"}
                                    for b in imgs]
+                        for b in imgs:
+                            n_images += 1
+                            paths.append(self._save_image(call, turn, n_images, b["source"]))
+                        image_paths += paths
                         text = "\n".join(b["text"] for b in content if b["type"] == "text")
                         if imgs:
                             text += f"\n[{len(imgs)} image(s) dans le message suivant]"
                     else:
                         text = content
                     messages.append({"role": "tool", "name": name, "content": text, "tool_call_id": c.id})
-                    result = _loggable(content)
+                    result = _loggable(content, paths)
                     used.append((name, _failure(content, result, tb)))
                     step("tool", tool=name, input=args, result=result, error=tb is not None,
                          traceback=tb, stdout=capture.buf.getvalue() or None,
                          duration_s=round(time.perf_counter() - t0, 2))
 
-                follow_up = list(images)
-                remaining = agent.max_turns - turn
-                if remaining <= 2 or self.budget_low:
-                    follow_up.append({"type": "text", "text":
-                                      f"[{remaining} tours restants, {self.spent:.2f}/{self.budget_usd:.2f} $ "
-                                      "dépensés sur la session. Termine maintenant et rends ton rapport.]"})
+                follow_up, logged = list(images), [f"<image {p}>" for p in image_paths]
                 if follow_up:
-                    messages.append({"role": "user", "content": follow_up})
-                if self.spent >= self.budget_usd:
-                    final = f"Agent arrêté : budget de session ({self.budget_usd} $) atteint."
+                    add_user(follow_up, logged)
+                # Un tour de plus dépasserait la limite (estimé au coût du dernier) : on conclut.
+                if self.spent + last_cost >= limit:
+                    final = last_report(turn + 1, f"Budget atteint ({self.spent:.2f}/{limit:.2f} $).")
                     break
-            else:
-                final = "Agent arrêté : nombre maximal de tours atteint sans rapport."
+                remaining = agent.max_turns - turn
+                if remaining == 0:
+                    final = last_report(turn + 1, "Nombre maximal de tours atteint.")
+                    break
+                if remaining <= 2 or self.spent >= 0.8 * limit:
+                    note = (f"[{remaining} tours restants, {self.spent:.2f}/{limit:.2f} $ dépensés sur ta "
+                            "part du budget. Termine maintenant et rends ton rapport.]")
+                    add_user([{"type": "text", "text": note}], [note])
             if len(self._stack) > 1:  # sous-agent : son rapport repart vers l'orchestrateur
                 final += "\n\n" + _verification(agent.name, used)
         except BaseException as e:
@@ -328,11 +395,12 @@ def _split(content) -> tuple[list[str], list[str]]:
     return [t for t in thinking if t], texts
 
 
-def _loggable(content) -> Any:
-    """Résultat d'outil tel qu'enregistré : complet, images remplacées par un repère, JSON décodé."""
+def _loggable(content, image_paths: list[str]) -> Any:
+    """Résultat d'outil tel qu'enregistré : complet, images remplacées par leur fichier, JSON décodé."""
     if isinstance(content, str):
         try:
             return json.loads(content)
         except ValueError:
             return content
-    return [c["text"] if c["type"] == "text" else "<image>" for c in content]
+    paths = iter(image_paths)
+    return [c["text"] if c["type"] == "text" else f"<image {next(paths)}>" for c in content]

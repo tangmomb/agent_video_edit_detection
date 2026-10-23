@@ -40,7 +40,7 @@ Sortie : `data/videos_samples/s<seed>/video.mp4` + `annotations.json` (format d�
 ## model_training_pipeline : classifieur « la frame contient un ajout de montage »
 
 ```bash
-python -m model_training_pipeline frames    # frames à 1 fps + labels (data/frames_from_videos/index.jsonl)
+python -m model_training_pipeline frames    # frames à 1 fps + labels (data/videos_samples_frames/index.jsonl)
 python -m model_training_pipeline info      # état du dataset
 ```
 
@@ -54,27 +54,40 @@ appliqué tel quel sur test ; AUC et AP en repères (`model_training_pipeline/me
 ```
 Orchestrateur ──► Dataset Builder   (génère données + annotations)
       │      ──► Model Researcher  (entraîne, expérimente sur val)
-      │      ──► Evaluator         (mesure, analyse les erreurs, test, production)
+      │      ──► Evaluator         (mesure, analyse les erreurs, test final)
       └──◄── rapports des agents : décide du cycle suivant
 ```
 
 ```bash
-python -m agents --budget-usd 1.00 --data-budget 200 --final-tests 2   # appels API payants
+python -m agents --budget-usd 1.00 --data-budget 250 --final-tests 2   # appels API payants
 ```
 
 Organisation :
 - `model_training_pipeline/lab.py` : toute la logique métier (données, entraînement, évaluation), sans LLM,
   utilisable et testable seule ;
 - `agents/runner.py` : boucle tool use commune sur l'API Mistral (`MISTRAL_API_KEY`), budget
-  partagé, journaux. Les quatre agents utilisent Mistral Large 4. Chaque rapport de sous-agent
+  partagé, journaux. Une réserve (15 % du budget, 0,05 $ minimum) est gardée pour le rapport
+  final de l'orchestrateur : les sous-agents s'arrêtent avant, les délégations sont alors
+  refusées, et un agent à court de budget ou de tours rédige un dernier rapport sans outils au
+  lieu d'être coupé net. Les quatre agents utilisent Mistral Large 4. Chaque rapport de sous-agent
   se termine par une « Vérification automatique » (outils réellement appelés, échecs) écrite par
   le code, pour que l'orchestrateur ne croie pas un rapport inventé ;
 - `agents/<agent>.py` : prompt + sous-ensemble d'outils du lab propres à chaque agent ;
-  seul l'Evaluator accède au split test et à la mise en production ;
+  le Dataset Builder génère sans se soucier des splits, le Model Researcher découpe le dataset en
+  splits train/val/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
+  clip source, stratifiés par défaut sur type, animation, orientation, thème et vidéos vides ;
+  l'ancien découpage `hash`, non figé, est refusé). Le test est figé au premier split
+  (`data/splits/test_set.json`) : les splits suivants ne redécoupent que train/val. Seul le
+  Dataset Builder peut exclure une vidéo défectueuse (`exclude_videos`, `data/excluded.json`),
+  jamais le Model Researcher. Seul l'Evaluator mesure sur test.
+  Aucun agent ne met de modèle en production : en fin de run, le code (`Lab().select_production()`)
+  écrit dans `production.json` l'expérience de meilleur rappel val à précision 95 % sur le plus gros
+  split (le plus de vidéos) — départage par AP, AUC puis ms/frame — et l'ajoute au rapport. On peut
+  forcer un autre choix avec `Lab().save_model(exp_id, precision, note)` ;
 - `agents/orchestrator.py` : délègue via `ask_dataset_builder` / `ask_model_researcher` /
   `ask_evaluator` ; chaque délégation repart d'une conversation vide (l'état vit sur disque).
 
-Journaux : `runs/<horodatage>/pipeline.json` (toutes les étapes de tous les agents, dans
+Journaux : `runs/<NNN>_<horodatage>/pipeline.json` (toutes les étapes de tous les agents, dans
 l'ordre, réécrit à chaque étape) + `report.md`. Expériences :
 `model_results/` (un dossier `<exp_id>/` par entraînement, `production.json`). Historique des
 générations de vidéos : `data/data_requests.jsonl`.

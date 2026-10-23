@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Détecteur d'ajouts</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --fg: #1c1c1e; --muted: #6e6e73; --line: #dedcd6;
+  --soft: #efede8; --accent: #e5402d; --accent-soft: #fde4df; --ok: #2f7d4f; --bar: #c9c6be;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --panel: #1d1d20; --fg: #ececee; --muted: #9a9aa1; --line: #33333a;
+    --soft: #26262b; --accent: #ff6a55; --accent-soft: #3b211d; --ok: #5cc48a; --bar: #4a4a52;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 64px; }
+header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+h1 { font-size: 22px; margin: 0; }
+.model { color: var(--muted); font-size: 13px; }
+.model b { color: var(--fg); font-weight: 600; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+#drop { border: 2px dashed var(--line); border-radius: 12px; padding: 36px 16px; text-align: center;
+  cursor: pointer; transition: border-color .15s, background .15s; background: var(--panel); }
+#drop.over { border-color: var(--accent); background: var(--accent-soft); }
+#drop strong { display: block; font-size: 16px; margin-bottom: 4px; }
+#drop span { color: var(--muted); font-size: 14px; }
+#status { margin: 14px 0 0; color: var(--muted); min-height: 1.5em; }
+#status.err { color: var(--accent); }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+  vertical-align: -2px; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#results { display: none; margin-top: 18px; }
+.top { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 820px) { .top { grid-template-columns: 1fr; } }
+video { width: 100%; max-height: 420px; background: #000; border-radius: 8px; display: block; }
+.stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.stat { background: var(--soft); border-radius: 8px; padding: 8px 12px; min-width: 110px; }
+.stat .v { font-size: 20px; font-weight: 650; }
+.stat .k { font-size: 12px; color: var(--muted); }
+h2 { font-size: 14px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+#segments { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
+#segments li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px;
+  border-radius: 6px; cursor: pointer; font-variant-numeric: tabular-nums; }
+#segments li:hover { background: var(--soft); }
+#segments .p { color: var(--muted); font-size: 13px; }
+.empty { color: var(--muted); font-size: 14px; }
+.controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0 10px; }
+.controls label { font-size: 14px; color: var(--muted); }
+input[type=range] { width: 220px; accent-color: var(--accent); }
+#thr-val { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 46px; display: inline-block; }
+button, .seg button { font: inherit; font-size: 13px; padding: 5px 11px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--fg); border-radius: 6px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--fg); color: var(--bg); }
+#timeline { position: relative; height: 64px; display: flex; align-items: flex-end; gap: 1px;
+  background: var(--soft); border-radius: 8px; padding: 4px; cursor: pointer; }
+#timeline .b { flex: 1 1 0; min-width: 1px; background: var(--bar); border-radius: 2px 2px 0 0; }
+#timeline .b.on { background: var(--accent); }
+#timeline .b.cur { outline: 2px solid var(--fg); }
+#thr-line { position: absolute; left: 4px; right: 4px; border-top: 1px dashed var(--fg); opacity: .55;
+  pointer-events: none; }
+.axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-top: 14px; }
+.card { border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: var(--panel);
+  cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+.card.on { border-color: var(--accent); box-shadow: none; }
+.card.cur { outline: 2px solid var(--fg); outline-offset: 2px; }
+.card img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
+.card .meta { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px;
+  font-size: 13px; font-variant-numeric: tabular-nums; }
+.badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; }
+.card.on .badge { background: var(--accent); color: #fff; }
+.card:not(.on) .badge { background: var(--soft); color: var(--muted); }
+.hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Détecteur d'ajouts de montage</h1>
+    <div class="model" id="model">chargement du modèle…</div>
+  </header>
+
+  <div id="drop" tabindex="0">
+    <strong>Dépose une vidéo ici</strong>
+    <span>ou clique pour en choisir une (mp4, mov, webm…)</span>
+    <input type="file" id="file" accept="video/*" hidden>
+  </div>
+  <div id="status"></div>
+
+  <section id="results">
+    <div class="top">
+      <div class="panel"><video id="video" controls muted></video></div>
+      <div class="panel">
+        <div class="stats">
+          <div class="stat"><div class="v" id="s-flag">–</div><div class="k">frames avec ajout</div></div>
+          <div class="stat"><div class="v" id="s-share">–</div><div class="k">de la vidéo</div></div>
+          <div class="stat"><div class="v" id="s-time">–</div><div class="k">temps d'analyse</div></div>
+        </div>
+        <h2>Passages détectés</h2>
+        <ul id="segments"></ul>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label for="thr">Seuil</label>
+      <input type="range" id="thr" min="0" max="1" step="0.005">
+      <span id="thr-val"></span>
+      <button id="thr-reset" title="Seuil choisi sur val pour la précision visée">Seuil du modèle</button>
+      <div class="seg" id="filter">
+        <button data-f="all" class="on">Toutes</button>
+        <button data-f="on">Avec ajout</button>
+        <button data-f="off">Sans ajout</button>
+      </div>
+    </div>
+
+    <div id="timeline"><div id="thr-line"></div></div>
+    <div class="axis"><span>0:00</span><span id="axis-end"></span></div>
+    <div class="hint">Une barre par frame analysée (1 par seconde), hauteur = probabilité d'ajout. Clique pour aller à l'instant dans la vidéo.</div>
+
+    <div id="grid"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let model = null, data = null, threshold = 0.5, filter = "all", cur = -1;
+
+const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+const pct = (x) => `${Math.round(x * 1000) / 10} %`;
+
+fetch("/api/model").then((r) => r.json()).then((m) => {
+  model = m;
+  threshold = m.threshold;
+  const test = m.test ? ` · test : précision <b>${pct(m.test.precision)}</b>, rappel <b>${pct(m.test.recall)}</b>` : "";
+  $("model").innerHTML = `modèle <b>${m.experiment_id}</b> · ${m.features.join(" + ")}${m.temporal === "diff" ? " + diff" : ""}`
+    + ` · ${m.model} · seuil <b>${m.threshold.toFixed(3)}</b> (précision visée ${pct(m.precision_visee)})${test} · ${m.device}`;
+}).catch(() => { $("model").textContent = "serveur injoignable"; });
+
+const drop = $("drop"), input = $("file");
+drop.onclick = () => input.click();
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") input.click(); };
+input.onchange = () => input.files[0] && analyze(input.files[0]);
+["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && analyze(e.dataTransfer.files[0]));
+
+async function analyze(file) {
+  const st = $("status");
+  st.className = "";
+  st.innerHTML = `<span class="spinner"></span>Analyse de « ${file.name} » : extraction des frames et passage dans le modèle…`;
+  $("results").style.display = "none";
+  $("video").src = URL.createObjectURL(file);
+  try {
+    const r = await fetch("/api/analyze", { method: "POST", body: file,
+      headers: { "X-Filename": encodeURIComponent(file.name) } });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    data = j;
+    st.textContent = "";
+    $("thr").value = threshold;
+    $("results").style.display = "block";
+    buildTimeline();
+    render();
+  } catch (e) {
+    st.className = "err";
+    st.textContent = `Échec de l'analyse : ${e.message}`;
+  }
+}
+
+function buildTimeline() {
+  const tl = $("timeline");
+  tl.querySelectorAll(".b").forEach((b) => b.remove());
+  data.frames.forEach((f, i) => {
+    const b = document.createElement("div");
+    b.className = "b";
+    b.style.height = `${Math.max(2, f.prob * 100)}%`;
+    b.title = `${fmt(f.t)} · p = ${f.prob.toFixed(3)}`;
+    b.onclick = (e) => { e.stopPropagation(); seek(i); };
+    tl.appendChild(b);
+  });
+  const last = data.frames[data.frames.length - 1];
+  $("axis-end").textContent = fmt(last ? last.t : 0);
+}
+
+function segments() {
+  const out = [];
+  data.frames.forEach((f, i) => {
+    if (f.prob < threshold) return;
+    const s = out[out.length - 1];
+    if (s && s.end === i - 1) { s.end = i; s.max = Math.max(s.max, f.prob); }
+    else out.push({ start: i, end: i, max: f.prob });
+  });
+  return out;
+}
+
+function render() {
+  const frames = data.frames, on = frames.map((f) => f.prob >= threshold);
+  const n = on.filter(Boolean).length;
+  $("thr-val").textContent = threshold.toFixed(3);
+  $("s-flag").textContent = `${n} / ${frames.length}`;
+  $("s-share").textContent = frames.length ? pct(n / frames.length) : "–";
+  $("s-time").textContent = `${data.duration_s.toFixed(1)} s`;
+
+  const tl = $("timeline"), bars = tl.querySelectorAll(".b");
+  bars.forEach((b, i) => { b.classList.toggle("on", on[i]); b.classList.toggle("cur", i === cur); });
+  $("thr-line").style.bottom = `calc(4px + ${threshold} * (100% - 8px))`;
+
+  const segs = segments(), ul = $("segments");
+  ul.innerHTML = segs.length ? "" : '<li class="empty">Aucun ajout détecté à ce seuil.</li>';
+  segs.forEach((s) => {
+    const li = document.createElement("li");
+    const a = frames[s.start].t, b = frames[s.end].t + 1 / data.fps;
+    li.innerHTML = `<span>${fmt(a)} → ${fmt(b)}</span><span class="p">${s.end - s.start + 1} frame(s) · max ${s.max.toFixed(2)}</span>`;
+    li.onclick = () => seek(s.start);
+    ul.appendChild(li);
+  });
+
+  const grid = $("grid");
+  grid.innerHTML = "";
+  frames.forEach((f, i) => {
+    if ((filter === "on" && !on[i]) || (filter === "off" && on[i])) return;
+    const c = document.createElement("div");
+    c.className = "card" + (on[i] ? " on" : "") + (i === cur ? " cur" : "");
+    c.innerHTML = `<img loading="lazy" src="${f.url}" alt="frame à ${fmt(f.t)}">
+      <div class="meta"><span>${fmt(f.t)}</span><span>p ${f.prob.toFixed(2)}</span>
+      <span class="badge">${on[i] ? "ajout" : "rien"}</span></div>`;
+    c.onclick = () => seek(i);
+    grid.appendChild(c);
+  });
+}
+
+function seek(i) {
+  cur = i;
+  const v = $("video");
+  v.currentTime = data.frames[i].t;
+  v.pause();
+  render();
+  $("video").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+$("thr").oninput = (e) => { threshold = parseFloat(e.target.value); render(); };
+$("thr-reset").onclick = () => { threshold = model.threshold; $("thr").value = threshold; render(); };
+$("filter").onclick = (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  filter = b.dataset.f;
+  [...$("filter").children].forEach((x) => x.classList.toggle("on", x === b));
+  render();
+};
+$("timeline").onclick = (e) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  const i = Math.floor(((e.clientX - r.left) / r.width) * data.frames.length);
+  seek(Math.min(Math.max(i, 0), data.frames.length - 1));
+};
+</script>
+</body>
+</html>

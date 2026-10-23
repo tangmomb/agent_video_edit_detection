@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "interface",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["interface/server.py"],
+      "port": 8780
+    }
+  ]
+}

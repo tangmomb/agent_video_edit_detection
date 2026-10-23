@@ -1,25 +1,40 @@
 """Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences."""
 
 from model_training_pipeline.features import EXTRACTORS
-from model_training_pipeline.lab import MODELS, Lab
+from model_training_pipeline.lab import BALANCE_GROUPS, MODELS, STRATIFY_KEYS, Lab
 
 from .common import CONTEXT, dataset_info_tool, list_experiments_tool
 from .runner import Agent, Tool
 
 SYSTEM = CONTEXT + """
 
-Ton rôle : Model Researcher. Tu mènes les expériences demandées par l'orchestrateur : choix des \
-embeddings figés (CLIP seul, DINOv2 seul ou les deux concaténés ; image entière ou quadrants), du \
-classifieur et de ses hyperparamètres, de l'information temporelle. Tu ne génères pas de données et \
-tu n'accèdes pas au split test.
+Ton rôle : Model Researcher. Tu constitues les splits train/val/test (make_split) et tu mènes les \
+expériences demandées par l'orchestrateur : choix des embeddings figés (CLIP seul, DINOv2 seul ou \
+les deux concaténés ; image entière ou quadrants), du classifieur et de ses hyperparamètres, de \
+l'information temporelle, et du rééquilibrage de train (balance) quand un type d'ajout ou les \
+négatifs sont sur-représentés. Tu ne génères pas de données et tu ne mesures jamais sur test : \
+seul l'Evaluator y accède.
+
+Splits : décide-les à partir de la composition du dataset (dataset_info), jamais des erreurs d'un \
+modèle. Crée un split quand aucun n'existe, quand le dataset a nettement grossi (videos_hors_split) \
+ou quand val ne couvre pas les cas importants (types d'ajout, animations, orientation, thèmes comme \
+les négatifs difficiles) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
+raison précise. Le test est figé au premier split : les suivants ne redécoupent que train et val, \
+et tu ne peux retirer aucune vidéo (une vidéo défectueuse se signale au Dataset Builder dans ton \
+rapport). Ne refais jamais un split pour améliorer un score val : un val choisi pour être facile ne \
+mesure plus rien. \
+Vérifie la composition de val et test (dataset_info avec split_id) avant d'entraîner.
 
 Méthode : consulte l'historique pour ne pas refaire une expérience existante. Formule une hypothèse \
-par expérience (champ note) et change un facteur à la fois pour que les résultats soient comparables. \
-Arrête-toi quand le lot demandé est fait ou quand les résultats ne bougent plus.
+par expérience (champ note) et change un facteur à la fois, sur le même split, pour que les \
+résultats soient comparables. Après un nouveau split, ré-entraîne la meilleure config précédente \
+dessus pour avoir une référence. Arrête-toi quand le lot demandé est fait ou quand les résultats ne \
+bougent plus.
 
-Rapport final (court, en français) : pour chaque expérience, son id, l'hypothèse et le résultat \
-(rappel à 95 % de précision, AUC, AP, ms/frame) ; le meilleur candidat selon toi et pourquoi ; ce \
-que tu essaierais ensuite et les données qui te manquent, le cas échéant."""
+Rapport final (court, en français) : le split utilisé (et pourquoi si tu l'as créé) ; pour chaque \
+expérience, son id, l'hypothèse et le résultat (rappel à 95 % de précision, AUC, AP, ms/frame) ; le \
+meilleur candidat selon toi et pourquoi ; ce que tu essaierais ensuite et les données qui te \
+manquent, le cas échéant."""
 
 
 def make(lab: Lab) -> Agent:
@@ -28,12 +43,39 @@ def make(lab: Lab) -> Agent:
         system=SYSTEM,
         max_turns=20,
         tools=[
-            dataset_info_tool(lab),
+            dataset_info_tool(lab, with_split=True),
             list_experiments_tool(lab),
+            Tool(
+                name="make_split",
+                description="Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos "
+                            "générées ensuite n'y entrent pas). Les vidéos d'un même clip source restent du "
+                            "même côté. Le test est commun à tous les splits (figé au premier) : seuls train "
+                            "et val sont redécoupés. Renvoie l'id du split et la composition de train, val et test.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "note": {"type": "string", "description": "Pourquoi ce split (ce qu'il corrige ou couvre)."},
+                        "val_ratio": {"type": "number", "minimum": 0.05, "maximum": 0.4,
+                                      "description": "Part des clips en val (défaut 0.2)."},
+                        "test_ratio": {"type": "number", "minimum": 0.05, "maximum": 0.4,
+                                       "description": "Part des clips en test (défaut 0.2), pour le premier "
+                                                      "split seulement : ignoré ensuite (test figé)."},
+                        "stratify": {"type": "array", "items": {"type": "string", "enum": list(STRATIFY_KEYS)},
+                                     "description": "Caractéristiques à répartir au plus près des proportions "
+                                                    "visées dans chaque split : type (d'élément), animation "
+                                                    "(d'entrée), orientation, theme, video_vide. Par défaut toutes ; [] = "
+                                                    "tirage purement aléatoire."},
+                        "seed": {"type": "integer", "description": "Graine du tirage (défaut 0)."},
+                    },
+                    "required": ["note"],
+                },
+                fn=lab.make_split,
+            ),
             Tool(
                 name="train_model",
                 description="Entraîne un classifieur binaire (ajout de montage visible ou non) sur des "
-                            "embeddings figés et l'évalue sur val. Renvoie l'id d'expérience, le rappel "
+                            "embeddings figés, sur le train du split choisi avec un sous-échantillonnage "
+                            "optionnel (balance), et l'évalue sur le val de ce split. Renvoie l'id d'expérience, le rappel "
                             "(avec seuil et TP/FP/FN) aux précisions 90/95/99 %, AUC, AP et le coût de "
                             "calcul (ms/frame). Les embeddings absents du cache sont calculés à la volée (GPU).",
                 input_schema={
@@ -52,9 +94,21 @@ def make(lab: Lab) -> Agent:
                         "params": {"type": "object",
                                    "description": "logreg: C ; mlp: hidden (liste), alpha ; "
                                                   "hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int)."},
+                        "balance": {"type": "object", "additionalProperties": {"type": "number"},
+                                    "description": "Sous-échantillonnage de train seulement (val et test "
+                                                   "intacts) : {groupe: fraction de frames gardée, 0 à 1}. "
+                                                   "Groupes : " + ", ".join(BALANCE_GROUPS) + ". Un type "
+                                                   "d'élément = frames positives dont tous les ajouts visibles "
+                                                   "sont de ce type ; negatif = frames sans ajout ; video_vide "
+                                                   "= frames des vidéos sans aucun ajout. Ex. "
+                                                   "{'subtitle': 0.5, 'negatif': 0.7}. Le dataset n'est pas "
+                                                   "modifié."},
                         "note": {"type": "string", "description": "Hypothèse testée."},
+                        "split_id": {"type": "string",
+                                     "description": "Split sur lequel entraîner (train) et mesurer (val) : "
+                                                    "un id renvoyé par make_split (voir dataset_info)."},
                     },
-                    "required": ["features"],
+                    "required": ["features", "split_id"],
                 },
                 fn=lab.train_model,
             ),

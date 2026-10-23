@@ -1,5 +1,6 @@
 """Génération d'un échantillon : clip source + overlays aléatoires + annotations."""
 
+import math
 import random
 import shutil
 import tempfile
@@ -14,7 +15,11 @@ from .config import SAMPLES_DIR
 from .fonts import available_fonts
 from .sources import default_photo_source, default_video_source
 
-ELEMENT_TYPES = ["keyword", "question", "subtitle", "lower_third", "image", "shape"]
+ELEMENT_TYPES = ["keyword", "question", "subtitle", "lower_third", "image", "shape", "title_card"]
+# Fonds des cartons plein écran (title_card) : sombres, clairs et couleurs vives
+CARD_BACKGROUNDS = [(15, 15, 15, 255), (30, 30, 46, 255), (245, 240, 230, 255), (255, 255, 255, 255),
+                    (229, 37, 45, 255), (30, 110, 255, 255), (255, 214, 0, 255), (0, 120, 90, 255),
+                    (255, 120, 0, 255), (120, 60, 200, 255)]
 
 # (fill, stroke, box)
 TEXT_STYLES = [
@@ -40,7 +45,8 @@ class GenerationConfig:
     empty_prob: float = 0.08  # échantillons sans aucun ajout (négatifs)
     lang: str = "fr"  # fr | en | mix
     type_weights: dict[str, float] = field(default_factory=lambda: {
-        "keyword": 3, "question": 2, "subtitle": 2, "lower_third": 1, "image": 2, "shape": 1})
+        "keyword": 3, "question": 2, "subtitle": 2, "lower_third": 1, "image": 2, "shape": 1,
+        "title_card": 1})
 
 
 def _hex(c) -> str | None:
@@ -120,6 +126,8 @@ class _Sampler:
             return (W - cw) // 2, min(y_hint, H - m - ch)
         if kind == "lower_third":
             return m + r.randint(0, int(W * 0.04)), min(int(H * r.uniform(0.62, 0.8)), H - m - ch)
+        if kind == "title_card":
+            return 0, 0
         return r.randint(m, W - m - cw), r.randint(m, H - m - ch)
 
     def add(self, kind: str, rendered, t0: float, t1: float, anim: dict, content_value,
@@ -127,7 +135,7 @@ class _Sampler:
             tries: int = 25) -> bool:
         img, box = rendered
         cw, ch = box[2] - box[0], box[3] - box[1]
-        for _ in range(tries if kind != "subtitle" else 1):
+        for _ in range(tries if kind not in ("subtitle", "title_card") else 1):
             x, y = self.position(kind, cw, ch, y_hint)
             bbox = [x, y, cw, ch]
             clash = any(
@@ -173,7 +181,7 @@ class _Sampler:
 
     def keyword(self):
         t0, t1 = self.timing(0.8, 3.0)
-        txt = content.keyword(self.rng, self.lang, self.words + self.topic.split())
+        txt = content.keyword(self.rng, self.lang, self.words + self.topic.split(), self.topic)
         self.text_element("keyword", txt, (0.07, 0.13), None, t0, t1, self.animation(t1 - t0))
 
     def question(self):
@@ -212,6 +220,31 @@ class _Sampler:
             st = {"font": f1.stem, "size": int(size), "bg": _hex(bg), "fg": _hex(fg), "accent": _hex(accent)}
             self.add("lower_third", rendered, t0, t1, self.animation(t1 - t0),
                      {"title": title, "subtitle": sub}, f"{title}\n{sub}", st)
+
+    def title_card(self):
+        """Carton opaque plein écran (question ou chapitre) : la vidéo n'est plus visible."""
+        r = self.rng
+        t0, t1 = self.timing(1.0, 3.0)
+        kicker, text = content.title_card(r, self.lang, self.topic)
+        bg = r.choice(CARD_BACKGROUNDS)
+        bg2 = None
+        if r.random() < 0.3:
+            k = r.choice([0.5, 1.4])
+            bg2 = tuple(min(255, int(v * k)) for v in bg[:3]) + (255,)
+        fg = (20, 20, 20, 255) if sum(bg[:3]) > 450 else (255, 255, 255, 255)
+        accent = r.choice([a for a in ACCENTS if a[:3] != bg[:3]] + [fg])
+        f1, f2 = self.font(), self.font()
+        size = int(self.short * r.uniform(0.06, 0.1))
+        rendered = render.render_title_card(text, kicker, f1, f2, size, self.W, self.H, bg, fg, accent, bg2)
+        anim = self.animation(t1 - t0)
+        if anim["in"]["type"].startswith("slide"):  # un carton arrive du bord du cadre
+            dx, dy = anim["in"]["offset"]
+            anim["in"]["offset"] = [math.copysign(self.W, dx) if dx else 0.0,
+                                    math.copysign(self.H, dy) if dy else 0.0]
+        st = {"font": f1.stem, "size": size, "bg": _hex(bg), "bg2": _hex(bg2), "fg": _hex(fg),
+              "accent": _hex(accent), "box": _hex(bg)}
+        self.add("title_card", rendered, t0, t1, anim, {"kicker": kicker, "text": text},
+                 f"{kicker}\n{text}" if kicker else text, st)
 
     def image(self):
         r = self.rng
@@ -287,7 +320,7 @@ def generate_sample(seed: int, out_root: Path = SAMPLES_DIR, config: GenerationC
     used: set[str] = set()
     for _ in range(n):
         kind = rng.choices(types, [cfg.type_weights[t] for t in types])[0]
-        if kind in ("subtitle", "lower_third"):  # au plus un par vidéo
+        if kind in ("subtitle", "lower_third", "title_card"):  # au plus un par vidéo
             if kind in used:
                 kind = "keyword"
             used.add(kind)

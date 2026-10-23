@@ -8,7 +8,8 @@ from PIL import Image, ImageDraw, ImageFont
 from . import annotations
 
 COLORS = {"keyword": "#ff3b30", "question": "#34c759", "subtitle": "#0a84ff",
-          "lower_third": "#ff9f0a", "image": "#bf5af2", "shape": "#ffd60a"}
+          "lower_third": "#ff9f0a", "image": "#bf5af2", "shape": "#ffd60a",
+          "title_card": "#64d2ff"}
 
 
 def _frames_at(video: Path, times: list[float], fps: float, size: tuple[int, int]) -> list[Image.Image]:

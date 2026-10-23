@@ -1,16 +1,13 @@
 """Construit le dataset de frames étiquetées à partir des échantillons edit_generator.
 
 Chaque ligne de index.jsonl :
-  frame, sample_id, t, source, split,
+  frame, sample_id, t, source (clip source : le split se fait par clip, voir lab.make_split),
   visible      : ids des éléments pleinement visibles (opacité >= 0.9)
   partial      : ids en cours de fondu (0.05 < opacité < 0.9)
-  visible_text : sous-ensemble textuel de visible (textes ajoutés)
-  label_any    : 1 si au moins un élément pleinement visible
-  label_text   : 1 si au moins un élément *textuel* pleinement visible
+  label_any    : 1 si au moins un élément pleinement visible (la cible du classifieur)
   ambiguous    : True si un élément est en fondu (exclu de l'entraînement)
 """
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -19,8 +16,7 @@ from pathlib import Path
 from edit_generator import annotations
 from edit_generator.config import DATA_DIR, SAMPLES_DIR, ffmpeg_bin
 
-TEXT_TYPES = {"keyword", "question", "subtitle", "lower_third"}
-FRAMES_DIR = DATA_DIR / "frames_from_videos"
+FRAMES_DIR = DATA_DIR / "videos_samples_frames"
 
 FPS = 1.0  # frames extraites par seconde de vidéo
 
@@ -28,16 +24,6 @@ FPS = 1.0  # frames extraites par seconde de vidéo
 def source_key(ann: dict) -> str:
     s = ann["source"]
     return f"{s['kind']}:{s.get('video_id') or s.get('path')}"
-
-
-def split_for(key: str, test_ratio: float = 0.2, val_ratio: float = 0.2) -> str:
-    # Split par vidéo *source* : deux échantillons tirés du même clip restent du même côté.
-    h = int(hashlib.sha1(key.encode()).hexdigest(), 16) % 1000
-    if h < test_ratio * 1000:
-        return "test"
-    if h < (test_ratio + val_ratio) * 1000:
-        return "val"
-    return "train"
 
 
 # Version de l'extraction, notée dans img/<sample_id>/.extraction : des frames extraites par une
@@ -78,12 +64,9 @@ def label(ann: dict, t: float) -> dict:
             visible.append(el["id"])
         elif op > 0.05:
             partial.append(el["id"])
-    types = {el["id"]: el["type"] for el in ann["elements"]}
     return {
         "visible": visible, "partial": partial,
-        "visible_text": [i for i in visible if types[i] in TEXT_TYPES],
         "label_any": int(bool(visible)),
-        "label_text": int(any(types[i] in TEXT_TYPES for i in visible)),
         "ambiguous": bool(partial),
     }
 
@@ -109,8 +92,7 @@ def build(samples_dir: Path = SAMPLES_DIR, out_dir: Path = FRAMES_DIR, fps: floa
             if t >= ann["video"]["duration"]:
                 break
             rows.append({"frame": str(f.relative_to(out_dir)).replace("\\", "/"),
-                         "sample_id": ann["sample_id"], "t": t, "source": key,
-                         "split": split_for(key), **label(ann, t)})
+                         "sample_id": ann["sample_id"], "t": t, "source": key, **label(ann, t)})
     index = out_dir / "index.jsonl"
     with open(index, "w", encoding="utf-8") as fh:
         for r in rows:

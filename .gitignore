@@ -5,3 +5,4 @@ __pycache__/
 data/
 runs/
 model_results/
+interface/_jobs/
