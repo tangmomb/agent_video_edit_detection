@@ -83,16 +83,41 @@ def _text(content) -> str:
 
 
 def _usage(u) -> dict:
-    details = getattr(u, "prompt_tokens_details", None)
-    cached = (details.get("cached_tokens") if isinstance(details, dict) else getattr(details, "cached_tokens", 0)) or 0
-    return {"input": u.prompt_tokens or 0, "cached_input": cached, "output": u.completion_tokens or 0}
+    """Tokens d'une réponse chat completions (objet du SDK ou dict brut d'un résultat de batch)."""
+    get = lambda o, k: (o.get(k) if isinstance(o, dict) else getattr(o, k, None)) if o else None  # noqa: E731
+    cached = get(get(u, "prompt_tokens_details"), "cached_tokens") or 0
+    return {"input": get(u, "prompt_tokens") or 0, "cached_input": cached, "output": get(u, "completion_tokens") or 0}
+
+
+def chat_body(provider: str, model: str, path: Path, max_side: int, reasoning: str | None) -> dict:
+    """Corps d'une requête chat completions (OpenAI ou Mistral) : consigne + une image. Le même
+    corps sert à l'appel direct et aux lignes d'un batch."""
+    url = data_url(path, max_side)
+    if provider == "openai":
+        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": {"url": url}}]
+        body = {"model": model, "messages": [{"role": "user", "content": content}],
+                "response_format": {"type": "json_object"}, "max_completion_tokens": 8000}
+    elif provider == "mistral":
+        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": url}]
+        body = {"model": model, "messages": [{"role": "user", "content": content}],
+                "response_format": {"type": "json_object"}, "max_tokens": 8000}
+    else:
+        raise ValueError(f"pas de requête chat completions pour {provider}")
+    return {**body, **({"reasoning_effort": reasoning} if reasoning else {})}
+
+
+def read_chat(response) -> tuple[str, dict]:
+    """Texte et tokens d'une réponse chat completions (objet du SDK ou dict brut d'un batch)."""
+    if isinstance(response, dict):
+        return _text(response["choices"][0]["message"]["content"]), _usage(response.get("usage"))
+    return _text(response.choices[0].message.content), _usage(response.usage)
 
 
 def ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: str | None) -> tuple[str, dict]:
     """Une requête (consigne + une image) ; renvoie le texte de la réponse et les tokens consommés.
     reasoning=None : sans effort de raisonnement imposé."""
-    url = data_url(path, max_side)
     if provider == "anthropic":
+        url = data_url(path, max_side)
         # Pas de fallbacks : on compare des modèles, la réponse doit venir du modèle demandé.
         r = api.messages.create(
             model=model, max_tokens=8000,
@@ -108,17 +133,9 @@ def ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: st
         cached, created = u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0
         text = "" if r.stop_reason == "refusal" else "".join(b.text for b in r.content if b.type == "text")
         return text, {"input": u.input_tokens + cached + created, "cached_input": cached, "output": u.output_tokens}
-    if provider == "openai":
-        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": {"url": url}}]
-        req = {"model": model, "messages": [{"role": "user", "content": content}],
-               "response_format": {"type": "json_object"}, "max_completion_tokens": 8000}
-        r = api.chat.completions.create(**req, **({"reasoning_effort": reasoning} if reasoning else {}))
-    else:
-        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": url}]
-        req = {"model": model, "messages": [{"role": "user", "content": content}],
-               "response_format": {"type": "json_object"}, "max_tokens": 8000}
-        r = api.chat.complete(**req, **({"reasoning_effort": reasoning} if reasoning else {}))
-    return _text(r.choices[0].message.content), _usage(r.usage)
+    body = chat_body(provider, model, path, max_side, reasoning)
+    r = api.chat.completions.create(**body) if provider == "openai" else api.chat.complete(**body)
+    return read_chat(r)
 
 
 def refuses_reasoning(e: Exception) -> bool:
@@ -158,6 +175,11 @@ def vote(path: Path, apis: dict | None = None, models=ANNOTATORS, max_side: int 
             text, used = ask(provider, apis[provider], model, path, max_side, None)
         spent += cost(model, used)
         votes[model] = parse(text)
-    values = set(votes.values())
-    label = int(values.pop()) if len(values) == 1 and None not in values else None
-    return {"votes": votes, "cost_usd": spent, "label": label}
+    return {"votes": votes, "cost_usd": spent, "label": consensus(votes)}
+
+
+def consensus(votes: dict, models=ANNOTATORS) -> int | None:
+    """1 / 0 si tous les modèles ont voté la même chose ; None sinon (désaccord, réponse illisible ou
+    vote manquant)."""
+    values = {votes.get(m) for m in models}
+    return int(values.pop()) if len(values) == 1 and None not in values else None

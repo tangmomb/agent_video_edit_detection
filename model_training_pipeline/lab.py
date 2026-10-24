@@ -39,7 +39,8 @@ from video_source.config import DATA_DIR, ROOT, SAMPLES_DIR
 
 from . import metrics
 from .features import extraction_cost, get_features
-from .frames import FPS, FRAMES_DIR, annotate, build, frames_of, load_index, load_votes, source_key
+from .frames import FPS, FRAMES_DIR, annotate, build, load_index, source_key
+from .frames import pending as frames_pending
 
 EXP_DIR = ROOT / "model_results"
 DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
@@ -288,8 +289,7 @@ class Lab:
             return {"error": "budget d'annotation épuisé pour cette session"}
         if not (query or "").strip():
             raise ValueError("query obligatoire : la recherche YouTube")
-        pending = [d for d in sorted(SAMPLES_DIR.glob("yt_*"))
-                   if (d / "meta.json").exists() and len(load_votes(d)["frames"]) < len(frames_of(d))]
+        pending = [d for d in sorted(SAMPLES_DIR.glob("yt_*")) if (d / "meta.json").exists() and frames_pending(d)]
         try:
             got = youtube.collect(query, n, orientation)
         except youtube.NoVideoFound as e:

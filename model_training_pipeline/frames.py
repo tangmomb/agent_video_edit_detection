@@ -73,17 +73,44 @@ def frames_of(sdir: Path, out_dir: Path = FRAMES_DIR, fps: float = FPS, long_sid
 
 
 def load_votes(sdir: Path) -> dict:
+    """votes.json : {"frames": {image: {"votes": {modèle: bool|None}, "label": 1|0|None}}, "cost_usd"}."""
     path = Path(sdir) / "votes.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"frames": {}, "cost_usd": 0.0}
 
 
+def save_votes(sdir: Path, votes: dict) -> None:
+    (Path(sdir) / "votes.json").write_text(json.dumps(votes, ensure_ascii=False), encoding="utf-8")
+
+
+def add_votes(votes: dict, frame: str, new: dict, cost_usd: float) -> None:
+    """Ajoute les votes de certains modèles pour une image (appel direct ou résultat de batch) et
+    recalcule son étiquette : elle n'existe qu'une fois tous les annotateurs d'accord."""
+    entry = votes["frames"].setdefault(frame, {"votes": {}, "label": None})
+    entry["votes"].update(new)
+    entry["label"] = annotators.consensus(entry["votes"])
+    votes["cost_usd"] += cost_usd
+
+
+def missing(votes: dict, frame: str) -> list[str]:
+    """Annotateurs qui n'ont pas encore voté sur l'image."""
+    got = votes["frames"].get(frame, {}).get("votes", {})
+    return [m for m in annotators.ANNOTATORS if m not in got]
+
+
+def pending(sdir: Path, out_dir: Path = FRAMES_DIR) -> list[Path]:
+    """Images de la vidéo auxquelles il manque au moins un vote."""
+    votes = load_votes(sdir)
+    return [f for f in frames_of(sdir, out_dir) if missing(votes, f.name)]
+
+
 def annotate(sdir: Path, max_usd: float | None = None, apis: dict | None = None,
              out_dir: Path = FRAMES_DIR) -> dict:
-    """Fait voter les annotateurs sur les images pas encore annotées de la vidéo (appels payants).
-    S'arrête avant de dépasser max_usd ; reprend là où il s'était arrêté. Renvoie le bilan."""
+    """Fait voter les annotateurs sur les images pas encore annotées de la vidéo (appels payants,
+    un par image et par modèle manquant). S'arrête avant de dépasser max_usd ; reprend là où il
+    s'était arrêté. Renvoie le bilan."""
     sdir = Path(sdir)
     votes = load_votes(sdir)
-    todo = [f for f in frames_of(sdir, out_dir) if f.name not in votes["frames"]]
+    todo = pending(sdir, out_dir)
     apis = apis if apis is not None else {}
     spent, done, stopped = 0.0, 0, False
     with ThreadPoolExecutor(WORKERS) as pool:
@@ -93,13 +120,13 @@ def annotate(sdir: Path, max_usd: float | None = None, apis: dict | None = None,
             if max_usd is not None and done and spent + spent / done * len(chunk) > max_usd:
                 stopped = True
                 break
-            for f, v in zip(chunk, pool.map(lambda f: annotators.vote(f, apis), chunk)):
-                votes["frames"][f.name] = {"votes": v["votes"], "label": v["label"]}
-                votes["cost_usd"] += v["cost_usd"]
+            asked = pool.map(lambda f: annotators.vote(f, apis, models=missing(votes, f.name)), chunk)
+            for f, v in zip(chunk, asked):
+                add_votes(votes, f.name, v["votes"], v["cost_usd"])
                 spent += v["cost_usd"]
             done += len(chunk)
             # écrit après chaque lot : une annotation interrompue reprend là où elle s'est arrêtée
-            (sdir / "votes.json").write_text(json.dumps(votes, ensure_ascii=False), encoding="utf-8")
+            save_votes(sdir, votes)
     labels = [v["label"] for v in votes["frames"].values()]
     return {"sample_id": sdir.name, "images_annotees": len(labels), "cost_usd": round(spent, 4),
             "images_avec_accord": sum(lab is not None for lab in labels),
