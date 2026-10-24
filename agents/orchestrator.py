@@ -123,11 +123,11 @@ def make(lab: Lab, session: Session) -> Agent:
 
 
 def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annotation_usd: float = 2.0,
-        client=None) -> Session:
+        model: str | None = None, completion=None) -> Session:
     lab = Lab(data_budget=data_budget, final_test_budget=final_tests, annotation_budget_usd=annotation_usd)
-    session = Session(budget_usd, client=client,
+    session = Session(budget_usd, completion=completion, model=model,
                       params={"goal": goal, "data_budget": data_budget, "final_tests": final_tests,
-                              "annotation_usd": annotation_usd})
+                              "annotation_usd": annotation_usd, "agent_model": model})
     try:
         report = session.run(make(lab, session), goal)
     except BaseException as e:

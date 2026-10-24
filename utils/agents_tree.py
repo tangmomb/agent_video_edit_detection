@@ -169,7 +169,7 @@ def render(examples: dict, note: str) -> str:
 <h1>Agents et outils</h1>
 <p class="sub">Généré depuis le code de <code>agents/</code> par <code>utils/agents_tree.py</code> : l'orchestrateur délègue aux trois sous-agents via ses outils <code>ask_*</code>. Les données sont de vraies vidéos YouTube, chaque image étiquetée par l'accord de trois LLM.</p>
 <div class="toolbar"><button id="open">Tout déplier</button><button id="close">Tout replier</button></div>
-<div class="legend"><span><span class="badge agent">agent</span> agent Mistral</span>
+<div class="legend"><span><span class="badge agent">agent</span> agent LLM (via LiteLLM)</span>
 <span><span class="badge tool">outil</span> appel au labo</span>
 <span><span class="badge delegate">délègue</span> lance un sous-agent</span></div>
 <ul class="tree">{_agent(root, examples, note, subs, open_=True)}</ul>

@@ -12,6 +12,7 @@ import shutil
 import time
 import unicodedata
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from .config import SAMPLES_DIR, ffmpeg_bin
 
@@ -20,6 +21,9 @@ MIN_DURATION = 5
 MAX_RES = 720  # plus petit côté de la vidéo téléchargée
 SEARCH_FACTOR = 4  # candidats cherchés par vidéo voulue (déjà prises, trop longues, mauvaise orientation)
 MIN_CANDIDATES = 25  # plancher : avec peu de vidéos voulues, 4 par vidéo ne suffit pas à trouver une bonne
+# Filtre de la recherche YouTube « vidéos de moins de 4 minutes » : sans lui, la plupart des
+# résultats dépassent MAX_DURATION et une requête courante paraît épuisée.
+SHORT_FILTER = "EgQQARgB"
 REQUEST_PAUSE = (2, 6)  # s : attente aléatoire entre deux lectures de page vidéo, contre le blocage YouTube
 DOWNLOAD_PAUSE = (60, 180)  # s : attente aléatoire entre deux téléchargements, pour ménager YouTube
 
@@ -66,12 +70,15 @@ def _candidates(query: str, n: int, orientation: str | None) -> list[dict]:
                 return list(ydl.extract_info(url, download=False)["entries"])
             except Exception:
                 pass  # hashtag inconnu : recherche classique, filtrée sur les dimensions
-        return list(ydl.extract_info(f"ytsearch{count}:{query}", download=False)["entries"])
+        url = f"https://www.youtube.com/results?search_query={quote_plus(query)}&sp={SHORT_FILTER}"
+        return [e for e in ydl.extract_info(url, download=False)["entries"] if e]
 
 
-def search(query: str, n: int, orientation: str | None = None, exclude: set[str] | None = None) -> list[dict]:
+def search(query: str, n: int, orientation: str | None = None, exclude: set[str] | None = None,
+           avoid_channels: set[str] | None = None) -> list[dict]:
     """Jusqu'à n vidéos (infos complètes yt-dlp) pour la requête, jamais téléchargées, de durée
-    acceptable et, si demandé, de la bonne orientation. Le portrait vise les Shorts."""
+    acceptable et, si demandé, de la bonne orientation. Le portrait vise les Shorts.
+    avoid_channels : chaînes à écarter (complété au fil de la recherche : une vidéo par chaîne)."""
     exclude = (exclude or set()) | downloaded()
     out, looked = [], 0
     with _ydl() as ydl:
@@ -80,7 +87,8 @@ def search(query: str, n: int, orientation: str | None = None, exclude: set[str]
                 break
             d = e.get("duration")  # absente des pages Shorts : vérifiée sur l'info complète
             if e["id"] in exclude or e.get("live_status") not in (None, "not_live") \
-                    or (d is not None and not MIN_DURATION <= d <= MAX_DURATION):
+                    or (d is not None and not MIN_DURATION <= d <= MAX_DURATION) \
+                    or (avoid_channels is not None and e.get("channel_id") in avoid_channels):
                 continue
             if looked:
                 time.sleep(random.uniform(*REQUEST_PAUSE))
@@ -93,6 +101,11 @@ def search(query: str, n: int, orientation: str | None = None, exclude: set[str]
                 continue
             if orientation and _orientation(info) != orientation:
                 continue
+            channel = info.get("channel_id") or info.get("uploader_id")
+            if avoid_channels is not None:
+                if channel in avoid_channels:
+                    continue
+                avoid_channels.add(channel)
             exclude.add(e["id"])
             out.append(info)
     return out

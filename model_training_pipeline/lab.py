@@ -35,13 +35,13 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from video_source import youtube
-from video_source.config import DATA_DIR, ROOT, SAMPLES_DIR
+from video_source.config import DATA_DIR, LAB_DIR, SAMPLES_DIR
 
 from . import batch, metrics
 from .features import extraction_cost, get_features
 from .frames import FPS, FRAMES_DIR, build, load_index, source_key
 
-EXP_DIR = ROOT / "model_results"
+EXP_DIR = LAB_DIR / "model_results"
 DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
 SPLITS_DIR = DATA_DIR / "splits"
 # Chaînes du test, figées au premier split : les splits suivants ne refont que train/val, et les

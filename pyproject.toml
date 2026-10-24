@@ -14,8 +14,10 @@ dependencies = [
     "yt-dlp>=2026.10",
     # annotateurs (video_source/annotators.py) et banc utils/llm_bench
     "mistralai>=3.3",
-    "openai>=3.0",
+    "openai>=2.20,<3",  # borne de litellm
     "anthropic>=2.0",
+    # agents (agents/runner.py) : un seul client pour Mistral, OpenAI, Anthropic, Google
+    "litellm==1.104.2",
 ]
 
 [project.optional-dependencies]

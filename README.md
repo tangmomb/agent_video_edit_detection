@@ -65,14 +65,26 @@ Orchestrateur ──► Dataset Builder   (collecte vidéos YouTube + annotation
 python -m agents --budget-usd 1.00 --annotation-usd 2.00 --data-budget 250 --final-tests 2   # appels API payants
 ```
 
+Banc d'agents (`agents/bench.py`) : compare des modèles LLM, le même pour les quatre agents, sur un
+instantané figé du dataset dans `bench/<nom>/`, sans toucher aux vraies données. Une part des
+chaînes est cachée aux agents ; le modèle de production de chaque run y est mesuré.
+
+```bash
+python -m agents.bench snapshot --name b1                  # instantané + jeu caché (gratuit)
+python -m agents.bench run --name b1 --runs 3 --budget 1.5 # 6 modèles x 3 runs (appels API payants)
+python -m agents.bench score --name b1                     # tableau bench/b1/results.md (gratuit)
+```
+
 Organisation :
 - `model_training_pipeline/lab.py` : toute la logique métier (données, entraînement, évaluation), sans LLM,
   utilisable et testable seule ;
-- `agents/runner.py` : boucle tool use commune sur l'API Mistral (`MISTRAL_API_KEY`), budget
+- `agents/runner.py` : boucle tool use commune via LiteLLM (Mistral, OpenAI, Anthropic, Google ;
+  clés du `.env`), budget
   partagé, journaux. Une réserve (15 % du budget, 0,05 $ minimum) est gardée pour le rapport
   final de l'orchestrateur : les sous-agents s'arrêtent avant, les délégations sont alors
   refusées, et un agent à court de budget ou de tours rédige un dernier rapport sans outils au
-  lieu d'être coupé net. Les quatre agents utilisent Mistral Large 4. Chaque rapport de sous-agent
+  lieu d'être coupé net. Les quatre agents utilisent Mistral Large 4, ou le modèle donné par
+  `--agent-model` (même modèle pour les quatre, ex. `openai/gpt-6-luna`). Chaque rapport de sous-agent
   se termine par une « Vérification automatique » (outils réellement appelés, échecs) écrite par
   le code, pour que l'orchestrateur ne croie pas un rapport inventé ;
 - `agents/<agent>.py` : prompt + sous-ensemble d'outils du lab propres à chaque agent ;

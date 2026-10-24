@@ -1,7 +1,8 @@
 """Boucle tool use commune aux quatre agents.
 
 Un `Agent` = un prompt système + une liste d'outils + un modèle. Une `Session` exécute des agents
-sur l'API Mistral (chat completions + function calling) avec un budget partagé et journalise tout
+via LiteLLM (chat completions + function calling au format OpenAI, traduit vers Mistral, OpenAI,
+Anthropic ou Google selon le préfixe du modèle) avec un budget partagé et journalise tout
 le pipeline dans runs/<NNN>_<horodatage>/ (à la racine du projet) : pipeline.json (réécrit à chaque
 étape), plus report.md pour le rapport final.
 
@@ -34,20 +35,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from video_source.config import ROOT
+from video_source.annotators import MODELS
+from video_source.config import LAB_DIR
 
-RUNS_DIR = ROOT / "runs"
+RUNS_DIR = LAB_DIR / "runs"
 
-# Identifiants épinglés (pas d'alias -latest) pour qu'un changement de modèle côté Mistral ne
-# modifie pas le comportement en silence.
-LARGE = "mistral-large-4-0"   # Mistral Large 4 (v26.10) : raisonnement, vision, 1M de contexte
-SMALL = "mistral-small-2603"  # Mistral Small 4 (v26.03) : raisonnement, vision, 256K
-# $/million de tokens (docs.mistral.ai/models, octobre 2026). cached_input : tokens d'entrée
-# servis depuis le cache, quand l'API les signale et que Mistral publie un prix.
-PRICES = {
-    LARGE: {"input": 1.36, "cached_input": 0.14, "output": 4.18},
-    SMALL: {"input": 0.15, "output": 0.60},
-}
+# Modèles au format LiteLLM « fournisseur/identifiant », épinglés (pas d'alias -latest) pour qu'un
+# changement de modèle côté fournisseur ne modifie pas le comportement en silence.
+LARGE = "mistral/mistral-large-4-0"   # Mistral Large 4 (v26.10) : raisonnement, vision, 1M de contexte
+SMALL = "mistral/mistral-small-2603"  # Mistral Small 4 (v26.03) : raisonnement, vision, 256K
+# $/million de tokens : tarifs relevés à la main (table des modèles du banc des annotateurs,
+# octobre 2026), prioritaires sur ceux de LiteLLM, parfois en retard. cached_input : tokens
+# d'entrée servis depuis le cache, quand l'API les signale et que le fournisseur publie un prix.
+PRICES = {f"{provider}/{model}": p for model, _, _, p, provider in MODELS}
+# Effort de raisonnement des modèles qui ne prennent pas celui de l'agent (None : aucun).
+REASONING_BY_MODEL = {"mistral/mistral-large-2512": None}  # Mistral Large 3 : pas de raisonnement
 
 
 def _next_run_number() -> int:
@@ -82,7 +84,7 @@ class Agent:
     tools: list[Tool] = field(default_factory=list)
     max_turns: int = 25
     model: str = LARGE  # Small 4 inventait des actions et des sorties de commandes (run du 22/10/2026)
-    reasoning: str = "high"  # reasoning_effort Mistral : "high" (trace de raisonnement) ou "none"
+    reasoning: str = "high"  # reasoning_effort, traduit par LiteLLM pour chaque fournisseur
 
 
 class _Capture(io.TextIOBase):
@@ -114,13 +116,32 @@ def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def price(model: str) -> dict:
+    """Tarif d'un modèle en $/million de tokens : PRICES, sinon la table de LiteLLM. Sans tarif, le
+    budget ne peut pas être tenu : erreur avant tout appel."""
+    if model in PRICES:
+        return PRICES[model]
+    import litellm
+    info = litellm.model_cost.get(model) or litellm.model_cost.get(model.split("/", 1)[-1]) or {}
+    if not (info.get("input_cost_per_token") and info.get("output_cost_per_token")):
+        raise ValueError(f"tarif inconnu pour {model} : l'ajouter à PRICES (agents/runner.py)")
+    out = {"input": info["input_cost_per_token"] * 1e6, "output": info["output_cost_per_token"] * 1e6}
+    if info.get("cache_read_input_token_cost"):
+        out["cached_input"] = info["cache_read_input_token_cost"] * 1e6
+    return out
+
+
 class Session:
-    def __init__(self, budget_usd: float, client=None, run_dir: Path | None = None, verbose: bool = True,
-                 params: dict | None = None, report_reserve_usd: float | None = None):
-        if client is None:
-            from mistralai.client import Mistral
-            client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
-        self.client = client
+    def __init__(self, budget_usd: float, completion=None, run_dir: Path | None = None, verbose: bool = True,
+                 params: dict | None = None, report_reserve_usd: float | None = None, model: str | None = None):
+        if completion is None:
+            import litellm
+            litellm.suppress_debug_info = True
+            completion = litellm.completion  # clés lues dans l'environnement (.env : MISTRAL_API_KEY…)
+        self.completion = completion
+        self.model = model  # même modèle pour tous les agents ; None : celui de chaque agent
+        if model:
+            price(model)
         self.budget_usd = budget_usd
         # Part du budget réservée à l'orchestrateur pour conclure : les sous-agents s'arrêtent avant,
         # et l'orchestrateur ne peut plus déléguer une fois la réserve entamée (run 004 : coupé
@@ -151,7 +172,7 @@ class Session:
 
     @staticmethod
     def _cost(model: str, tokens: dict) -> float:
-        p = PRICES[model]
+        p = price(model)
         cached = tokens["cached_input"] if "cached_input" in p else 0
         return ((tokens["input"] - cached) * p["input"] + cached * p.get("cached_input", 0)
                 + tokens["output"] * p["output"]) / 1e6
@@ -203,10 +224,16 @@ class Session:
         step = lambda type_, **data: self._step(call, agent.name, type_, **data)
         t_agent = time.perf_counter()
 
+        model = self.model or agent.model
+        price(model)  # tarif inconnu : erreur avant le premier appel
+        effort = REASONING_BY_MODEL.get(model, agent.reasoning)
+        # Effort transmis tel quel : la table de capacités de LiteLLM a du retard (zai-glm-5-3-flash
+        # y figure sans raisonnement et l'appel serait refusé) ; c'est l'API du fournisseur qui juge.
+        reasoning = {"reasoning_effort": effort, "allowed_openai_params": ["reasoning_effort"]} if effort else {}
         tool_schemas = [t.schema() for t in agent.tools]
         # Prompt système et schémas d'outils : fixes pendant un run, enregistrés une fois par agent.
         self.trace["agents"].setdefault(agent.name, {"system": agent.system, "tools": tool_schemas})
-        step("start", task=task, max_turns=agent.max_turns, model=agent.model, reasoning=agent.reasoning)
+        step("start", task=task, max_turns=agent.max_turns, model=model, reasoning=effort)
         self._say(f"\n=== {agent.name} ===\n{task}")
         tools = {t.name: t for t in agent.tools}
         n_images = 0
@@ -221,24 +248,26 @@ class Session:
         def complete(turn: int, tool_choice: str):
             nonlocal last_cost
             t0 = time.perf_counter()
-            response = self.client.chat.complete(
-                model=agent.model,
+            response = self.completion(
+                model=model,
                 max_tokens=16000,
                 messages=messages,
                 tools=tool_schemas,
                 tool_choice=tool_choice,
-                reasoning_effort=agent.reasoning,
+                **reasoning,
             )
             choice = response.choices[0]
             msg = choice.message
             tokens = _tokens(response.usage)
-            cost = self._cost(agent.model, tokens)
+            cost = self._cost(model, tokens)
             self.spent += cost
             last_cost = cost
             for k, v in tokens.items():
                 self.trace["run"]["tokens"][k] += v
-            messages.append(msg)  # message complet, raisonnement compris (à rejouer tel quel)
-            thinking, texts = _split(msg.content)
+            # Message complet, raisonnement compris : LiteLLM le rejoue si le fournisseur l'exige
+            # (blocs signés d'Anthropic) et le retire sinon (Mistral refuse ces champs en entrée).
+            messages.append(msg.model_dump(exclude_none=True))
+            thinking, texts = _split(msg)
             calls = msg.tool_calls or []
             for t in texts:
                 self._say(f"[{agent.name}] {t}")
@@ -296,8 +325,8 @@ class Session:
                     paths = []
                     if isinstance(content, list):
                         imgs = [b for b in content if b["type"] == "image"]
-                        images += [{"type": "image_url",
-                                    "image_url": f"data:{b['source']['media_type']};base64,{b['source']['data']}"}
+                        images += [{"type": "image_url", "image_url": {
+                                       "url": f"data:{b['source']['media_type']};base64,{b['source']['data']}"}}
                                    for b in imgs]
                         for b in imgs:
                             n_images += 1
@@ -380,19 +409,10 @@ def _tokens(usage) -> dict:
             "output": _get(usage, "completion_tokens") or 0}
 
 
-def _split(content) -> tuple[list[str], list[str]]:
-    """Sépare le raisonnement (chunks thinking) du texte. content : str ou liste de chunks."""
-    if content is None:
-        return [], []
-    if isinstance(content, str):
-        return [], [content] if content.strip() else []
-    thinking, texts = [], []
-    for chunk in content:
-        if _get(chunk, "type") == "thinking":
-            thinking.append("".join(_get(t, "text", "") for t in _get(chunk, "thinking") or []))
-        elif _get(chunk, "type") == "text" and _get(chunk, "text", "").strip():
-            texts.append(_get(chunk, "text"))
-    return [t for t in thinking if t], texts
+def _split(msg) -> tuple[list[str], list[str]]:
+    """Raisonnement et texte d'une réponse LiteLLM (reasoning_content, quel que soit le fournisseur)."""
+    thinking, content = _get(msg, "reasoning_content"), _get(msg, "content")
+    return ([thinking] if thinking and thinking.strip() else []), ([content] if content and content.strip() else [])
 
 
 def _loggable(content, image_paths: list[str]) -> Any:

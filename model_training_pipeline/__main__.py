@@ -14,7 +14,26 @@ def main() -> None:
     bt.add_argument("action", choices=["estimate", "submit", "status", "collect"])
     bt.add_argument("--max-usd", type=float, help="submit : plafond du coût estimé")
     sub.add_parser("info", help="état du dataset (outil dataset_info de l'agent)")
+    c = sub.add_parser("collect", help="collecte directe de vidéos variées puis annotation en batch (payant)")
+    c.add_argument("--target", type=int, default=50, help="vidéos à collecter")
+    c.add_argument("--per-query", type=int, default=2, help="vidéos au plus par requête")
+    c.add_argument("--max-usd", type=float, required=True, help="plafond du coût d'annotation estimé")
+    c.add_argument("--dry-run", action="store_true", help="cherche seulement : ni téléchargement ni annotation")
+    c.add_argument("--no-wait", action="store_true",
+                   help="envoie les batchs sans attendre (récupération plus tard : batch collect)")
+    c.add_argument("--pause", type=float, nargs=2, metavar=("MIN", "MAX"),
+                   help="attente aléatoire entre deux téléchargements, en s (défaut : 60 180)")
     args = p.parse_args()
+
+    if args.cmd == "collect":
+        import json
+
+        from video_source.youtube import DOWNLOAD_PAUSE
+
+        from .collect import collect
+        print(json.dumps(collect(args.target, args.per_query, args.max_usd, args.dry_run, not args.no_wait,
+                                 tuple(args.pause or DOWNLOAD_PAUSE)), indent=2, ensure_ascii=False))
+        return
 
     if args.cmd == "frames":
         print(build(fps=args.fps))

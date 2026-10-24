@@ -11,8 +11,11 @@ def main() -> None:
     p.add_argument("--annotation-usd", type=float, default=2.00,
                    help="budget d'annotation des images par les 3 LLM (en $, en plus de --budget-usd)")
     p.add_argument("--final-tests", type=int, default=2, help="appels à final_test autorisés")
+    p.add_argument("--agent-model",
+                   help="même modèle pour les 4 agents, au format LiteLLM « fournisseur/identifiant » "
+                        "(ex. openai/gpt-6-luna, anthropic/claude-haiku-5-5) ; défaut : mistral/mistral-large-4-0")
     a = p.parse_args()
-    run(a.goal, a.budget_usd, a.data_budget, a.final_tests, a.annotation_usd)
+    run(a.goal, a.budget_usd, a.data_budget, a.final_tests, a.annotation_usd, model=a.agent_model)
 
 
 if __name__ == "__main__":
