@@ -1,12 +1,13 @@
-"""Banc des annotateurs Mistral : on charge une vidéo, chaque modèle choisi dit en JSON quelles images
-(1 par seconde) contiennent un ajout de montage, et on compare leurs réponses, leur coût et leur
-durée pour choisir le prochain modèle d'annotation. Outil autonome : il n'est branché ni au
-dataset, ni au classifieur, ni aux agents.
+"""Banc des annotateurs (Mistral, OpenAI, Anthropic) : on charge une vidéo, chaque modèle choisi dit
+en JSON quelles images (1 par seconde) contiennent un ajout de montage, et on compare leurs réponses,
+leur coût et leur durée pour choisir le prochain modèle d'annotation. Outil autonome : il n'est
+branché ni au dataset, ni au classifieur, ni aux agents.
 
     .venv/Scripts/python.exe utils/llm_bench/server.py [--port 8790]
 
 Chaque vidéo chargée est rangée dans utils/llm_bench/_videos/<id>/ (vidéo, images, et une réponse
-JSON par modèle dans runs/). Chaque lancement de modèle est un appel payant à l'API Mistral.
+JSON par modèle dans runs/). Chaque lancement de modèle est un appel payant à l'API de son
+fournisseur (clés MISTRAL_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY du .env).
 """
 
 import argparse
@@ -34,25 +35,76 @@ from utils import dev_reload  # noqa: E402
 load_dotenv(ROOT / ".env")
 VIDEOS = HERE / "_videos"
 
-# Modèles comparés (docs.mistral.ai/models, octobre 2026) : identifiant d'API, nom, lecture d'images,
-# tarif en $ par million de tokens.
+# Modèles comparés (docs.mistral.ai/models, developers.openai.com/api/docs/pricing,
+# platform.claude.com, octobre 2026) : identifiant d'API, nom, lecture d'images, tarif en $ par
+# million de tokens, fournisseur.
 MODELS = [
-    ("mistral-large-4-0", "Mistral Large 4", True, {"input": 1.36, "cached_input": 0.14, "output": 4.18}),
-    ("mistral-large-2512", "Mistral Large 3", True, {"input": 0.50, "output": 1.50}),
-    ("mistral-small-2603", "Mistral Small 4", True, {"input": 0.15, "output": 0.60}),
-    ("ministral-14b-2512", "Ministral 3 14B", True, {"input": 0.20, "output": 0.20}),
-    ("zai-glm-5-3-flash", "Z.ai GLM 5.3 Flash", True, {"input": 0.15, "cached_input": 0.03, "output": 0.50}),
+    ("mistral-large-4-0", "Mistral Large 4", True, {"input": 1.36, "cached_input": 0.14, "output": 4.18}, "mistral"),
+    ("mistral-large-2512", "Mistral Large 3", True, {"input": 0.50, "output": 1.50}, "mistral"),
+    ("mistral-small-2603", "Mistral Small 4", True, {"input": 0.15, "output": 0.60}, "mistral"),
+    ("ministral-14b-2512", "Ministral 3 14B", True, {"input": 0.20, "output": 0.20}, "mistral"),
+    ("zai-glm-5-3-flash", "Z.ai GLM 5.3 Flash", True, {"input": 0.15, "cached_input": 0.03, "output": 0.50}, "mistral"),
+    ("gpt-6-luna", "GPT-6 Luna", True, {"input": 0.10, "cached_input": 0.01, "output": 0.50}, "openai"),
+    ("gpt-5.6-luna", "GPT-5.6 Luna", True, {"input": 0.20, "cached_input": 0.02, "output": 1.20}, "openai"),
+    ("claude-haiku-5-5", "Claude Haiku 5.5", True, {"input": 0.10, "output": 0.50}, "anthropic"),
 ]
 PRICES = {m[0]: m[3] for m in MODELS}
+PROVIDER = {m[0]: m[4] for m in MODELS}
+KEYS = {"mistral": "MISTRAL_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
 REASONING = "medium"  # même effort de raisonnement pour tous les modèles qui raisonnent
 
-PROMPT = """Pour chaque image, dis si un élément a été ajouté au montage ou non.
-Réponds uniquement en JSON : {"images": [{"id": <numéro de l'image>, "ajout": true|false}]}"""
+PROMPT = """Dis si cette image est brute de la caméra ou non.
+Réponds true dès que quelque chose a été ajouté au montage : habillage, texte, titre, sous-titres,
+photo ou image incrustée, logo, cadre, effet graphique ou tout autre élément qui ne vient pas de la caméra.
+Réponds false seulement si l'image est telle que la caméra l'a filmée.
+Réponds uniquement en JSON : {"ajout": true|false}"""
 
 
-def client():
+def client(provider: str):
+    key = os.environ.get(KEYS[provider])
+    if not key:
+        raise ValueError(f"{KEYS[provider]} absente du .env : impossible d'interroger {provider}")
+    if provider == "openai":
+        from openai import OpenAI
+        return OpenAI(api_key=key)
+    if provider == "anthropic":
+        from anthropic import Anthropic
+        return Anthropic(api_key=key)
     from mistralai.client import Mistral
-    return Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+    return Mistral(api_key=key)
+
+
+def _ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: str | None) -> tuple[str, dict]:
+    """Une requête (consigne + une image) ; renvoie le texte de la réponse et les tokens consommés.
+    reasoning=None : sans effort de raisonnement imposé."""
+    url = _data_url(path, max_side)
+    if provider == "anthropic":
+        # Pas de fallbacks : on compare des modèles, la réponse doit venir du modèle demandé.
+        r = api.messages.create(
+            model=model, max_tokens=8000,
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                             "data": url.split(",", 1)[1]}},
+                {"type": "text", "text": PROMPT}]}],
+            output_config={"format": {"type": "json_schema", "schema": {
+                "type": "object", "properties": {"ajout": {"type": "boolean"}},
+                "required": ["ajout"], "additionalProperties": False}},
+                **({"effort": reasoning} if reasoning else {})})
+        u = r.usage
+        cached, created = u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0
+        text = "" if r.stop_reason == "refusal" else "".join(b.text for b in r.content if b.type == "text")
+        return text, {"input": u.input_tokens + cached + created, "cached_input": cached, "output": u.output_tokens}
+    if provider == "openai":
+        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": {"url": url}}]
+        req = {"model": model, "messages": [{"role": "user", "content": content}],
+               "response_format": {"type": "json_object"}, "max_completion_tokens": 8000}
+        r = api.chat.completions.create(**req, **({"reasoning_effort": reasoning} if reasoning else {}))
+    else:
+        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": url}]
+        req = {"model": model, "messages": [{"role": "user", "content": content}],
+               "response_format": {"type": "json_object"}, "max_tokens": 8000}
+        r = api.chat.complete(**req, **({"reasoning_effort": reasoning} if reasoning else {}))
+    return _text(r.choices[0].message.content), _usage(r.usage)
 
 
 def extract(video: Path, out: Path) -> list[Path]:
@@ -108,45 +160,35 @@ def run(cfg: dict, api=None) -> dict:
         raise ValueError(f"{model} ne lit pas les images (ou n'est pas dans la liste) : il ne peut pas annoter")
     d = VIDEOS / Path(cfg["video"]).name
     paths = sorted((d / "frames").glob("*.jpg"))
-    max_side, batch = int(cfg.get("max_side", 768)), int(cfg.get("batch", 6))
+    max_side = int(cfg.get("max_side", 768))
     max_usd, reasoning = float(cfg.get("max_usd", 0.5)), REASONING
-    api = api or client()
+    provider = PROVIDER[model]
+    api = api or client(provider)
     labels, raw, spent, last, refus = [], [], 0.0, 0.0, None
     tokens = {"input": 0, "cached_input": 0, "output": 0}
     t0 = time.perf_counter()
-    for start in range(0, len(paths), batch):
-        if spent + last > max_usd:  # le prochain lot coûterait à peu près autant que le dernier
+    for i, path in enumerate(paths):  # une requête par image
+        if spent + last > max_usd:  # la prochaine image coûterait à peu près autant que la dernière
             break
-        ids = list(range(start, min(start + batch, len(paths))))
-        content = [{"type": "text", "text": PROMPT}]
-        for i in ids:
-            content += [{"type": "text", "text": f"Image n°{i}"},
-                        {"type": "image_url", "image_url": _data_url(paths[i], max_side)}]
-        req = {"model": model, "messages": [{"role": "user", "content": content}],
-               "response_format": {"type": "json_object"}, "max_tokens": 8000}
         try:
-            r = api.chat.complete(**req, **({"reasoning_effort": reasoning} if reasoning else {}))
+            text, used = _ask(provider, api, model, path, max_side, reasoning)
         except Exception as e:
-            if not reasoning or "reason" not in str(e).lower():
+            if not reasoning or not any(w in str(e).lower() for w in ("reason", "effort")):
                 raise
             reasoning, refus = None, str(e)[:300]  # refusé : on continue sans, et on garde la réponse de l'API
-            r = api.chat.complete(**req)
-        used = _usage(r.usage)
+            text, used = _ask(provider, api, model, path, max_side, None)
         for k in tokens:
             tokens[k] += used[k]
         last = _cost(model, used)
         spent += last
-        text = _text(r.choices[0].message.content)
         raw.append(text)
         try:
-            answer = json.loads(text).get("images", [])
-        except (json.JSONDecodeError, AttributeError):
-            answer = []
-        got = {str(x.get("id")): x for x in answer if isinstance(x, dict)}
-        for i in ids:
-            x = got.get(str(i), {})
-            labels.append({"i": i, "ajout": bool(x.get("ajout")), "manquant": not x})
-    config = {"max_side": max_side, "batch": batch, "max_usd": max_usd,
+            answer = json.loads(text.strip().removeprefix("```json").removeprefix("```").removesuffix("```"))
+        except json.JSONDecodeError:
+            answer = None
+        ok = isinstance(answer, dict) and "ajout" in answer
+        labels.append({"i": i, "ajout": ok and bool(answer["ajout"]), "manquant": not ok})
+    config = {"max_side": max_side, "batch": 1, "max_usd": max_usd,
               "reasoning": reasoning or f"« {REASONING} » refusé, lancé sans", "refus_api": refus}
     rec = {"model": model, "config": config, "images_total": len(paths),
            "frames": labels, "tokens": tokens, "cost_usd": round(_cost(model, tokens), 4),
@@ -169,15 +211,15 @@ def _image_tokens(w: int, h: int, max_side: int) -> int:
     return cols * rows + rows
 
 
-def estimate(vid: str, max_side: int, batch: int) -> dict:
+def estimate(vid: str, max_side: int) -> dict:
     """Coût estimé par modèle pour annoter toute la vidéo. Quand le modèle a déjà été lancé à la même
     taille d'image (sur n'importe quelle vidéo), on prend ses tokens réels par image."""
     paths = sorted((VIDEOS / Path(vid).name / "frames").glob("*.jpg"))
     if not paths:
         return {}
     w, h = Image.open(paths[0]).size
-    n, n_req = len(paths), -(-len(paths) // batch)
-    base_in = n * (_image_tokens(w, h, max_side) + 8) + n_req * len(PROMPT) // 3.5
+    n = len(paths)
+    base_in = n * (_image_tokens(w, h, max_side) + len(PROMPT) // 3.5)
     seen: dict[str, list[tuple[int, int, int]]] = {}
     for p in VIDEOS.glob("*/runs/*.json"):
         rec = json.loads(p.read_text(encoding="utf-8"))
@@ -236,13 +278,13 @@ class Handler(SimpleHTTPRequestHandler):
             if u.path in ("/", "/index.html"):
                 return self._send(HTTPStatus.OK, dev_reload.page(HERE / "index.html"), "text/html; charset=utf-8")
         if u.path == "/api/models":
-            return self._json(HTTPStatus.OK, {"models": [{"id": i, "nom": n, "vision": v, "prix": p}
-                                                         for i, n, v, p in MODELS],
+            return self._json(HTTPStatus.OK, {"models": [{"id": i, "nom": n, "vision": v, "prix": p, "fournisseur": f,
+                                                          "cle": KEYS[f] if not os.environ.get(KEYS[f]) else None}
+                                                         for i, n, v, p, f in MODELS],
                                               "prompt": PROMPT, "reasoning": REASONING})
         if u.path == "/api/estimate":
             q = parse_qs(u.query)
-            return self._json(HTTPStatus.OK, estimate(q.get("video", [""])[0], int(q.get("max_side", ["768"])[0]),
-                                                      int(q.get("batch", ["6"])[0])))
+            return self._json(HTTPStatus.OK, estimate(q.get("video", [""])[0], int(q.get("max_side", ["768"])[0])))
         if u.path == "/api/videos":
             return self._json(HTTPStatus.OK, videos())
         if u.path == "/api/video":
@@ -296,7 +338,7 @@ def main() -> None:
     p = argparse.ArgumentParser(prog="utils/llm_bench/server.py")
     p.add_argument("--port", type=int, default=8790)
     a = p.parse_args()
-    print(f"banc des annotateurs Mistral — http://localhost:{a.port}", flush=True)
+    print(f"banc des annotateurs — http://localhost:{a.port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", a.port), Handler).serve_forever()
 
 

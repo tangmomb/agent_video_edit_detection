@@ -43,6 +43,8 @@ video { width: 100%; max-height: 360px; background: #000; border-radius: 8px; di
 #models label { display: flex; gap: 8px; align-items: baseline; font-size: 14px; cursor: pointer; }
 #models label.off { color: var(--muted); cursor: default; }
 #models small { color: var(--muted); }
+#models h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 8px 0 0; }
+#models h3:first-child { margin-top: 0; }
 #models .est { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13px; }
 #models .est i { font-style: normal; color: var(--muted); font-size: 12px; }
 .opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -91,7 +93,7 @@ tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--pick); }
 </head>
 <body>
 <main>
-  <h1>Banc des annotateurs Mistral</h1>
+  <h1>Banc des annotateurs</h1>
   <p class="sub">Charge une vidéo : chaque modèle coché dit en JSON quelles images (1 par seconde) contiennent un ajout de montage. On compare leurs réponses, leur coût et leur durée pour choisir le prochain modèle d'annotation. Outil autonome, non branché au dataset ni au classifieur.</p>
 
   <div id="drop" tabindex="0">
@@ -113,7 +115,6 @@ tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--pick); }
         <div id="models"></div>
         <div class="opts">
           <label>Taille envoyée (px)<select id="max_side"><option>512</option><option selected>768</option><option>1024</option></select></label>
-          <label>Images par requête<input id="batch" type="number" min="1" max="12" value="6"></label>
           <label>Plafond par modèle ($)<input id="max_usd" type="number" min="0.05" step="0.05" value="0.50"></label>
         </div>
         <p class="status" id="reasoning-note" style="margin: 0 0 10px"></p>
@@ -124,7 +125,7 @@ tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--pick); }
 
     <section class="panel">
       <h2>Consigne envoyée à chaque modèle</h2>
-      <p class="sub" style="margin: 0 0 6px">Même texte pour tous, suivi des images numérotées (« Image n°0 », « Image n°1 »…) par lots ; la réponse est demandée en JSON.</p>
+      <p class="sub" style="margin: 0 0 6px">Même texte pour tous, une requête par image ; la réponse est demandée en JSON.</p>
       <pre class="raw" id="prompt" style="max-height: none"></pre>
     </section>
 
@@ -170,10 +171,17 @@ async function init() {
   models = info.models;
   $("prompt").textContent = info.prompt;
   $("reasoning-note").textContent = `Raisonnement « ${info.reasoning} » pour tous les modèles (sans raisonnement si le modèle ne raisonne pas, noté dans le tableau).`;
-  $("models").innerHTML = models.map((m) => `<label class="${m.vision ? "" : "off"}">
-    <input type="checkbox" value="${m.id}" ${m.vision ? "" : "disabled"} ${m.vision ? "checked" : ""}>
-    <span>${m.nom} <small>${m.id} · ${m.prix.input} / ${m.prix.output} $ par M${m.vision ? "" : " · texte seulement, ne lit pas les images"}</small></span>
-    <span class="est" data-m="${m.id}"></span></label>`).join("");
+  const PROVIDERS = { mistral: "Mistral", openai: "OpenAI", anthropic: "Anthropic" };
+  // Cochés par défaut : les modèles Mistral seulement (les autres sont plus chers, à cocher à la main).
+  $("models").innerHTML = models.map((m, k) => {
+    const ok = m.vision && !m.cle;
+    const why = !m.vision ? " · texte seulement, ne lit pas les images" : m.cle ? ` · ${m.cle} absente du .env` : "";
+    const head = k === 0 || models[k - 1].fournisseur !== m.fournisseur ? `<h3>${PROVIDERS[m.fournisseur]}</h3>` : "";
+    return `${head}<label class="${ok ? "" : "off"}">
+    <input type="checkbox" value="${m.id}" ${ok ? "" : "disabled"} ${ok && m.fournisseur === "mistral" ? "checked" : ""}>
+    <span>${m.nom} <small>${m.id} · ${m.prix.input} / ${m.prix.output} $ par M${why}</small></span>
+    <span class="est" data-m="${m.id}"></span></label>`;
+  }).join("");
   $("models").querySelectorAll("input").forEach((x) => x.onchange = showEstimates);
   const vids = await (await fetch("/api/videos")).json();
   $("previous").innerHTML = `<option value="">—</option>` + vids.map((v) => `<option value="${v.id}">${v.nom} · ${v.images} images · ${v.date}</option>`).join("");
@@ -214,7 +222,7 @@ function open(v) {
 
 async function loadEstimates() {
   if (!cur) return;
-  estimates = await (await fetch(`/api/estimate?video=${cur.id}&max_side=${$("max_side").value}&batch=${$("batch").value}`)).json();
+  estimates = await (await fetch(`/api/estimate?video=${cur.id}&max_side=${$("max_side").value}`)).json();
   showEstimates();
 }
 
@@ -222,14 +230,13 @@ function showEstimates() {
   let total = 0;
   $("models").querySelectorAll(".est").forEach((s) => {
     const e = estimates[s.dataset.m], m = models.find((x) => x.id === s.dataset.m);
-    s.innerHTML = e && m.vision ? `≈ ${e.usd.toFixed(3)} $ <i>${e.source}</i>` : "";
+    s.innerHTML = e && m.vision && !m.cle ?`≈ ${e.usd.toFixed(3)} $ <i>${e.source}</i>` : "";
   });
   $("models").querySelectorAll("input:checked").forEach((x) => { total += (estimates[x.value] || {}).usd || 0; });
   const n = cur ? cur.frames.length : 0;
   $("total").textContent = cur ? `Estimation pour les modèles cochés : ≈ ${total.toFixed(3)} $ pour ${n} images (${fmt(n)} de vidéo).` : "";
 }
 $("max_side").onchange = loadEstimates;
-$("batch").onchange = loadEstimates;
 
 // Vote majoritaire des autres modèles sur l'image i (null si aucun autre modèle n'a répondu).
 function majority(i, except) {
@@ -335,9 +342,9 @@ function render() {
 $("go").onclick = async () => {
   const chosen = [...$("models").querySelectorAll("input:checked")].map((x) => x.value);
   if (!chosen.length || !cur) return;
-  const opts = { max_side: +$("max_side").value, batch: +$("batch").value, max_usd: +$("max_usd").value };
+  const opts = { max_side: +$("max_side").value, max_usd: +$("max_usd").value };
   const est = chosen.reduce((s, m) => s + ((estimates[m] || {}).usd || 0), 0);
-  if (!confirm(`Interroger ${chosen.length} modèle(s) sur ${cur.frames.length} images ? Appels payants à l'API Mistral : ≈ ${est.toFixed(3)} $ estimés, plafond ${opts.max_usd} $ par modèle.`)) return;
+  if (!confirm(`Interroger ${chosen.length} modèle(s) sur ${cur.frames.length} images ? Appels payants aux API (${[...new Set(chosen.map((id) => models.find((m) => m.id === id).fournisseur))].join(", ")}) : ≈ ${est.toFixed(3)} $ estimés, plafond ${opts.max_usd} $ par modèle.`)) return;
   $("go").disabled = true;
   chosen.forEach((m) => { pending[m] = true; cur.runs = cur.runs.filter((r) => r.model !== m); });
   render();

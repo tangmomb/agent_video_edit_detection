@@ -16,6 +16,8 @@ dependencies = [
 
 [project.optional-dependencies]
 agent = ["mistralai>=3.3"]
+# banc des annotateurs (utils/llm_bench) : modèles OpenAI et Anthropic en plus de Mistral
+llm_bench = ["mistralai>=3.3", "openai>=3.0", "anthropic>=2.0"]
 # torch : installer la variante CUDA depuis https://download.pytorch.org/whl/cu126
 model_training_pipeline = ["torch", "transformers", "scikit-learn", "numpy"]
 
