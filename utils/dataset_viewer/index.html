@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visionneuse du dataset</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --fg: #1c1c1e; --muted: #6e6e73; --line: #dedcd6; --soft: #efede8;
+  --yes: #2f7d4f; --yes-soft: #dcefe3; --no: #8e8e93; --warn: #d98a1f; --warn-soft: #fbecd6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --panel: #1d1d20; --fg: #ececee; --muted: #9a9aa1; --line: #33333a; --soft: #26262b;
+    --yes: #5cc48a; --yes-soft: #1d3326; --no: #9a9aa1; --warn: #e9a23b; --warn-soft: #3a2c17;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+td.num, th.num { text-align: right; }
+tr.vid { cursor: pointer; }
+tr.vid:hover td { background: var(--soft); }
+tr.vid.on td { background: var(--soft); box-shadow: inset 0 -1px 0 var(--line); }
+tr.vid.on td:first-child { box-shadow: inset 3px 0 0 var(--yes); }
+.scroll { overflow-x: auto; }
+.bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; min-width: 120px; background: var(--soft); }
+.bar span { display: block; }
+.y { background: var(--yes); } .n { background: var(--no); } .w { background: var(--warn); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 5px 11px; border: 0; border-right: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--fg); color: var(--bg); }
+.timeline { display: flex; gap: 1px; height: 22px; margin: 10px 0 4px; }
+.timeline div { flex: 1; min-width: 1px; cursor: pointer; }
+.legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 12px; }
+.card { border: 3px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--panel); }
+.card.l1 { border-color: var(--yes); } .card.l0 { border-color: var(--no); } .card.lx { border-color: var(--warn); }
+.card.flash { outline: 3px solid var(--fg); outline-offset: 2px; }
+.card img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
+.card.portrait img { aspect-ratio: 9 / 16; }
+.card .t { padding: 4px 7px; font-size: 12px; display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.badge { font-weight: 600; }
+.l1 .badge { color: var(--yes); } .l0 .badge { color: var(--no); } .lx .badge { color: var(--warn); }
+.votes { padding: 0 7px 6px; font-size: 11px; color: var(--muted); }
+.votes b { font-weight: 600; } .votes .a { color: var(--yes); } .votes .x { color: var(--warn); }
+.empty { color: var(--muted); font-size: 14px; }
+a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Visionneuse du dataset</h1>
+  <p class="sub">Vidéos de <code>data/videos_samples</code> : chaque image (1 par seconde) avec l'étiquette du dataset, donnée seulement si les 3 annotateurs sont d'accord. Lecture seule.</p>
+
+  <section class="panel scroll">
+    <table>
+      <thead><tr><th>Vidéo</th><th>Chaîne</th><th>Format</th><th class="num">Durée</th><th class="num">Ajout</th><th class="num">Brute</th><th class="num">Sans étiquette</th><th>Répartition</th></tr></thead>
+      <tbody id="videos"></tbody>
+    </table>
+  </section>
+
+  <section class="panel" id="detail" hidden>
+    <div class="row" style="justify-content: space-between">
+      <div><b id="v-title"></b> <span class="sub" id="v-sub"></span></div>
+      <div class="seg" id="filter">
+        <button data-f="all" class="on">Toutes</button><button data-f="1">Ajout</button><button data-f="0">Brute</button><button data-f="x">Sans étiquette</button>
+      </div>
+    </div>
+    <div class="timeline" id="timeline" title="Une barre par seconde : clique pour aller à l'image"></div>
+    <div class="legend"><span><i class="y"></i>ajout (3/3)</span><span><i class="n"></i>brute (3/3)</span><span><i class="w"></i>désaccord ou vote manquant</span><span><i style="background: var(--soft)"></i>pas encore annotée</span></div>
+    <div id="grid"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+let cur = null, filter = "all";
+const cls = (f) => !f.annotee ? "" : f.label === 1 ? "l1" : f.label === 0 ? "l0" : "lx";
+const word = (f) => !f.annotee ? "pas annotée" : f.label === 1 ? "ajout" : f.label === 0 ? "brute" : "désaccord";
+const color = (f) => !f.annotee ? "var(--soft)" : f.label === 1 ? "var(--yes)" : f.label === 0 ? "var(--no)" : "var(--warn)";
+
+async function init() {
+  const vids = await (await fetch("/api/videos")).json();
+  $("videos").innerHTML = vids.length ? vids.map((v) => {
+    const n = Math.max(1, v.images);
+    return `<tr class="vid" data-id="${v.id}"><td>${(v.title || v.id).replace(/</g, "&lt;").slice(0, 70)}</td><td>${v.channel || ""}</td>
+      <td>${v.height > v.width ? "portrait" : "paysage"} ${v.width}×${v.height}</td><td class="num">${fmt(v.duration || 0)}</td>
+      <td class="num">${v.ajout}</td><td class="num">${v.brute}</td><td class="num">${v.sans + (v.images - v.ajout - v.brute - v.sans)}</td>
+      <td><div class="bar"><span class="y" style="width:${100 * v.ajout / n}%"></span><span class="n" style="width:${100 * v.brute / n}%"></span><span class="w" style="width:${100 * v.sans / n}%"></span></div></td></tr>`;
+  }).join("") : '<tr><td colspan="8" class="empty">Aucune vidéo dans data/videos_samples.</td></tr>';
+  document.querySelectorAll("tr.vid").forEach((tr) => tr.onclick = () => open(tr.dataset.id));
+  const want = new URLSearchParams(location.search).get("v") || (vids[0] && vids[0].id);
+  if (want) open(want);
+}
+
+async function open(id) {
+  cur = await (await fetch(`/api/video?id=${encodeURIComponent(id)}`)).json();
+  history.replaceState(null, "", `?v=${id}`);
+  document.querySelectorAll("tr.vid").forEach((tr) => tr.classList.toggle("on", tr.dataset.id === id));
+  const m = cur.meta;
+  $("detail").hidden = false;
+  $("v-title").innerHTML = `<a href="${m.url}" target="_blank" rel="noopener">${(m.title || id).replace(/</g, "&lt;")}</a>`;
+  $("v-sub").textContent = ` · ${m.channel || ""} · requête « ${m.query || "?"} » · ${cur.frames.length} images · annotation ${cur.cost_usd.toFixed(4)} $`;
+  $("timeline").innerHTML = cur.frames.map((f) => `<div style="background:${color(f)}" title="${fmt(f.t)} : ${word(f)}" data-i="${f.i}"></div>`).join("");
+  $("timeline").querySelectorAll("div").forEach((d) => d.onclick = () => seek(+d.dataset.i));
+  render();
+}
+
+function render() {
+  const portrait = cur.meta.video.height > cur.meta.video.width;
+  const keep = (f) => filter === "all" || (filter === "x" ? f.label === null : String(f.label) === filter);
+  const shown = cur.frames.filter(keep);
+  $("grid").innerHTML = shown.length ? shown.map((f) => {
+    const votes = cur.annotators.map((a) => {
+      const v = f.votes[a];
+      return `<div>${a} : <b class="${v === true ? "a" : v == null ? "x" : ""}">${v === true ? "ajout" : v === false ? "brute" : f.annotee ? "?" : "–"}</b></div>`;
+    }).join("");
+    return `<div class="card ${cls(f)}${portrait ? " portrait" : ""}" id="f${f.i}"><img loading="lazy" src="${f.url}" alt="image à ${fmt(f.t)}">
+      <div class="t"><span>${fmt(f.t)}</span><span class="badge">${word(f)}</span></div><div class="votes">${votes}</div></div>`;
+  }).join("") : '<p class="empty">Aucune image pour ce filtre.</p>';
+}
+
+function seek(i) {
+  if (filter !== "all") { filter = "all"; [...$("filter").children].forEach((b) => b.classList.toggle("on", b.dataset.f === "all")); render(); }
+  const el = $(`f${i}`);
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("flash");
+  setTimeout(() => el.classList.remove("flash"), 1200);
+}
+
+$("filter").onclick = (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  filter = b.dataset.f;
+  [...$("filter").children].forEach((x) => x.classList.toggle("on", x === b));
+  render();
+};
+init();
+</script>
+</body>
+</html>

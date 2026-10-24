@@ -16,6 +16,14 @@
         "utils/llm_bench/server.py"
       ],
       "port": 8790
+    },
+    {
+      "name": "dataset-viewer",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "utils/dataset_viewer/server.py"
+      ],
+      "port": 8800
     }
   ]
 }
