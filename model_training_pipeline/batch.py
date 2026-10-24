@@ -91,6 +91,22 @@ def _upload_and_create(provider: str, api, model: str, path: Path) -> str:
     return api.batch.jobs.create(input_files=[file_id], model=model, endpoint="/v1/chat/completions").id
 
 
+def _send(provider: str, api, model: str, chunk: list[tuple[Path, Path]], reasoning: str | None) -> str:
+    """Écrit le fichier JSONL d'un paquet de requêtes, l'envoie et crée le batch ; renvoie son id."""
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as fh:
+        for sdir, f in chunk:
+            line = {"custom_id": _cid(sdir, f),
+                    "body": annotators.chat_body(provider, model, f, annotators.MAX_SIDE, reasoning)}
+            if provider == "openai":
+                line.update(method="POST", url="/v1/chat/completions")
+            fh.write(json.dumps(line) + "\n")
+        path = Path(fh.name)
+    try:
+        return _upload_and_create(provider, api, model, path)
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def submit(max_usd: float, apis: dict | None = None) -> dict:
     """Envoie les votes manquants, par modèle et par paquets de CHUNK requêtes ; refuse si le coût
     estimé dépasse max_usd."""
@@ -105,21 +121,18 @@ def submit(max_usd: float, apis: dict | None = None) -> dict:
         if provider not in DONE:
             raise ValueError(f"pas de batch pour {provider} ({model})")
         api = apis.setdefault(provider, annotators.client(provider))
-        reasoning = None if model in state["no_reasoning"] else annotators.REASONING
         for i in range(0, len(items), CHUNK):
             chunk = items[i:i + CHUNK]
-            with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as fh:
-                for sdir, f in chunk:
-                    line = {"custom_id": _cid(sdir, f),
-                            "body": annotators.chat_body(provider, model, f, annotators.MAX_SIDE, reasoning)}
-                    if provider == "openai":
-                        line.update(method="POST", url="/v1/chat/completions")
-                    fh.write(json.dumps(line) + "\n")
-                path = Path(fh.name)
             try:
-                job_id = _upload_and_create(provider, api, model, path)
-            finally:
-                path.unlink(missing_ok=True)
+                reasoning = None if model in state["no_reasoning"] else annotators.REASONING
+                job_id = _send(provider, api, model, chunk, reasoning)
+            except Exception as e:
+                # Mistral valide le fichier dès l'envoi : effort refusé, on renvoie sans (comme en direct)
+                if reasoning is None or not annotators.refuses_reasoning(e):
+                    raise
+                state["no_reasoning"].append(model)
+                reasoning = None
+                job_id = _send(provider, api, model, chunk, reasoning)
             job = {"provider": provider, "model": model, "job_id": job_id, "requests": len(chunk),
                    "reasoning": reasoning, "custom_ids": [_cid(s, f) for s, f in chunk],
                    "submitted": time.strftime("%Y-%m-%d %H:%M"), "status": None, "collected": False}
