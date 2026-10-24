@@ -60,13 +60,16 @@ def _drop(out_dir: Path, sample_id: str) -> None:
 
 
 def frames_of(sdir: Path, out_dir: Path = FRAMES_DIR, fps: float = FPS, long_side: int = LONG_SIDE) -> list[Path]:
-    """Images extraites de la vidéo (extraites au besoin)."""
+    """Images extraites de la vidéo (extraites au besoin), sans celles qu'ffmpeg ajoute parfois
+    après la fin de la vidéo (instant >= durée)."""
     meta = load_meta(sdir)
     frames_dir = Path(out_dir) / "img" / meta["sample_id"]
     if _stale(frames_dir):
         _drop(Path(out_dir), meta["sample_id"])
     frames = sorted(frames_dir.glob("*.jpg")) if frames_dir.exists() else []
-    return frames or extract(sdir / meta["video"]["file"], frames_dir, fps, long_side)
+    frames = frames or extract(sdir / meta["video"]["file"], frames_dir, fps, long_side)
+    duration = meta["video"]["duration"]
+    return [f for i, f in enumerate(frames) if not duration or i / fps < duration]
 
 
 def load_votes(sdir: Path) -> dict:
@@ -115,8 +118,6 @@ def build(samples_dir: Path = SAMPLES_DIR, out_dir: Path = FRAMES_DIR, fps: floa
         votes = load_votes(sdir)["frames"]
         for i, f in enumerate(frames_of(sdir, out_dir, fps, long_side)):
             t = round(i / fps, 3)
-            if meta["video"]["duration"] and t >= meta["video"]["duration"]:
-                break
             rows.append({"frame": str(f.relative_to(out_dir)).replace("\\", "/"),
                          "sample_id": meta["sample_id"], "t": t, "source": source_key(meta),
                          "label_any": votes.get(f.name, {}).get("label")})

@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agents et outils</title><style>
+:root{--bg:#f7f6f3;--panel:#fff;--fg:#1d1d1f;--muted:#6b6b70;--line:#d9d7d1;--code:#f0eee9;
+--agent:#2f5bd3;--tool:#2e7d4f;--deleg:#b35c00;--req:#c0392b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151517;--panel:#1e1e21;
+--fg:#ececee;--muted:#9a9aa0;--line:#34343a;--code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;
+--deleg:#f0a24a;--req:#ff7a6b}}
+:root[data-theme="dark"]{--bg:#151517;--panel:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#34343a;
+--code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;--deleg:#f0a24a;--req:#ff7a6b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+.toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+button{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--line);background:var(--panel);
+color:var(--fg);border-radius:6px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+ul.tree{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(--line)}
+main>ul.tree{border-left:none;padding-left:0}
+li.node{margin:6px 0;position:relative}
+ul.tree ul.tree>li.node::before,ul.tree>li.node::before{content:"";position:absolute;left:-22px;top:17px;width:16px;border-top:1px solid var(--line)}
+main>ul.tree>li.node::before{display:none}
+summary{cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;
+background:var(--panel);border:1px solid var(--line);border-radius:8px;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸";color:var(--muted);font-size:12px;width:10px}
+details[open]>summary::before{content:"▾"}
+.badge{font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:1px 7px;border-radius:10px;
+border:1px solid currentColor;font-weight:600}
+.badge.agent{color:var(--agent)}.badge.tool{color:var(--tool)}.badge.delegate{color:var(--deleg)}
+.aname{font-weight:650;font-size:16px}
+.tname{font-weight:600}
+.meta{color:var(--muted);font-size:13px;margin-left:auto}
+.body{padding:6px 12px 2px 30px}
+.desc{margin:0 0 6px}
+code{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px}
+summary code{background:none;padding:0;font-size:14px}
+ul.params{margin:0 0 6px;padding-left:18px;font-size:14px}
+ul.params li{margin:3px 0}
+.ptype{color:var(--muted);font-size:13px}
+.penum{color:var(--muted);font-size:13px}
+.req{color:var(--req);font-size:11px;margin-left:6px;text-transform:uppercase}
+.pdesc{color:var(--muted)}
+.noparam{color:var(--muted);font-size:13px;font-style:italic;margin-bottom:6px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:12px}
+details.ex{margin:0 0 8px}
+details.ex>summary{background:none;border:none;padding:2px 0;font-size:13px;color:var(--tool);font-weight:600}
+.exnote{color:var(--muted);font-size:13px;margin:4px 0}
+details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding:10px 12px;background:var(--code);border-radius:6px;overflow-x:auto;font:12px/1.45 ui-monospace,Consolas,monospace;max-height:480px}
+.exlabel{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px}
+</style></head>
+<body><main>
+<h1>Agents et outils</h1>
+<p class="sub">Généré depuis le code de <code>agents/</code> par <code>utils/agents_tree.py</code> : l'orchestrateur délègue aux trois sous-agents via ses outils <code>ask_*</code>. Les données sont de vraies vidéos YouTube, chaque image étiquetée par l'accord de trois LLM.</p>
+<div class="toolbar"><button id="open">Tout déplier</button><button id="close">Tout replier</button></div>
+<div class="legend"><span><span class="badge agent">agent</span> agent Mistral</span>
+<span><span class="badge tool">outil</span> appel au labo</span>
+<span><span class="badge delegate">délègue</span> lance un sous-agent</span></div>
+<ul class="tree"><li class="node agent"><details open><summary><span class="badge agent">agent</span><span class="aname">orchestrator</span><span class="meta">mistral-large-4-0 · 30 tours max · 5 outils</span></summary><div class="body"><p class="desc">Orchestrateur : décide de la prochaine expérience et délègue aux trois autres agents.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">global_status</code></summary><div class="body"><p class="desc">État global : volumes du dataset (chaînes YouTube, vidéos, images extraites, images étiquetées et sans étiquette faute d&#x27;accord des annotateurs, vidéos sans ajout, pourcentage d&#x27;images avec ajout), budgets restants (vidéos, annotation en $, tests finaux), budget de session. Les splits sont dans list_experiments ; le détail de composition (orientation, chaînes) n&#x27;est visible que des sous-agents.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Réponse</div><pre>{
+  &quot;dataset&quot;: {
+    &quot;chaines_youtube&quot;: 6,
+    &quot;videos&quot;: 8,
+    &quot;images_extraites&quot;: 162,
+    &quot;images_etiquetees&quot;: 149,
+    &quot;images_sans_etiquette&quot;: 13,
+    &quot;videos_sans_ajout&quot;: 1,
+    &quot;pourcentage_images_avec_ajout&quot;: 70.5,
+    &quot;budgets&quot;: {
+      &quot;videos_collectables_restantes&quot;: 248,
+      &quot;budget_annotation_restant_usd&quot;: 1.966,
+      &quot;final_tests_restants&quot;: 1
+    }
+  },
+  &quot;budget_session_usd&quot;: {
+    &quot;depense&quot;: 0.12,
+    &quot;total&quot;: 1.0,
+    &quot;reserve_rapport_usd&quot;: 0.15,
+    &quot;disponible_pour_deleguer&quot;: 0.73
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en train/val/test et chaines_shared (chaînes présentes dans plusieurs parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en train/val/test, images étiquetées du val et images positives du val, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Réponse</div><pre>{
+  &quot;splits&quot;: [
+    {
+      &quot;split_id&quot;: &quot;split_001&quot;,
+      &quot;chaines_train&quot;: 2,
+      &quot;chaines_val&quot;: 2,
+      &quot;chaines_test&quot;: 2,
+      &quot;chaines_shared&quot;: 0,
+      &quot;clips_train&quot;: 4,
+      &quot;clips_val&quot;: 2,
+      &quot;clips_test&quot;: 2,
+      &quot;val_images&quot;: 42,
+      &quot;val_images_positives&quot;: 19,
+      &quot;clips_hors_split&quot;: 0,
+      &quot;note&quot;: &quot;Premier split : toutes les chaînes actuelles.&quot;,
+      &quot;experiences&quot;: [
+        {
+          &quot;id&quot;: &quot;exp_001&quot;,
+          &quot;embeddings&quot;: [
+            &quot;clip_b32:full&quot;
+          ],
+          &quot;model&quot;: &quot;logreg&quot;,
+          &quot;temporal&quot;: &quot;diff&quot;,
+          &quot;params&quot;: {},
+          &quot;hypothese&quot;: &quot;Référence CLIP B/32 + différence temporelle.&quot;,
+          &quot;val&quot;: {
+            &quot;auc&quot;: 0.1648,
+            &quot;ap&quot;: 0.3272,
+            &quot;p95&quot;: &quot;précision non atteinte&quot;
+          }
+        }
+      ]
+    }
+  ]
+}</pre></details></div></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_dataset_builder</code></summary><div class="body"><p class="desc">Délègue une collecte de données au Dataset Builder ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div></details><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">dataset_builder</span><span class="meta">mistral-large-4-0 · 12 tours max · 3 outils</span></summary><div class="body"><p class="desc">Dataset Builder : collecte de vraies vidéos YouTube, annotées image par image par trois LLM (étiquette seulement s&#x27;ils sont d&#x27;accord).</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (chaînes YouTube, vidéos, images extraites, images étiquetées et sans étiquette faute d&#x27;accord des annotateurs, pourcentage d&#x27;images avec ajout, vidéos sans aucun ajout, répartition des vidéos par orientation), diversité (chaînes les plus représentées), budgets restants (vidéos, annotation en $).</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Réponse</div><pre>{
+  &quot;dataset&quot;: {
+    &quot;chaines_youtube&quot;: 6,
+    &quot;videos&quot;: 8,
+    &quot;images_extraites&quot;: 162,
+    &quot;images_etiquetees&quot;: 149,
+    &quot;images_sans_etiquette&quot;: 13,
+    &quot;videos_sans_ajout&quot;: 1,
+    &quot;videos_par_orientation&quot;: {
+      &quot;portrait&quot;: 8
+    },
+    &quot;pourcentage_images_avec_ajout&quot;: 70.5
+  },
+  &quot;diversite&quot;: {
+    &quot;chaines_youtube&quot;: 6,
+    &quot;videos&quot;: 8,
+    &quot;videos_par_chaine_la_plus_representee&quot;: {
+      &quot;youtube:UC7rAPb4G7QcPbAQoA_Dvu-Q&quot;: 3,
+      &quot;youtube:UCFWvBpxTD8JCaiA2ZUf11sg&quot;: 1,
+      &quot;youtube:UC6NbkIb1uzh5hUxXwaHqLoQ&quot;: 1,
+      &quot;youtube:UCw4KoM6novCi9zNx9VP55PA&quot;: 1,
+      &quot;youtube:UCxPB3II48ELnNA9RgLR6N4g&quot;: 1
+    }
+  },
+  &quot;budgets&quot;: {
+    &quot;videos_collectables_restantes&quot;: 248,
+    &quot;budget_annotation_restant_usd&quot;: 1.966
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">data_requested_history</code></summary><div class="body"><p class="desc">Historique des collectes passées, regroupé par requête YouTube : appels, vidéos demandées, vidéos obtenues, orientations, coût d&#x27;annotation. Moins de vidéos obtenues que demandées : la requête s&#x27;épuise.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Réponse</div><pre>{
+  &quot;astuce cuisine&quot;: {
+    &quot;appels&quot;: 1,
+    &quot;videos_demandees&quot;: 2,
+    &quot;videos_obtenues&quot;: 2,
+    &quot;orientations&quot;: [
+      &quot;portrait&quot;
+    ],
+    &quot;cout_annotation_usd&quot;: 0.0341
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">generate_data</code></summary><div class="body"><p class="desc">Collecte de nouvelles vraies vidéos YouTube (jamais prises, 5 min au plus) pour une recherche, les ajoute au dataset, extrait leurs images (1 par seconde) et les fait annoter par trois LLM (une image n&#x27;est étiquetée que s&#x27;ils sont d&#x27;accord). Coûteux en temps et en budget d&#x27;annotation : justifie chaque collecte.</p><ul class="params"><li><code class="pname">n</code><span class=req>requis</span> <span class="ptype">integer</span><span class="penum"> · 1…20</span></li><li><code class="pname">reason</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ces données sont nécessaires.</div></li><li><code class="pname">query</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Recherche YouTube : quelques mots-clés (thème, type de vidéo). En portrait, elle devient un hashtag (mots collés, sans accents) : préfère alors un ou deux mots courants (« recette », « astuce cuisine »).</div></li><li><code class="pname">orientation</code> <span class="ptype">string</span><span class="penum"> · portrait | landscape</span><div class=pdesc>portrait : Shorts du hashtag ; landscape ou sans valeur : recherche classique (surtout du paysage).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Appel</div><pre>{
+  &quot;n&quot;: 2,
+  &quot;reason&quot;: &quot;Plus de Shorts de cuisine pour varier les chaînes.&quot;,
+  &quot;query&quot;: &quot;astuce cuisine&quot;,
+  &quot;orientation&quot;: &quot;portrait&quot;
+}</pre><div class="exlabel">Réponse</div><pre>{
+  &quot;videos_collectees&quot;: 2,
+  &quot;videos_reprises&quot;: 0,
+  &quot;echecs&quot;: 0,
+  &quot;exemples_erreurs&quot;: [],
+  &quot;arret&quot;: null,
+  &quot;images_annotees&quot;: 31,
+  &quot;images_avec_accord&quot;: 29,
+  &quot;cout_annotation_usd&quot;: 0.0341,
+  &quot;images_total&quot;: 162,
+  &quot;videos_collectables_restantes&quot;: 248,
+  &quot;budget_annotation_restant_usd&quot;: 1.966
+}</pre></details></div></details></li></ul></details></li></ul></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_model_researcher</code></summary><div class="body"><p class="desc">Délègue un lot d&#x27;expériences au Model Researcher ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div></details><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">mistral-large-4-0 · 20 tours max · 5 outils</span></summary><div class="body"><p class="desc">Model Researcher : constitue les splits, choisit les représentations et les modèles, entraîne, mène les expériences sur val.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (chaînes YouTube, vidéos, images extraites, images étiquetées et sans étiquette faute d&#x27;accord des annotateurs, pourcentage d&#x27;images avec ajout, vidéos sans aucun ajout, répartition des vidéos par orientation) ; avec split_id, la même composition pour train, val et test.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de train, val et test pour ce split (id renvoyé par make_split).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Réponse</div><pre>{
+  &quot;dataset&quot;: {
+    &quot;chaines_youtube&quot;: 6,
+    &quot;videos&quot;: 8,
+    &quot;images_extraites&quot;: 162,
+    &quot;images_etiquetees&quot;: 149,
+    &quot;images_sans_etiquette&quot;: 13,
+    &quot;videos_sans_ajout&quot;: 1,
+    &quot;videos_par_orientation&quot;: {
+      &quot;portrait&quot;: 8
+    },
+    &quot;pourcentage_images_avec_ajout&quot;: 70.5
+  },
+  &quot;diversite&quot;: {
+    &quot;chaines_youtube&quot;: 6,
+    &quot;videos&quot;: 8,
+    &quot;videos_par_chaine_la_plus_representee&quot;: {
+      &quot;youtube:UC7rAPb4G7QcPbAQoA_Dvu-Q&quot;: 3,
+      &quot;youtube:UCFWvBpxTD8JCaiA2ZUf11sg&quot;: 1,
+      &quot;youtube:UC6NbkIb1uzh5hUxXwaHqLoQ&quot;: 1,
+      &quot;youtube:UCw4KoM6novCi9zNx9VP55PA&quot;: 1,
+      &quot;youtube:UCxPB3II48ELnNA9RgLR6N4g&quot;: 1
+    }
+  },
+  &quot;budgets&quot;: {
+    &quot;videos_collectables_restantes&quot;: 248,
+    &quot;budget_annotation_restant_usd&quot;: 1.966
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en train/val/test et chaines_shared (chaînes présentes dans plusieurs parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en train/val/test, images étiquetées du val et images positives du val, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Réponse</div><pre>{
+  &quot;splits&quot;: [
+    {
+      &quot;split_id&quot;: &quot;split_001&quot;,
+      &quot;chaines_train&quot;: 2,
+      &quot;chaines_val&quot;: 2,
+      &quot;chaines_test&quot;: 2,
+      &quot;chaines_shared&quot;: 0,
+      &quot;clips_train&quot;: 4,
+      &quot;clips_val&quot;: 2,
+      &quot;clips_test&quot;: 2,
+      &quot;val_images&quot;: 42,
+      &quot;val_images_positives&quot;: 19,
+      &quot;clips_hors_split&quot;: 0,
+      &quot;note&quot;: &quot;Premier split : toutes les chaînes actuelles.&quot;,
+      &quot;experiences&quot;: [
+        {
+          &quot;id&quot;: &quot;exp_001&quot;,
+          &quot;embeddings&quot;: [
+            &quot;clip_b32:full&quot;
+          ],
+          &quot;model&quot;: &quot;logreg&quot;,
+          &quot;temporal&quot;: &quot;diff&quot;,
+          &quot;params&quot;: {},
+          &quot;hypothese&quot;: &quot;Référence CLIP B/32 + différence temporelle.&quot;,
+          &quot;val&quot;: {
+            &quot;auc&quot;: 0.1648,
+            &quot;ap&quot;: 0.3272,
+            &quot;p95&quot;: &quot;précision non atteinte&quot;
+          }
+        }
+      ]
+    }
+  ]
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><p class="desc">Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos collectées ensuite n&#x27;y entrent pas). Les vidéos d&#x27;une même chaîne YouTube restent du même côté. Le test est commun à tous les splits (figé au premier) : seuls train et val sont redécoupés. Renvoie l&#x27;id du split et la composition de train, val et test.</p><ul class="params"><li><code class="pname">note</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ce split (ce qu&#x27;il corrige ou couvre).</div></li><li><code class="pname">val_ratio</code> <span class="ptype">number</span><span class="penum"> · 0.05…0.4</span><div class=pdesc>Part des clips en val (défaut 0.2).</div></li><li><code class="pname">test_ratio</code> <span class="ptype">number</span><span class="penum"> · 0.05…0.4</span><div class=pdesc>Part des clips en test (défaut 0.2), pour le premier split seulement : ignoré ensuite (test figé).</div></li><li><code class="pname">stratify</code> <span class="ptype">array de string</span><span class="penum"> · orientation | clip_vide</span><div class=pdesc>Caractéristiques à répartir au plus près des proportions visées dans chaque split : orientation, clip_vide (vidéo sans aucune image avec ajout). Par défaut toutes ; [] = tirage purement aléatoire.</div></li><li><code class="pname">seed</code> <span class="ptype">integer</span><div class=pdesc>Graine du tirage (défaut 0).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Appel</div><pre>{
+  &quot;note&quot;: &quot;Premier split : toutes les chaînes actuelles.&quot;,
+  &quot;val_ratio&quot;: 0.3,
+  &quot;test_ratio&quot;: 0.3
+}</pre><div class="exlabel">Réponse</div><pre>{
+  &quot;split_id&quot;: &quot;split_001&quot;,
+  &quot;params&quot;: {
+    &quot;val_ratio&quot;: 0.3,
+    &quot;test_ratio&quot;: 0.3,
+    &quot;test_fige&quot;: false,
+    &quot;stratify&quot;: [
+      &quot;orientation&quot;,
+      &quot;clip_vide&quot;
+    ],
+    &quot;seed&quot;: 0
+  },
+  &quot;clips_exclus&quot;: 0,
+  &quot;train&quot;: {
+    &quot;chaines_youtube&quot;: 2,
+    &quot;videos&quot;: 4,
+    &quot;images_extraites&quot;: 69,
+    &quot;images_etiquetees&quot;: 64,
+    &quot;images_sans_etiquette&quot;: 5,
+    &quot;videos_sans_ajout&quot;: 0,
+    &quot;videos_par_orientation&quot;: {
+      &quot;portrait&quot;: 4
+    },
+    &quot;pourcentage_images_avec_ajout&quot;: 96.9
+  },
+  &quot;val&quot;: {
+    &quot;chaines_youtube&quot;: 2,
+    &quot;videos&quot;: 2,
+    &quot;images_extraites&quot;: 46,
+    &quot;images_etiquetees&quot;: 42,
+    &quot;images_sans_etiquette&quot;: 4,
+    &quot;videos_sans_ajout&quot;: 1,
+    &quot;videos_par_orientation&quot;: {
+      &quot;portrait&quot;: 2
+    },
+    &quot;pourcentage_images_avec_ajout&quot;: 45.2
+  },
+  &quot;test&quot;: {
+    &quot;chaines_youtube&quot;: 2,
+    &quot;videos&quot;: 2,
+    &quot;images_extraites&quot;: 47,
+    &quot;images_etiquetees&quot;: 43,
+    &quot;images_sans_etiquette&quot;: 4,
+    &quot;videos_sans_ajout&quot;: 0,
+    &quot;videos_par_orientation&quot;: {
+      &quot;portrait&quot;: 2
+    }
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">train_model</code></summary><div class="body"><p class="desc">Entraîne un classifieur binaire (ajout de montage visible ou non) sur des embeddings figés, sur le train du split choisi avec un rééchantillonnage (balance) et une pondération (weights) optionnels, et l&#x27;évalue sur le val de ce split. Renvoie l&#x27;id d&#x27;expérience, AUC, AP, le rappel au seuil de précision 95 % (avec FP/FN) et l&#x27;effet du rééchantillonnage et de la pondération. Les embeddings absents du cache sont calculés à la volée (GPU).</p><ul class="params"><li><code class="pname">embeddings</code><span class=req>requis</span> <span class="ptype">array de string</span><div class=pdesc>Liste &#x27;extracteur:vue&#x27;, extracteurs clip_b32, clip_b16, clip_l14, dinov2_s, dinov2_b ; vues full (image entière) ou grid2 (image + 4 quadrants). Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = embeddings concaténés, ex. [&#x27;clip_b32:full&#x27;, &#x27;dinov2_s:full&#x27;] pour CLIP + DINOv2.</div></li><li><code class="pname">model</code> <span class="ptype">string</span><span class="penum"> · logreg | mlp | hgb</span></li><li><code class="pname">temporal</code> <span class="ptype">string</span><span class="penum"> · none | diff</span><div class=pdesc>diff ajoute e_t - e_(t-1) (changement depuis l&#x27;image précédente).</div></li><li><code class="pname">params</code> <span class="ptype">object</span><div class=pdesc>logreg: C ; mlp: hidden (liste), alpha ; hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int).</div></li><li><code class="pname">balance</code> <span class="ptype">object</span><div class=pdesc>Rééchantillonnage de train seulement (val et test intacts) : {groupe: facteur, 0 à 10}. Sous 1, on garde cette fraction des images ; au-dessus, on les duplique (3 = trois exemplaires). Groupes : positif, negatif, clip_vide, portrait, paysage. positif / negatif = images avec / sans ajout ; clip_vide = images des vidéos sans aucune image avec ajout ; portrait / paysage = orientation de la vidéo. Ex. {&#x27;negatif&#x27;: 2, &#x27;paysage&#x27;: 0.7}. Le dataset n&#x27;est pas modifié.</div></li><li><code class="pname">weights</code> <span class="ptype">object</span><div class=pdesc>Poids des images de train dans la perte, sans changer les données : {groupe: poids, &gt; 0 et au plus 10}, mêmes groupes que balance. Une image dans plusieurs groupes prend le plus grand poids, les autres gardent 1. S&#x27;ajoute à la pondération équilibrée des classes déjà appliquée (logreg, hgb). Ex. {&#x27;clip_vide&#x27;: 3}.</div></li><li><code class="pname">note</code> <span class="ptype">string</span><div class=pdesc>Hypothèse testée, en une phrase, sans recopier la config.</div></li><li><code class="pname">split_id</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Split sur lequel entraîner (train) et mesurer (val) : un id renvoyé par make_split (voir list_experiments).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Appel</div><pre>{
+  &quot;embeddings&quot;: [
+    &quot;clip_b32:full&quot;
+  ],
+  &quot;model&quot;: &quot;logreg&quot;,
+  &quot;temporal&quot;: &quot;diff&quot;,
+  &quot;split_id&quot;: &quot;split_001&quot;,
+  &quot;note&quot;: &quot;Référence CLIP B/32 + différence temporelle.&quot;
+}</pre><div class="exlabel">Réponse</div><pre>{
+  &quot;experiment_id&quot;: &quot;exp_001&quot;,
+  &quot;val&quot;: {
+    &quot;auc&quot;: 0.1648,
+    &quot;ap&quot;: 0.3272,
+    &quot;p95&quot;: &quot;précision non atteinte&quot;
+  }
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">exclude_clips</code></summary><div class="body"><p class="desc">Retire des clips des splits créés ensuite (make_split), sans supprimer de fichier ; les splits existants ne changent pas. Réservé aux vidéos défectueuses ou dupliquées.</p><ul class="params"><li><code class="pname">clips</code><span class=req>requis</span> <span class="ptype">object</span><div class=pdesc>{sample_id: raison du défaut}</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Appel</div><pre>{
+  &quot;clips&quot;: {
+    &quot;yt_0U6_cPT95a0&quot;: &quot;vidéo en double d&#x27;une autre déjà présente&quot;
+  }
+}</pre><div class="exlabel">Réponse</div><pre>{
+  &quot;clips_exclus&quot;: {
+    &quot;yt_0U6_cPT95a0&quot;: &quot;vidéo en double d&#x27;une autre déjà présente&quot;
+  },
+  &quot;effet&quot;: &quot;appliqué aux splits créés à partir de maintenant (make_split) ; splits existants inchangés&quot;
+}</pre></details></div></details></li></ul></details></li></ul></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_evaluator</code></summary><div class="body"><p class="desc">Délègue une évaluation, une analyse d&#x27;erreurs ou un test final à l&#x27;Evaluator ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul></div></details><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">evaluator</span><span class="meta">mistral-large-4-0 · 15 tours max · 4 outils</span></summary><div class="body"><p class="desc">Evaluator : mesure, analyse les erreurs, vérifie les améliorations, seul accès au test.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en train/val/test et chaines_shared (chaînes présentes dans plusieurs parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en train/val/test, images étiquetées du val et images positives du val, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Réponse</div><pre>{
+  &quot;splits&quot;: [
+    {
+      &quot;split_id&quot;: &quot;split_001&quot;,
+      &quot;chaines_train&quot;: 2,
+      &quot;chaines_val&quot;: 2,
+      &quot;chaines_test&quot;: 2,
+      &quot;chaines_shared&quot;: 0,
+      &quot;clips_train&quot;: 4,
+      &quot;clips_val&quot;: 2,
+      &quot;clips_test&quot;: 2,
+      &quot;val_images&quot;: 42,
+      &quot;val_images_positives&quot;: 19,
+      &quot;clips_hors_split&quot;: 0,
+      &quot;note&quot;: &quot;Premier split : toutes les chaînes actuelles.&quot;,
+      &quot;experiences&quot;: [
+        {
+          &quot;id&quot;: &quot;exp_001&quot;,
+          &quot;embeddings&quot;: [
+            &quot;clip_b32:full&quot;
+          ],
+          &quot;model&quot;: &quot;logreg&quot;,
+          &quot;temporal&quot;: &quot;diff&quot;,
+          &quot;params&quot;: {},
+          &quot;hypothese&quot;: &quot;Référence CLIP B/32 + différence temporelle.&quot;,
+          &quot;val&quot;: {
+            &quot;auc&quot;: 0.1648,
+            &quot;ap&quot;: 0.3272,
+            &quot;p95&quot;: &quot;précision non atteinte&quot;
+          }
+        }
+      ]
+    }
+  ]
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">analyze_errors</code></summary><div class="body"><p class="desc">Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux d&#x27;images positives ratées par orientation et par chaîne ; répartition des fausses alertes ; exemples d&#x27;images ratées.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Appel</div><pre>{
+  &quot;experiment_id&quot;: &quot;exp_001&quot;,
+  &quot;precision&quot;: 0.5
+}</pre><div class="exlabel">Réponse</div><pre>{
+  &quot;experiment_id&quot;: &quot;exp_001&quot;,
+  &quot;precision_visee&quot;: 0.5,
+  &quot;threshold&quot;: 0.9984,
+  &quot;recall&quot;: 0.0526,
+  &quot;precision&quot;: 0.5,
+  &quot;tp&quot;: 1,
+  &quot;fp&quot;: 1,
+  &quot;fn&quot;: 18,
+  &quot;tn&quot;: 22,
+  &quot;positifs_rates_par_orientation&quot;: {
+    &quot;portrait&quot;: &quot;18/19 ratées&quot;
+  },
+  &quot;positifs_rates_par_chaine&quot;: {
+    &quot;Ezequiel - Juicio Bíblico&quot;: &quot;18/19 ratées&quot;
+  },
+  &quot;faux_positifs_par_orientation&quot;: {
+    &quot;portrait&quot;: 1
+  },
+  &quot;faux_positifs_par_clip&quot;: {
+    &quot;yt_xd8Q4z_kzz0&quot;: 1
+  },
+  &quot;exemples_rates&quot;: [
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00002.jpg&quot;,
+      &quot;t&quot;: 1.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00003.jpg&quot;,
+      &quot;t&quot;: 2.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00004.jpg&quot;,
+      &quot;t&quot;: 3.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00005.jpg&quot;,
+      &quot;t&quot;: 4.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00006.jpg&quot;,
+      &quot;t&quot;: 5.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00007.jpg&quot;,
+      &quot;t&quot;: 6.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00008.jpg&quot;,
+      &quot;t&quot;: 7.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00010.jpg&quot;,
+      &quot;t&quot;: 9.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00012.jpg&quot;,
+      &quot;t&quot;: 11.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0U6_cPT95a0/00013.jpg&quot;,
+      &quot;t&quot;: 12.0,
+      &quot;video&quot;: &quot;L&#x27;astuce incroyable de ce berger avec ses moutons ! 🐑🚜 #ferme  #animaux #vieàlacampagne #astuce&quot;
+    }
+  ]
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">show_examples</code></summary><div class="body"><p class="desc">Montre des images de val : images avec ajout ratées (kind=missed) ou fausses alertes (kind=false_positive).</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">kind</code> <span class="ptype">string</span><span class="penum"> · missed | false_positive</span></li><li><code class="pname">n</code> <span class="ptype">integer</span><span class="penum"> · 1…6</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Appel</div><pre>{
+  &quot;experiment_id&quot;: &quot;exp_001&quot;,
+  &quot;kind&quot;: &quot;false_positive&quot;,
+  &quot;n&quot;: 2,
+  &quot;precision&quot;: 0.5
+}</pre><div class="exlabel">Réponse</div><pre>faux positif yt_xd8Q4z_kzz0 t=0.0 p=1.00 (seuil 1.00)
+[image JPEG en base64]</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">final_test</code></summary><div class="body"><p class="desc">Évalue une expérience sur le test de son split avec le seuil choisi sur val : rappel, précision, TP/FP/FN, AUC, AP. Nombre d&#x27;appels limité par session : à réserver au candidat final.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Exemple produit par le code actuel (Tool.call, ce que reçoit l&#x27;agent) sur un mini-dataset de test : 8 vraies vidéos YouTube (Shorts), mais vote des 3 LLM simulé, donc étiquettes et scores sans valeur. Montre la forme des appels et des réponses ; à remplacer par un vrai run (python utils/agents_tree.py --examples …).</p><div class="exlabel">Appel</div><pre>{
+  &quot;experiment_id&quot;: &quot;exp_001&quot;,
+  &quot;precision&quot;: 0.5
+}</pre><div class="exlabel">Réponse</div><pre>{
+  &quot;experiment_id&quot;: &quot;exp_001&quot;,
+  &quot;split_id&quot;: &quot;split_001&quot;,
+  &quot;precision_visee&quot;: 0.5,
+  &quot;seuil_choisi_sur_val&quot;: 0.9984,
+  &quot;val&quot;: {
+    &quot;threshold&quot;: 0.9984,
+    &quot;recall&quot;: 0.0526,
+    &quot;precision&quot;: 0.5,
+    &quot;tp&quot;: 1,
+    &quot;fp&quot;: 1,
+    &quot;fn&quot;: 18,
+    &quot;tn&quot;: 22
+  },
+  &quot;test&quot;: {
+    &quot;threshold&quot;: 0.9984,
+    &quot;recall&quot;: 0.0833,
+    &quot;precision&quot;: 0.6667,
+    &quot;tp&quot;: 2,
+    &quot;fp&quot;: 1,
+    &quot;fn&quot;: 22,
+    &quot;tn&quot;: 18
+  },
+  &quot;test_auc&quot;: 0.5197,
+  &quot;test_ap&quot;: 0.5992,
+  &quot;final_tests_restants&quot;: 1
+}</pre></details></div></details></li></ul></details></li></ul></li></ul></details></li></ul>
+</main><script>
+document.getElementById('open').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=true);
+document.getElementById('close').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=false);
+</script></body></html>
