@@ -64,10 +64,21 @@ def _todo(state: dict, samples: list[Path] | None = None) -> dict[str, list[tupl
     return out
 
 
-def _estimate(model: str, items: list[tuple[Path, Path]]) -> float:
-    """Coût estimé au tarif batch des requêtes d'un modèle (ordre de grandeur)."""
+def _measured(model: str, state: dict) -> float | None:
+    """Coût réel moyen d'une requête du modèle (tarif batch), sur ses batchs déjà récupérés."""
+    done = [j for j in state["jobs"] if j["model"] == model and j.get("collected") and j.get("cost_usd")]
+    n = sum(j["requests"] for j in done)
+    return sum(j["cost_usd"] for j in done) / n if n else None
+
+
+def _estimate(model: str, items: list[tuple[Path, Path]], state: dict | None = None) -> float:
+    """Coût estimé au tarif batch des requêtes d'un modèle : coût réel moyen par requête si le
+    modèle a déjà été mesuré, sinon estimation a priori (ordre de grandeur, prudente)."""
     if not items:
         return 0.0
+    per_request = _measured(model, state if state is not None else _load())
+    if per_request is not None:
+        return per_request * len(items)
     w, h = Image.open(items[0][1]).size
     k = min(1.0, annotators.MAX_SIDE / max(w, h))
     cols, rows = -(-round(w * k) // 16), -(-round(h * k) // 16)
@@ -79,11 +90,13 @@ def _estimate(model: str, items: list[tuple[Path, Path]]) -> float:
 def estimate(samples: list[Path] | None = None) -> dict:
     """Requêtes à envoyer par modèle et coût estimé au tarif batch (ordre de grandeur), pour toutes
     les vidéos ou seulement samples."""
-    todo = _todo(_load(), samples)
+    state = _load()
+    todo = _todo(state, samples)
     out, total = {}, 0.0
     for model, items in todo.items():
-        usd = _estimate(model, items)
-        out[model] = {"requetes": len(items), "usd_estime": round(usd, 4)}
+        usd = _estimate(model, items, state)
+        out[model] = {"requetes": len(items), "usd_estime": round(usd, 4),
+                      "source": "mesuré" if _measured(model, state) is not None else "a priori"}
         total += usd
     return {"par_modele": out, "total_usd_estime": round(total, 4),
             "images": len({c for items in todo.values() for c in items})}
@@ -143,7 +156,7 @@ def submit(max_usd: float, apis: dict | None = None, samples: list[Path] | None 
                 reasoning = annotators.NO_REASONING
                 job_id = _send(provider, api, model, chunk, reasoning)
             job = {"provider": provider, "model": model, "job_id": job_id, "requests": len(chunk),
-                   "reasoning": reasoning, "usd_estime": round(_estimate(model, chunk), 5),
+                   "reasoning": reasoning, "usd_estime": round(_estimate(model, chunk, state), 5),
                    "custom_ids": [_cid(s, f) for s, f in chunk],
                    "submitted": time.strftime("%Y-%m-%d %H:%M"), "status": None, "collected": False}
             state["jobs"].append(job)
