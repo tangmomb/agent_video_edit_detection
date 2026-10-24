@@ -6,6 +6,10 @@ Sans --exp, utilise le modèle désigné dans model_results/production.json (et 
 est traitée exactement comme à l'entraînement : frames à FPS par seconde (frames.extract), mêmes
 embeddings (features), même composante temporelle (lab._X), même classifieur.
 Fichiers de travail dans interface/_jobs/<id>/ (frames + résultat), effaçables à tout moment.
+
+Une vidéo peut ensuite être annotée par Mistral Large 4 (bouton de la page, appel payant, plafonné par
+vidéo) puis corrigée à la main : elle est alors rangée dans data/real_videos/<id>/ (voir annotate.py)
+et la page compare le modèle à ces étiquettes.
 """
 
 import argparse
@@ -31,8 +35,11 @@ from model_training_pipeline import metrics  # noqa: E402
 from model_training_pipeline.features import _encoder, _views  # noqa: E402
 from model_training_pipeline.frames import FPS, extract  # noqa: E402
 from model_training_pipeline.lab import EXP_DIR  # noqa: E402
+from utils import dev_reload  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import annotate  # noqa: E402
 JOBS = HERE / "_jobs"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 _gpu = Lock()  # une analyse à la fois sur le GPU
@@ -126,7 +133,19 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _page(self, body: bytes) -> None:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
+        if dev_reload.enabled():  # lancé par utils/dev_reload.py : la page se recharge toute seule
+            if self.path == "/__dev":
+                return self._json(HTTPStatus.OK, dev_reload.status(HERE / "index.html"))
+            if self.path in ("/", "/index.html"):
+                return self._page(dev_reload.page(HERE / "index.html"))
         if self.path == "/api/model":
             return self._json(HTTPStatus.OK, self.model.info())
         if self.path.startswith("/jobs/"):
@@ -135,7 +154,33 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_error(HTTPStatus.NOT_FOUND)
         return super().do_GET()
 
+    def _body(self) -> dict:
+        size = int(self.headers.get("Content-Length") or 0)
+        return json.loads(self.rfile.read(size) or b"{}")
+
+    def _annotate(self):
+        """Étiquettes LLM de la vidéo d'un job (appel payant à Mistral la première fois seulement)."""
+        job = JOBS / Path(self._body().get("job", "")).name
+        if not (job / "result.json").exists():
+            return self._json(HTTPStatus.NOT_FOUND, {"error": "analyse introuvable"})
+        labels = annotate.load(job.name)
+        if labels is None:
+            result = json.loads((job / "result.json").read_text(encoding="utf-8"))
+            annotate.save(job, result, annotate.annotate_video(result, job))
+            labels = annotate.load(job.name)
+        return self._json(HTTPStatus.OK, labels)
+
+    def _label(self):
+        b = self._body()
+        return self._json(HTTPStatus.OK, annotate.set_manual(b["job"], int(b["i"]), b.get("value")))
+
     def do_POST(self):
+        routes = {"/api/annotate": self._annotate, "/api/label": self._label}
+        if self.path in routes:
+            try:
+                return routes[self.path]()
+            except Exception as e:
+                return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(e).__name__}: {e}"})
         if self.path != "/api/analyze":
             return self.send_error(HTTPStatus.NOT_FOUND)
         size = int(self.headers.get("Content-Length") or 0)

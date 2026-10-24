@@ -81,6 +81,20 @@ button:hover { border-color: var(--muted); }
 .card.on .badge { background: var(--accent); color: #fff; }
 .card:not(.on) .badge { background: var(--soft); color: var(--muted); }
 .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+#truth { display: none; gap: 1px; padding: 0 4px; margin-top: 3px; height: 8px; }
+#truth .c { flex: 1 1 0; min-width: 1px; background: var(--soft); border-radius: 1px; }
+#truth .c.on { background: var(--ok); }
+#annot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+#annot-status { font-size: 13px; color: var(--muted); }
+#annot-status.err { color: var(--accent); }
+#cmp { display: none; }
+.card.miss { border-color: #d98a1f; box-shadow: none; }
+.card.fa { border-color: #7a5bd6; box-shadow: none; }
+.card .ref { display: flex; justify-content: space-between; align-items: center; gap: 6px;
+  padding: 0 8px 7px; font-size: 12px; color: var(--muted); }
+.card .ref button { font-size: 11px; padding: 1px 7px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 </style>
 </head>
 <body>
@@ -102,9 +116,15 @@ button:hover { border-color: var(--muted); }
       <div class="panel"><video id="video" controls muted></video></div>
       <div class="panel">
         <div class="stats">
-          <div class="stat"><div class="v" id="s-flag">–</div><div class="k">frames avec ajout</div></div>
+          <div class="stat"><div class="v" id="s-flag">–</div><div class="k">images avec ajout</div></div>
           <div class="stat"><div class="v" id="s-share">–</div><div class="k">de la vidéo</div></div>
           <div class="stat"><div class="v" id="s-time">–</div><div class="k">temps d'analyse</div></div>
+        </div>
+        <div class="stats" id="cmp">
+          <div class="stat"><div class="v" id="c-recall">–</div><div class="k">rappel vs étiquettes</div></div>
+          <div class="stat"><div class="v" id="c-prec">–</div><div class="k">précision vs étiquettes</div></div>
+          <div class="stat"><div class="v" id="c-miss">–</div><div class="k">ajouts ratés</div></div>
+          <div class="stat"><div class="v" id="c-fa">–</div><div class="k">fausses alertes</div></div>
         </div>
         <h2>Passages détectés</h2>
         <ul id="segments"></ul>
@@ -120,12 +140,24 @@ button:hover { border-color: var(--muted); }
         <button data-f="all" class="on">Toutes</button>
         <button data-f="on">Avec ajout</button>
         <button data-f="off">Sans ajout</button>
+        <button data-f="diff" id="f-diff" hidden>Désaccords</button>
       </div>
     </div>
 
     <div id="timeline"><div id="thr-line"></div></div>
+    <div id="truth"></div>
     <div class="axis"><span>0:00</span><span id="axis-end"></span></div>
-    <div class="hint">Une barre par frame analysée (1 par seconde), hauteur = probabilité d'ajout. Clique pour aller à l'instant dans la vidéo.</div>
+    <div class="hint">Une barre par image analysée (1 par seconde), hauteur = probabilité d'ajout. Clique pour aller à l'instant dans la vidéo.</div>
+
+    <div id="annot">
+      <button id="annot-btn">Annoter avec Mistral Large 4</button>
+      <span id="annot-status">Appel payant, plafonné à 0,50 $ par vidéo. Les étiquettes servent à mesurer le modèle sur du réel, jamais à l'entraîner.</span>
+    </div>
+    <div class="legend" id="legend" hidden>
+      <span><i style="background: var(--ok)"></i>étiquette : ajout (bande sous la frise)</span>
+      <span><i style="background: #d98a1f"></i>ajout raté par le modèle</span>
+      <span><i style="background: #7a5bd6"></i>fausse alerte du modèle</span>
+    </div>
 
     <div id="grid"></div>
   </section>
@@ -133,7 +165,9 @@ button:hover { border-color: var(--muted); }
 
 <script>
 const $ = (id) => document.getElementById(id);
-let model = null, data = null, threshold = 0.5, filter = "all", cur = -1;
+let model = null, data = null, threshold = 0.5, filter = "all", cur = -1, labels = null;
+// Étiquette retenue d'une image : la correction manuelle si elle existe, sinon celle du LLM.
+const truth = (i) => labels && (labels.frames[i].manuel ?? labels.frames[i].ajout);
 
 const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 const pct = (x) => `${Math.round(x * 1000) / 10} %`;
@@ -157,7 +191,7 @@ drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && analyze(e.dataTr
 async function analyze(file) {
   const st = $("status");
   st.className = "";
-  st.innerHTML = `<span class="spinner"></span>Analyse de « ${file.name} » : extraction des frames et passage dans le modèle…`;
+  st.innerHTML = `<span class="spinner"></span>Analyse de « ${file.name} » : extraction des images et passage dans le modèle…`;
   $("results").style.display = "none";
   $("video").src = URL.createObjectURL(file);
   try {
@@ -166,6 +200,7 @@ async function analyze(file) {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.statusText);
     data = j;
+    setLabels(null);
     st.textContent = "";
     $("thr").value = threshold;
     $("results").style.display = "block";
@@ -192,6 +227,52 @@ function buildTimeline() {
   $("axis-end").textContent = fmt(last ? last.t : 0);
 }
 
+function setLabels(l) {
+  labels = l;
+  const has = !!labels;
+  $("cmp").style.display = has ? "flex" : "none";
+  $("truth").style.display = has ? "flex" : "none";
+  $("legend").hidden = !has;
+  $("f-diff").hidden = !has;
+  $("annot-btn").hidden = has;
+  const tr = $("truth");
+  tr.innerHTML = "";
+  if (has) {
+    data.frames.forEach(() => tr.appendChild(Object.assign(document.createElement("div"), { className: "c" })));
+    const done = labels.frames.length, total = data.frames.length;
+    $("annot-status").className = "";
+    $("annot-status").textContent = `Étiquettes ${labels.model} · ${labels.cost_usd.toFixed(3)} $`
+      + (labels.complete ? "" : ` · incomplètes (${done} / ${total} images, plafond atteint)`)
+      + " · clique « corriger » sur une image pour inverser son étiquette.";
+  }
+}
+
+async function annotate() {
+  const st = $("annot-status"), btn = $("annot-btn");
+  btn.disabled = true;
+  st.className = "";
+  st.innerHTML = `<span class="spinner"></span>Annotation des ${data.frames.length} images par Mistral Large 4…`;
+  try {
+    const r = await fetch("/api/annotate", { method: "POST", body: JSON.stringify({ job: data.job }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    setLabels(j);
+    render();
+  } catch (e) {
+    st.className = "err";
+    st.textContent = `Échec de l'annotation : ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function correct(i) {
+  const f = labels.frames[i], want = !truth(i);
+  const r = await fetch("/api/label", { method: "POST",
+    body: JSON.stringify({ job: data.job, i, value: want === f.ajout ? null : want }) });
+  if (r.ok) { setLabels(await r.json()); render(); }
+}
+
 function segments() {
   const out = [];
   data.frames.forEach((f, i) => {
@@ -215,12 +296,27 @@ function render() {
   bars.forEach((b, i) => { b.classList.toggle("on", on[i]); b.classList.toggle("cur", i === cur); });
   $("thr-line").style.bottom = `calc(4px + ${threshold} * (100% - 8px))`;
 
+  // Comparaison aux étiquettes, au seuil courant (images annotées seulement).
+  const n_lab = labels ? labels.frames.length : 0;
+  const err = frames.map((f, i) => i >= n_lab ? "" : truth(i) && !on[i] ? "miss" : !truth(i) && on[i] ? "fa" : "");
+  if (labels) {
+    $("truth").querySelectorAll(".c").forEach((c, i) => c.classList.toggle("on", i < n_lab && truth(i)));
+    let tp = 0, fp = 0, fn = 0;
+    for (let i = 0; i < n_lab; i++) {
+      if (on[i] && truth(i)) tp++; else if (on[i]) fp++; else if (truth(i)) fn++;
+    }
+    $("c-recall").textContent = tp + fn ? pct(tp / (tp + fn)) : "–";
+    $("c-prec").textContent = tp + fp ? pct(tp / (tp + fp)) : "–";
+    $("c-miss").textContent = `${fn} / ${tp + fn}`;
+    $("c-fa").textContent = `${fp}`;
+  }
+
   const segs = segments(), ul = $("segments");
   ul.innerHTML = segs.length ? "" : '<li class="empty">Aucun ajout détecté à ce seuil.</li>';
   segs.forEach((s) => {
     const li = document.createElement("li");
     const a = frames[s.start].t, b = frames[s.end].t + 1 / data.fps;
-    li.innerHTML = `<span>${fmt(a)} → ${fmt(b)}</span><span class="p">${s.end - s.start + 1} frame(s) · max ${s.max.toFixed(2)}</span>`;
+    li.innerHTML = `<span>${fmt(a)} → ${fmt(b)}</span><span class="p">${s.end - s.start + 1} image(s) · max ${s.max.toFixed(2)}</span>`;
     li.onclick = () => seek(s.start);
     ul.appendChild(li);
   });
@@ -228,13 +324,23 @@ function render() {
   const grid = $("grid");
   grid.innerHTML = "";
   frames.forEach((f, i) => {
-    if ((filter === "on" && !on[i]) || (filter === "off" && on[i])) return;
+    if ((filter === "on" && !on[i]) || (filter === "off" && on[i]) || (filter === "diff" && !err[i])) return;
     const c = document.createElement("div");
-    c.className = "card" + (on[i] ? " on" : "") + (i === cur ? " cur" : "");
-    c.innerHTML = `<img loading="lazy" src="${f.url}" alt="frame à ${fmt(f.t)}">
+    c.className = "card" + (on[i] ? " on" : "") + (i === cur ? " cur" : "") + (err[i] ? ` ${err[i]}` : "");
+    let ref = "";
+    if (labels && i < n_lab) {
+      const l = labels.frames[i], who = l.manuel === null ? "LLM" : "corrigé";
+      const what = truth(i) ? `ajout${l.manuel === null && l.types.length ? ` (${l.types.join(", ")})` : ""}` : "rien";
+      ref = `<div class="ref" title="${(l.description || "").replace(/"/g, "&quot;")}"><span>${who} : ${what}</span>
+        <button data-fix="${i}">corriger</button></div>`;
+    }
+    c.innerHTML = `<img loading="lazy" src="${f.url}" alt="image à ${fmt(f.t)}">
       <div class="meta"><span>${fmt(f.t)}</span><span>p ${f.prob.toFixed(2)}</span>
-      <span class="badge">${on[i] ? "ajout" : "rien"}</span></div>`;
-    c.onclick = () => seek(i);
+      <span class="badge">${on[i] ? "ajout" : "rien"}</span></div>${ref}`;
+    c.onclick = (e) => {
+      const fix = e.target.closest("[data-fix]");
+      if (fix) { e.stopPropagation(); correct(i); } else seek(i);
+    };
     grid.appendChild(c);
   });
 }
@@ -248,6 +354,7 @@ function seek(i) {
   $("video").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+$("annot-btn").onclick = annotate;
 $("thr").oninput = (e) => { threshold = parseFloat(e.target.value); render(); };
 $("thr-reset").onclick = () => { threshold = model.threshold; $("thr").value = threshold; render(); };
 $("filter").onclick = (e) => {

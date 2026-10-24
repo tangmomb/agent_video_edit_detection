@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banc des annotateurs</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --fg: #1c1c1e; --muted: #6e6e73; --line: #dedcd6;
+  --soft: #efede8; --accent: #e5402d; --accent-soft: #fde4df; --yes: #2f7d4f; --yes-soft: #dcefe3; --warn: #d98a1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --panel: #1d1d20; --fg: #ececee; --muted: #9a9aa1; --line: #33333a;
+    --soft: #26262b; --accent: #ff6a55; --accent-soft: #3b211d; --yes: #5cc48a; --yes-soft: #1d3326; --warn: #e9a23b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
+h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+#drop { border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; background: var(--panel); }
+#drop.over { border-color: var(--accent); background: var(--accent-soft); }
+#drop strong { display: block; font-size: 16px; margin-bottom: 2px; }
+#drop span { color: var(--muted); font-size: 14px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+select, input { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); min-width: 0; }
+button { font: inherit; font-size: 14px; padding: 7px 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 6px; cursor: pointer; }
+button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+button:disabled { opacity: .5; cursor: default; }
+.status { font-size: 14px; color: var(--muted); }
+.status.err { color: var(--accent); }
+.spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#work { display: none; }
+.top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; }
+@media (max-width: 860px) { .top { grid-template-columns: 1fr; } }
+video { width: 100%; max-height: 360px; background: #000; border-radius: 8px; display: block; }
+#models { display: grid; gap: 6px; margin-bottom: 12px; }
+#models label { display: flex; gap: 8px; align-items: baseline; font-size: 14px; cursor: pointer; }
+#models label.off { color: var(--muted); cursor: default; }
+#models small { color: var(--muted); }
+#models .est { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13px; }
+#models .est i { font-style: normal; color: var(--muted); font-size: 12px; }
+.opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.opts label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+td.num, th.num { text-align: right; }
+pre.raw { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospace, Consolas, monospace; background: var(--soft); padding: 10px; border-radius: 6px; max-height: 320px; overflow: auto; margin: 6px 0 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line); font-size: 13px; padding: 5px 11px; }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--fg); color: var(--bg); }
+#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 12px; }
+.card { border: 2px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.card.diff { border-color: var(--warn); }
+.card img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: contain; background: #000; cursor: pointer; }
+.card .t { padding: 6px 8px 2px; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; justify-content: space-between; }
+.chips { display: flex; flex-direction: column; gap: 3px; padding: 4px 8px 8px; }
+.chip { font-size: 12px; padding: 2px 7px; border-radius: 6px; background: var(--soft); color: var(--muted); }
+.chip.yes { background: var(--yes-soft); color: var(--fg); }
+.chip.yes b { color: var(--yes); }
+.chip.miss { font-style: italic; }
+.empty { color: var(--muted); font-size: 14px; }
+table.matrix { width: auto; border-collapse: separate; border-spacing: 2px; }
+table.matrix th, table.matrix td { padding: 0; border: 0; text-align: center; }
+table.matrix th.name, table.matrix td.name { text-align: left; padding: 0 10px 0 0; font-size: 13px; white-space: nowrap; font-weight: 500; color: var(--fg); text-transform: none; letter-spacing: 0; }
+table.matrix img { width: 64px; height: 36px; object-fit: cover; border-radius: 4px; display: block; cursor: pointer; background: #000; }
+table.matrix .tt { font-size: 11px; color: var(--muted); font-weight: 400; text-transform: none; }
+table.matrix td.c { width: 64px; height: 24px; border-radius: 4px; background: var(--soft); font-size: 13px; color: var(--muted); }
+table.matrix td.c.yes { background: var(--yes-soft); color: var(--yes); font-weight: 700; }
+table.matrix td.c.miss { font-style: italic; }
+table.matrix .diff { box-shadow: inset 0 0 0 2px var(--warn); }
+.card.flash { outline: 3px solid var(--accent); outline-offset: 2px; }
+:root { --pick: #2f6fd6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pick: #5b9bff; } }
+.card.pick { border-color: var(--pick); box-shadow: 0 0 0 3px var(--pick); }
+.chip.sel { outline: 2px solid var(--pick); outline-offset: -2px; }
+tr.pickable { cursor: pointer; }
+tr.pickable:hover td { background: var(--soft); }
+tr.picked td { background: var(--soft); }
+tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--pick); }
+#pick-note { font-size: 13px; color: var(--pick); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Banc des annotateurs Mistral</h1>
+  <p class="sub">Charge une vidéo : chaque modèle coché dit en JSON quelles images (1 par seconde) contiennent un ajout de montage. On compare leurs réponses, leur coût et leur durée pour choisir le prochain modèle d'annotation. Outil autonome, non branché au dataset ni au classifieur.</p>
+
+  <div id="drop" tabindex="0">
+    <strong>Dépose une vidéo ici</strong>
+    <span>ou clique pour en choisir une</span>
+    <input type="file" id="file" accept="video/*" hidden>
+  </div>
+  <div class="row" style="margin: 10px 0 16px">
+    <label class="status" for="previous">Ou reprendre une vidéo déjà chargée :</label>
+    <select id="previous"><option value="">—</option></select>
+    <span class="status" id="status"></span>
+  </div>
+
+  <section id="work">
+    <div class="top">
+      <div class="panel"><video id="video" controls muted></video><p class="status" id="vinfo" style="margin: 8px 0 0"></p></div>
+      <div class="panel">
+        <h2>Modèles à interroger</h2>
+        <div id="models"></div>
+        <div class="opts">
+          <label>Taille envoyée (px)<select id="max_side"><option>512</option><option selected>768</option><option>1024</option></select></label>
+          <label>Images par requête<input id="batch" type="number" min="1" max="12" value="6"></label>
+          <label>Plafond par modèle ($)<input id="max_usd" type="number" min="0.05" step="0.05" value="0.50"></label>
+        </div>
+        <p class="status" id="reasoning-note" style="margin: 0 0 10px"></p>
+        <div class="row"><button class="primary" id="go">Interroger les modèles cochés (payant)</button>
+          <span class="status" id="total"></span></div>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2>Consigne envoyée à chaque modèle</h2>
+      <p class="sub" style="margin: 0 0 6px">Même texte pour tous, suivi des images numérotées (« Image n°0 », « Image n°1 »…) par lots ; la réponse est demandée en JSON.</p>
+      <pre class="raw" id="prompt" style="max-height: none"></pre>
+    </section>
+
+    <section class="panel">
+      <h2>Réponses par modèle</h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Modèle</th><th class="num">Images avec ajout</th><th class="num">Accord avec la majorité</th>
+          <th class="num">Réponses manquantes</th><th class="num">Coût</th><th class="num">$ / minute</th><th class="num">Durée</th><th>Réglages</th><th></th></tr></thead>
+        <tbody id="runs"></tbody>
+      </table></div>
+      <p class="sub" style="margin: 10px 0 0">Sans vérité de référence : « accord avec la majorité » compare chaque modèle au vote des autres modèles lancés sur cette vidéo. Les désaccords sont à trancher à l'œil dans la grille.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Qui a vu un ajout, image par image</h2>
+      <div class="scroll"><table class="matrix" id="matrix"></table></div>
+      <p class="sub" style="margin: 10px 0 0">Une colonne par image (1 par seconde), une ligne par modèle : ✓ = ajout vu. Les colonnes encadrées sont celles où les modèles ne sont pas d'accord. Clique une miniature pour aller à l'image dans la grille.</p>
+    </section>
+
+    <section class="panel">
+      <div class="row" style="justify-content: space-between">
+        <h2 style="margin: 0">Images <span id="pick-note"></span></h2>
+        <div class="seg" id="filter">
+          <button data-f="all" class="on">Toutes</button><button data-f="diff">Désaccords</button><button data-f="any">Au moins un ajout</button>
+        </div>
+      </div>
+      <div id="grid"></div>
+    </section>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+let models = [], cur = null, filter = "all", pick = null;  // pick : modèle sélectionné
+const togglePick = (model) => { pick = pick === model ? null : model; render(); };
+const pending = {};  // modèle -> en cours
+
+let estimates = {};
+
+async function init() {
+  const info = await (await fetch("/api/models")).json();
+  models = info.models;
+  $("prompt").textContent = info.prompt;
+  $("reasoning-note").textContent = `Raisonnement « ${info.reasoning} » pour tous les modèles (sans raisonnement si le modèle ne raisonne pas, noté dans le tableau).`;
+  $("models").innerHTML = models.map((m) => `<label class="${m.vision ? "" : "off"}">
+    <input type="checkbox" value="${m.id}" ${m.vision ? "" : "disabled"} ${m.vision ? "checked" : ""}>
+    <span>${m.nom} <small>${m.id} · ${m.prix.input} / ${m.prix.output} $ par M${m.vision ? "" : " · texte seulement, ne lit pas les images"}</small></span>
+    <span class="est" data-m="${m.id}"></span></label>`).join("");
+  $("models").querySelectorAll("input").forEach((x) => x.onchange = showEstimates);
+  const vids = await (await fetch("/api/videos")).json();
+  $("previous").innerHTML = `<option value="">—</option>` + vids.map((v) => `<option value="${v.id}">${v.nom} · ${v.images} images · ${v.date}</option>`).join("");
+}
+
+const drop = $("drop"), input = $("file");
+drop.onclick = () => input.click();
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") input.click(); };
+input.onchange = () => input.files[0] && upload(input.files[0]);
+["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && upload(e.dataTransfer.files[0]));
+$("previous").onchange = async (e) => e.target.value && open(await (await fetch(`/api/video?id=${e.target.value}`)).json());
+
+async function upload(file) {
+  const st = $("status");
+  st.className = "status";
+  st.innerHTML = `<span class="spinner"></span>Extraction des images de « ${file.name} »…`;
+  try {
+    const r = await fetch("/api/upload", { method: "POST", body: file, headers: { "X-Filename": encodeURIComponent(file.name) } });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    st.textContent = "";
+    open(j);
+    init();
+  } catch (e) { st.className = "status err"; st.textContent = `Échec : ${e.message}`; }
+}
+
+function open(v) {
+  cur = v;
+  $("work").style.display = "block";
+  const vfile = v.frames.length ? v.frames[0].url.split("/frames/")[0] : "";
+  $("video").src = `${vfile}/video${(v.nom.match(/\.[^.]+$/) || [".mp4"])[0].toLowerCase()}`;
+  $("vinfo").textContent = `${v.nom} · ${v.frames.length} images (1 par seconde)`;
+  render();
+  loadEstimates();
+}
+
+async function loadEstimates() {
+  if (!cur) return;
+  estimates = await (await fetch(`/api/estimate?video=${cur.id}&max_side=${$("max_side").value}&batch=${$("batch").value}`)).json();
+  showEstimates();
+}
+
+function showEstimates() {
+  let total = 0;
+  $("models").querySelectorAll(".est").forEach((s) => {
+    const e = estimates[s.dataset.m], m = models.find((x) => x.id === s.dataset.m);
+    s.innerHTML = e && m.vision ? `≈ ${e.usd.toFixed(3)} $ <i>${e.source}</i>` : "";
+  });
+  $("models").querySelectorAll("input:checked").forEach((x) => { total += (estimates[x.value] || {}).usd || 0; });
+  const n = cur ? cur.frames.length : 0;
+  $("total").textContent = cur ? `Estimation pour les modèles cochés : ≈ ${total.toFixed(3)} $ pour ${n} images (${fmt(n)} de vidéo).` : "";
+}
+$("max_side").onchange = loadEstimates;
+$("batch").onchange = loadEstimates;
+
+// Vote majoritaire des autres modèles sur l'image i (null si aucun autre modèle n'a répondu).
+function majority(i, except) {
+  const votes = cur.runs.filter((r) => r.model !== except).map((r) => r.frames[i]).filter((f) => f && !f.manquant);
+  if (!votes.length) return null;
+  const yes = votes.filter((f) => f.ajout).length;
+  return yes * 2 === votes.length ? null : yes * 2 > votes.length;
+}
+
+function render() {
+  const n = cur.frames.length, runs = cur.runs;
+  const tb = $("runs");
+  tb.innerHTML = "";
+  const names = [...new Set([...runs.map((r) => r.model), ...Object.keys(pending)])];
+  if (!names.length) tb.innerHTML = `<tr><td colspan="9" class="empty">Aucun modèle interrogé sur cette vidéo.</td></tr>`;
+  names.forEach((name) => {
+    const r = runs.find((x) => x.model === name), m = models.find((x) => x.id === name) || { nom: name };
+    const tr = document.createElement("tr");
+    if (pending[name]) {
+      tr.innerHTML = `<td>${m.nom}</td><td colspan="8" class="status">${pending[name] === true ? '<span class="spinner"></span>en cours…' : pending[name]}</td>`;
+    } else {
+      const yes = r.frames.filter((f) => f.ajout).length, miss = r.frames.filter((f) => f.manquant).length;
+      let agree = 0, comparable = 0;
+      r.frames.forEach((f) => { const maj = majority(f.i, name); if (maj !== null && !f.manquant) { comparable++; agree += f.ajout === maj; } });
+      const perMin = r.frames.length ? r.cost_usd * 60 / r.frames.length : null;
+      const c = r.config;
+      tr.innerHTML = `<td>${m.nom}<br><small class="status">${r.date}</small></td>
+        <td class="num">${yes} / ${r.frames.length}${r.complete ? "" : ` <small class="status">(plafond, ${n} au total)</small>`}</td>
+        <td class="num">${comparable ? `${Math.round(agree / comparable * 1000) / 10} %` : "–"}</td>
+        <td class="num">${miss}</td><td class="num">${r.cost_usd.toFixed(3)} $</td>
+        <td class="num">${perMin == null ? "–" : perMin.toFixed(3) + " $"}</td><td class="num">${r.duration_s} s</td>
+        <td><small class="status" title="${(c.refus_api || "").replace(/"/g, "&quot;")}">${c.max_side} px · raisonnement ${c.reasoning} · ${c.batch} / requête${c.refus_api ? " (survole pour la réponse de l'API)" : ""}</small></td>
+        <td><details><summary class="status" style="cursor:pointer">JSON</summary><pre class="raw"></pre></details></td>`;
+      tr.querySelector("pre").textContent = r.raw.map((x) => { try { return JSON.stringify(JSON.parse(x), null, 1); } catch { return x; } }).join("\n\n");
+      tr.className = "pickable" + (pick === name ? " picked" : "");
+      tr.title = "Clique pour encadrer les images où ce modèle voit un ajout";
+      tr.onclick = (e) => { if (!e.target.closest("details")) togglePick(name); };
+    }
+    tb.appendChild(tr);
+  });
+
+  // Vue d'ensemble : une colonne par image, une ligne par modèle.
+  const isDiff = (i) => {
+    const v = runs.map((r) => r.frames[i]).filter((a) => a && !a.manquant);
+    const yes = v.filter((a) => a.ajout).length;
+    return yes > 0 && yes < v.length;
+  };
+  const mx = $("matrix");
+  mx.innerHTML = "";
+  if (runs.length) {
+    const head = document.createElement("tr");
+    head.innerHTML = `<th class="name"></th>` + cur.frames.map((f) =>
+      `<th class="${isDiff(f.i) ? "diff" : ""}"><img src="${f.url}" data-i="${f.i}" alt=""><span class="tt">${fmt(f.t)}</span></th>`).join("");
+    mx.appendChild(head);
+    runs.forEach((r) => {
+      const m = models.find((x) => x.id === r.model) || { nom: r.model };
+      const tr = document.createElement("tr");
+      tr.className = "pickable" + (pick === r.model ? " picked" : "");
+      tr.onclick = () => togglePick(r.model);
+      tr.innerHTML = `<td class="name">${m.nom}</td>` + cur.frames.map((f) => {
+        const a = r.frames[f.i];
+        if (!a) return `<td class="c" title="non annotée (plafond)">·</td>`;
+        if (a.manquant) return `<td class="c miss" title="pas de réponse">?</td>`;
+        return `<td class="c ${a.ajout ? "yes" : ""}" title="${m.nom} · ${fmt(f.t)} : ${a.ajout ? "ajout" : "rien"}">${a.ajout ? "✓" : "–"}</td>`;
+      }).join("");
+      mx.appendChild(tr);
+    });
+    mx.querySelectorAll("img[data-i]").forEach((img) => img.onclick = () => {
+      if (filter !== "all") { filter = "all"; [...$("filter").children].forEach((x) => x.classList.toggle("on", x.dataset.f === "all")); render(); }
+      const card = $("grid").querySelector(`[data-i="${img.dataset.i}"]`);
+      if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" }); card.classList.add("flash"); setTimeout(() => card.classList.remove("flash"), 1500); }
+    });
+  }
+
+  const pm = pick && (models.find((x) => x.id === pick) || { nom: pick });
+  $("pick-note").textContent = pm ? ` · encadrées en bleu : ajout selon ${pm.nom} (reclique sur le modèle pour enlever)` : "";
+
+  const grid = $("grid");
+  grid.innerHTML = "";
+  cur.frames.forEach((f) => {
+    const answers = runs.map((r) => ({ r, a: r.frames[f.i] })).filter((x) => x.a);
+    const yes = answers.filter((x) => x.a.ajout && !x.a.manquant).length;
+    const diff = yes > 0 && yes < answers.filter((x) => !x.a.manquant).length;
+    if ((filter === "diff" && !diff) || (filter === "any" && !yes)) return;
+    const c = document.createElement("div");
+    const picked = pick && answers.some(({ r, a }) => r.model === pick && a.ajout && !a.manquant);
+    c.className = "card" + (picked ? " pick" : diff ? " diff" : "");
+    c.dataset.i = f.i;
+    const chips = answers.map(({ r, a }) => {
+      const m = models.find((x) => x.id === r.model) || { nom: r.model };
+      const sel = r.model === pick ? " sel" : "";
+      if (a.manquant) return `<span class="chip miss${sel}">${m.nom} : pas de réponse</span>`;
+      return `<span class="chip ${a.ajout ? "yes" : ""}${sel}">${m.nom} : ${a.ajout ? "<b>ajout</b>" : "rien"}</span>`;
+    }).join("");
+    c.innerHTML = `<img loading="lazy" src="${f.url}" alt="image à ${fmt(f.t)}"><div class="t"><span>${fmt(f.t)}</span>
+      <span class="status">${answers.length ? `${yes} / ${answers.length} : ajout` : ""}</span></div><div class="chips">${chips}</div>`;
+    c.querySelector("img").onclick = () => { const v = $("video"); v.currentTime = f.t; v.pause(); v.scrollIntoView({ behavior: "smooth", block: "nearest" }); };
+    grid.appendChild(c);
+  });
+  if (!grid.children.length) grid.innerHTML = '<p class="empty">Aucune image pour ce filtre.</p>';
+}
+
+$("go").onclick = async () => {
+  const chosen = [...$("models").querySelectorAll("input:checked")].map((x) => x.value);
+  if (!chosen.length || !cur) return;
+  const opts = { max_side: +$("max_side").value, batch: +$("batch").value, max_usd: +$("max_usd").value };
+  const est = chosen.reduce((s, m) => s + ((estimates[m] || {}).usd || 0), 0);
+  if (!confirm(`Interroger ${chosen.length} modèle(s) sur ${cur.frames.length} images ? Appels payants à l'API Mistral : ≈ ${est.toFixed(3)} $ estimés, plafond ${opts.max_usd} $ par modèle.`)) return;
+  $("go").disabled = true;
+  chosen.forEach((m) => { pending[m] = true; cur.runs = cur.runs.filter((r) => r.model !== m); });
+  render();
+  await Promise.all(chosen.map(async (m) => {
+    try {
+      const r = await fetch("/api/run", { method: "POST", body: JSON.stringify({ video: cur.id, model: m, ...opts }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      cur.runs.push(j);
+      delete pending[m];
+    } catch (e) { pending[m] = `échec : ${e.message}`; }
+    render();
+  }));
+  $("go").disabled = false;
+  loadEstimates();  // les modèles lancés passent en estimation « mesuré »
+};
+
+$("filter").onclick = (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  filter = b.dataset.f;
+  [...$("filter").children].forEach((x) => x.classList.toggle("on", x === b));
+  render();
+};
+
+init();
+</script>
+</body>
+</html>

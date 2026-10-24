@@ -4,8 +4,18 @@
     {
       "name": "interface",
       "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["interface/server.py"],
+      "runtimeArgs": [
+        "interface/server.py"
+      ],
       "port": 8780
+    },
+    {
+      "name": "llm-bench",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "utils/llm_bench/server.py"
+      ],
+      "port": 8790
     }
   ]
 }
