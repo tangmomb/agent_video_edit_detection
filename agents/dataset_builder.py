@@ -24,10 +24,8 @@ nouvelle vidéo YouTube » signifie qu'il faut changer de requête ou d'orientat
 (query) est une recherche YouTube : quelques mots-clés (« recette pâtes rapide », « vlog voyage \
 japon »), qui fixent le thème et donc, indirectement, le style de montage. Chaque image collectée \
 est annotée par trois LLM en mode batch (payant, résultats différés) : le budget d'annotation \
-limite le volume, et chaque collecte attend les résultats, ce qui peut prendre de quelques minutes \
-à une heure ou plus. Si l'annotation est encore en cours à la fin de l'attente \
-(batchs_encore_en_cours), ses images n'ont pas encore d'étiquette : ne relance pas une collecte \
-pour autant, les résultats seront récupérés au prochain appel.
+limite le volume, et chaque collecte attend les résultats jusqu'au bout, ce qui peut prendre de \
+quelques minutes à plusieurs heures.
 
 Rapport final (court, en français) : ce que tu as collecté et pourquoi, la composition du dataset \
 après collecte (chaînes, vidéos, images étiquetées, part d'images sans accord des annotateurs, \
@@ -54,8 +52,8 @@ def make(lab: Lab) -> Agent:
                 description="Collecte de nouvelles vraies vidéos YouTube (jamais prises, 5 min au plus) "
                             "pour une recherche, les ajoute au dataset, extrait leurs images (1 par seconde) "
                             "et les fait annoter par trois LLM en mode batch (une image n'est étiquetée que "
-                            "s'ils sont d'accord), puis attend les résultats. Récupère d'abord les annotations "
-                            "terminées depuis l'appel précédent. Coûteux en temps et en budget d'annotation : "
+                            "s'ils sont d'accord), puis attend les résultats dans le même appel, aussi "
+                            "longtemps qu'il faut. Coûteux en temps et en budget d'annotation : "
                             "justifie chaque collecte.",
                 input_schema={
                     "type": "object",

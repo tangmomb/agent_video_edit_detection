@@ -6,11 +6,14 @@
 --from-run : chaque outil montre son premier appel réussi dans le journal de ce run (appel et réponse
 réels). exemples.json (facultatif) : {nom d'outil: {"call": {...}, "response": ..., "note": "…"}},
 pour les outils que le run n'a pas appelés ; --examples-note s'affiche quand un exemple n'a pas de note.
+Sans --from-run ni --examples, la page garde les exemples qu'elle contient déjà (embarqués en JSON) :
+on la régénère après chaque changement du code des agents sans avoir besoin d'un run.
 """
 
 import argparse
 import html
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -173,8 +176,23 @@ def render(examples: dict, note: str) -> str:
 </main><script>
 document.getElementById('open').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=true);
 document.getElementById('close').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=false);
-</script></body></html>
+</script>
+<script type="application/json" id="examples">{_embed(examples)}</script></body></html>
 """
+
+
+def _embed(examples: dict) -> str:
+    # « </ » fermerait la balise <script> : échappé, le JSON reste valide
+    return json.dumps(examples, ensure_ascii=False).replace("</", "<\\/")
+
+
+def examples_from_page(page: Path) -> dict:
+    """Exemples embarqués dans une page déjà générée (vide si elle n'en a pas)."""
+    if not page.exists():
+        return {}
+    m = re.search(r'<script type="application/json" id="examples">(.*?)</script>',
+                  page.read_text(encoding="utf-8"), re.S)
+    return json.loads(m.group(1)) if m else {}
 
 
 def examples_from_run(run_dir: Path) -> dict:
@@ -205,7 +223,10 @@ def main() -> None:
     p.add_argument("--examples-note", default="", help="d'où viennent les exemples")
     p.add_argument("--out", type=Path, default=HERE / "agents_tree.html")
     a = p.parse_args()
-    examples = json.loads(a.examples.read_text(encoding="utf-8")) if a.examples else {}
+    if a.examples:
+        examples = json.loads(a.examples.read_text(encoding="utf-8"))
+    else:  # sans source d'exemples : ceux que la page contient déjà
+        examples = {} if a.from_run else examples_from_page(a.out)
     if a.from_run:
         examples.update(examples_from_run(a.from_run))
         # outils sans appel dans ce run : dit-le plutôt que de montrer un exemple d'ailleurs

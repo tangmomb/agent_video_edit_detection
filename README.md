@@ -13,8 +13,8 @@ vraies vidéos YouTube, annotées image par image par trois LLM de vision.
   dataset est annoté par `gpt-6-luna`, `gpt-5.6-luna` et `zai-glm-5-3-flash` (les meilleurs du banc
   `utils/llm_bench`) : une image n'a d'étiquette que s'ils sont **tous d'accord**, sinon elle est
   écartée (ni entraînée ni mesurée), sans revue manuelle. Votes dans `votes.json` à côté de la vidéo.
-  Effort de raisonnement `medium` pour tous, `none` pour un modèle dont l'API refuse `medium`
-  (`zai-glm-5-3-flash`). L'annotation passe par les API batch d'OpenAI et de Mistral (-50 %),
+  Effort de raisonnement `medium` pour les GPT, aucun effort précisé pour `zai-glm-5-3-flash` (son
+  API n'accepte ni `medium` ni `none`). L'annotation passe par les API batch d'OpenAI et de Mistral (-50 %),
   suivies dans `data/batches.json`.
 
 ## Installation
@@ -62,7 +62,7 @@ Orchestrateur ──► Dataset Builder   (collecte vidéos YouTube + annotation
 ```
 
 ```bash
-python -m agents --budget-usd 1.00 --annotation-usd 2.00 --batch-wait-min 120 --data-budget 250 --final-tests 2   # appels API payants
+python -m agents --budget-usd 1.00 --annotation-usd 2.00 --data-budget 250 --final-tests 2   # appels API payants
 ```
 
 Organisation :
@@ -78,7 +78,7 @@ Organisation :
 - `agents/<agent>.py` : prompt + sous-ensemble d'outils du lab propres à chaque agent ;
   le Dataset Builder collecte sans se soucier des splits (`generate_data` : recherche YouTube,
   téléchargement, annotation en mode batch dans la limite de `--annotation-usd`, attente des résultats
-  au plus `--batch-wait-min`, sinon récupérés à la collecte suivante), le Model Researcher découpe le dataset en
+  sans limite, dans le même appel), le Model Researcher découpe le dataset en
   splits train/val/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
   chaîne YouTube, stratifiés par défaut sur orientation et vidéos sans ajout ;
   l'ancien découpage `hash`, non figé, est refusé). Le test est figé au premier split

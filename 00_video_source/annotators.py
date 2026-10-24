@@ -31,8 +31,10 @@ MODELS = [
 PRICES = {m[0]: m[3] for m in MODELS}
 PROVIDER = {m[0]: m[4] for m in MODELS}
 KEYS = {"mistral": "MISTRAL_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
-REASONING = "medium"  # même effort de raisonnement pour tous les modèles…
-NO_REASONING = "none"  # …sauf ceux dont l'API refuse « medium » (zai-glm-5-3-flash : none ou high)
+REASONING = "medium"  # effort de raisonnement de tous les modèles…
+# …sauf ceux-ci (None : aucun effort précisé, le modèle garde son réglage par défaut). L'API de
+# zai-glm-5-3-flash n'accepte ni « medium » ni « none » (low, high, max seulement, octobre 2026).
+REASONING_BY_MODEL = {"zai-glm-5-3-flash": None}
 MAX_SIDE = 768  # plus grand côté envoyé ; le nombre de tokens d'une image suit son nombre de pixels
 
 # Les trois annotateurs du dataset (meilleurs du banc, octobre 2026).
@@ -139,9 +141,9 @@ def ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: st
     return read_chat(r)
 
 
-def refuses_reasoning(e: Exception) -> bool:
-    """L'API a refusé l'effort de raisonnement demandé (le modèle ne raisonne pas)."""
-    return any(w in str(e).lower() for w in ("reason", "effort"))
+def reasoning(model: str) -> str | None:
+    """Effort de raisonnement envoyé au modèle (None : aucun)."""
+    return REASONING_BY_MODEL.get(model, REASONING)
 
 
 def parse(text: str) -> bool | None:
@@ -151,9 +153,6 @@ def parse(text: str) -> bool | None:
     except json.JSONDecodeError:
         return None
     return bool(answer["ajout"]) if isinstance(answer, dict) and "ajout" in answer else None
-
-
-_no_reasoning: set[str] = set()  # modèles dont l'API a refusé « medium » : passés en « none »
 
 
 def vote(path: Path, apis: dict | None = None, models=ANNOTATORS, max_side: int = MAX_SIDE) -> dict:
@@ -166,14 +165,7 @@ def vote(path: Path, apis: dict | None = None, models=ANNOTATORS, max_side: int 
         provider = PROVIDER[model]
         if provider not in apis:
             apis[provider] = client(provider)
-        reasoning = NO_REASONING if model in _no_reasoning else REASONING
-        try:
-            text, used = ask(provider, apis[provider], model, path, max_side, reasoning)
-        except Exception as e:
-            if reasoning == NO_REASONING or not refuses_reasoning(e):
-                raise
-            _no_reasoning.add(model)
-            text, used = ask(provider, apis[provider], model, path, max_side, NO_REASONING)
+        text, used = ask(provider, apis[provider], model, path, max_side, reasoning(model))
         spent += cost(model, used)
         votes[model] = parse(text)
     return {"votes": votes, "cost_usd": spent, "label": consensus(votes)}

@@ -2,6 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "home",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "utils/dev_reload.py",
+        "utils/home/server.py"
+      ],
+      "port": 8770
+    },
+    {
       "name": "interface",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [

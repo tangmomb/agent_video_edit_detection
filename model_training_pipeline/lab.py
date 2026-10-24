@@ -40,7 +40,6 @@ from video_source.config import DATA_DIR, ROOT, SAMPLES_DIR
 from . import batch, metrics
 from .features import extraction_cost, get_features
 from .frames import FPS, FRAMES_DIR, build, load_index, source_key
-from .frames import pending as frames_pending
 
 EXP_DIR = ROOT / "model_results"
 DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
@@ -125,14 +124,12 @@ def _video_traits(meta: dict, empty: bool, keys: list[str]) -> set[str]:
 
 class Lab:
     def __init__(self, data_budget: int = 250, final_test_budget: int = 2, max_per_request: int = 20,
-                 annotation_budget_usd: float = 2.0, batch_wait_s: int = 2 * 3600):
+                 annotation_budget_usd: float = 2.0):
         self.data_budget = data_budget
         self.max_per_request = max_per_request
         self.generated = 0
         self.annotation_budget_usd = annotation_budget_usd
         self.annotation_spent = 0.0  # coût réel des batchs de la session récupérés
-        self.batch_wait_s = batch_wait_s  # attente maximale des résultats d'un batch dans generate_data
-        self._my_jobs: set[str] = set()  # batchs envoyés pendant la session
         self.final_tests_left = final_test_budget
         self._rows: list[dict] | None = None
         self._ann_cache: dict[str, dict] = {}
@@ -232,7 +229,9 @@ class Lab:
         rows = [r for r in self.rows if r["sample_id"] in sids]
         labeled = [r for r in rows if r["label_any"] is not None]
         anns = [self._ann(s) for s in sorted(sids)]
-        out = {"chaines_youtube": len({r["source"] for r in rows}), "videos": len(sids),
+        chains = {r["source"] for r in rows}
+        out = {"chaines_distinctes": len(chains), "videos": len(sids),
+               "moyenne_videos_par_chaine": round(len(sids) / len(chains), 2) if chains else 0,
                "images_extraites": len(rows), "images_etiquetees": len(labeled),
                # désaccord des annotateurs (ou annotation interrompue) : images jamais utilisées
                "images_sans_etiquette": len(rows) - len(labeled),
@@ -259,7 +258,7 @@ class Lab:
     def dataset_info(self, split_id: str | None = None) -> dict:
         rows = self.rows
         budgets = {"videos_collectables_restantes": self.data_budget - self.generated,
-                   "budget_annotation_restant_usd": round(self.annotation_budget_usd - self._annotation_used(), 3),
+                   "budget_annotation_restant_usd": round(self.annotation_budget_usd - self.annotation_spent, 3),
                    "final_tests_restants": self.final_tests_left}
         if not rows:
             return {"dataset_vide": True, "budgets": budgets,
@@ -274,57 +273,41 @@ class Lab:
                    for s in SPLITS}}
         chains = Counter(source_key(self._ann(s)) for s in sids)
         info["diversite"] = {
-            "chaines_youtube": len(chains), "videos": len(sids),
+            "chaines_distinctes": len(chains), "videos": len(sids),
+            "moyenne_videos_par_chaine": round(len(sids) / len(chains), 2) if chains else 0,
             # Plusieurs vidéos d'une même chaîne partagent son habillage : elles diversifient peu.
             "videos_par_chaine_la_plus_representee": dict(chains.most_common(5)),
         }
         return _jsonable(info)
 
-    def _annotation_used(self) -> float:
-        """Coût réel des batchs de la session déjà récupérés + coût estimé de ceux encore en cours."""
-        return self.annotation_spent + sum(j.get("usd_estime", 0.0) for j in batch.in_flight(self._my_jobs))
-
-    def _collect_batches(self) -> dict:
-        """Récupère les batchs terminés (votes fusionnés, index reconstruit) ; seul le coût de ceux
-        de la session compte dans son budget."""
-        res = batch.collect()
-        self.annotation_spent += sum(c for j, c in res["jobs"].items() if j in self._my_jobs)
-        if res["batchs_recuperes"]:
-            self._rows = None
-        return res
-
     def generate_data(self, n: int, reason: str, query: str, orientation: str | None = None) -> dict:
         """Collecte n nouvelles vraies vidéos YouTube pour la requête, puis fait annoter leurs images
         par les trois LLM en mode batch (appels payants, plafonnés par annotation_budget_usd) et attend
-        les résultats au plus batch_wait_s. Récupère d'abord les batchs terminés entre-temps et
-        renvoie en annotation les vidéos laissées incomplètes (budget épuisé, requêtes en échec)."""
+        les résultats, sans limite. Envoi et récupération se font dans le même appel : un batch que
+        l'appel n'a pas récupéré (interrompu) est oublié, et une vidéo non annotée (budget épuisé)
+        reste sans étiquette, jamais reprise."""
         n = min(int(n), self.max_per_request, self.data_budget - self.generated)
         if n <= 0:
             return {"error": "budget de vidéos épuisé pour cette session"}
         if not (query or "").strip():
             raise ValueError("query obligatoire : la recherche YouTube")
-        self._collect_batches()
-        if self._annotation_used() >= self.annotation_budget_usd:
+        if self.annotation_spent >= self.annotation_budget_usd:
             return {"error": "budget d'annotation épuisé pour cette session"}
-        pending = [d for d in sorted(SAMPLES_DIR.glob("yt_*")) if (d / "meta.json").exists() and frames_pending(d)]
         try:
             got = youtube.collect(query, n, orientation)
         except youtube.NoVideoFound as e:
             got = {"dirs": [], "errors": [str(e)]}
         self.generated += len(got["dirs"])  # seules les vidéos téléchargées consomment le budget
         errors, chosen, est, stopped = list(got["errors"]), [], 0.0, None
-        for d in pending + got["dirs"]:
-            e = batch.estimate([d])["total_usd_estime"]  # 0 : tout est déjà en cours d'annotation
-            if not e:
-                continue
-            if self._annotation_used() + est + e > self.annotation_budget_usd:
-                stopped = ("budget d'annotation épuisé : vidéos suivantes téléchargées mais non annotées "
-                           "(leur annotation reprendra au prochain generate_data)")
+        for d in got["dirs"]:
+            e = batch.estimate([d])["total_usd_estime"]
+            if self.annotation_spent + est + e > self.annotation_budget_usd:
+                stopped = "budget d'annotation épuisé : vidéos suivantes téléchargées mais laissées sans étiquette"
                 break
             chosen.append(d)
             est += e
         before = self.annotation_spent
-        finished, res, failed = True, {"echecs": {}}, 0
+        failed = 0
         # 2e passage pour les requêtes en échec (ex. effort « medium » refusé, renvoyé en « none »)
         for _ in range(2 if chosen else 0):
             try:
@@ -335,35 +318,29 @@ class Lab:
             if not sent:
                 break
             jobs = {s["job_id"] for s in sent}
-            self._my_jobs |= jobs
-            finished = batch.wait(jobs, self.batch_wait_s)
-            res = self._collect_batches()
+            batch.wait(jobs)
+            res = batch.collect(job_ids=jobs)
+            self.annotation_spent += res["cost_usd"]
             failed = sum(res["echecs"].values())
-            if not finished or not failed:
+            if not failed:
                 break
-        if not chosen:
-            res = self._collect_batches()
         build()
         self._rows = None
         sids = {d.name for d in chosen}
         mine = [r for r in self.rows if r["sample_id"] in sids]
-        if not finished:
-            stopped = (f"annotation encore en cours après {self.batch_wait_s // 60} min : "
-                       "résultats récupérés au prochain generate_data")
         with open(DATA_REQUESTS, "a", encoding="utf-8") as fh:
             fh.write(json.dumps({"n": n, "ok": len(got["dirs"]), "query": query, "orientation": orientation,
                                  "cost_usd": round(self.annotation_spent - before, 4),
                                  "cost_usd_estime": round(est, 4), "reason": reason, "time": time.time()}) + "\n")
         return _jsonable({
-            "videos_collectees": len(got["dirs"]), "videos_reprises": len([d for d in chosen if d in pending]),
+            "videos_collectees": len(got["dirs"]),
             "echecs": len(errors), "exemples_erreurs": errors[:3], "arret": stopped,
             "images_envoyees_en_annotation": len(mine),
             "images_avec_accord": sum(r["label_any"] is not None for r in mine),
             "requetes_en_echec": failed,
-            "batchs_encore_en_cours": len(batch.in_flight(self._my_jobs)),
             "cout_annotation_usd": round(self.annotation_spent - before, 4),
             "images_total": len(self.rows), "videos_collectables_restantes": self.data_budget - self.generated,
-            "budget_annotation_restant_usd": round(self.annotation_budget_usd - self._annotation_used(), 3)})
+            "budget_annotation_restant_usd": round(self.annotation_budget_usd - self.annotation_spent, 3)})
 
     def data_requests(self) -> list[dict]:
         path = DATA_REQUESTS

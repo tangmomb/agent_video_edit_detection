@@ -7,6 +7,7 @@ l'autre).
 """
 
 import json
+import random
 import shutil
 import time
 import unicodedata
@@ -18,6 +19,9 @@ MAX_DURATION = 300  # s : au-delà, la vidéo coûterait trop à annoter (une im
 MIN_DURATION = 5
 MAX_RES = 720  # plus petit côté de la vidéo téléchargée
 SEARCH_FACTOR = 4  # candidats cherchés par vidéo voulue (déjà prises, trop longues, mauvaise orientation)
+MIN_CANDIDATES = 25  # plancher : avec peu de vidéos voulues, 4 par vidéo ne suffit pas à trouver une bonne
+REQUEST_PAUSE = (2, 6)  # s : attente aléatoire entre deux lectures de page vidéo, contre le blocage YouTube
+DOWNLOAD_PAUSE = (60, 180)  # s : attente aléatoire entre deux téléchargements, pour ménager YouTube
 
 
 class NoVideoFound(Exception):
@@ -54,7 +58,7 @@ def hashtag(query: str) -> str:
 def _candidates(query: str, n: int, orientation: str | None) -> list[dict]:
     """Résultats bruts (sans détail) : la recherche YouTube ne renvoie presque jamais de Shorts, le
     portrait passe donc par la page Shorts du hashtag tiré de la requête."""
-    count = n * SEARCH_FACTOR
+    count = max(n * SEARCH_FACTOR, MIN_CANDIDATES)
     with _ydl(extract_flat=True, playlistend=count) as ydl:
         if orientation == "portrait":
             try:
@@ -69,7 +73,7 @@ def search(query: str, n: int, orientation: str | None = None, exclude: set[str]
     """Jusqu'à n vidéos (infos complètes yt-dlp) pour la requête, jamais téléchargées, de durée
     acceptable et, si demandé, de la bonne orientation. Le portrait vise les Shorts."""
     exclude = (exclude or set()) | downloaded()
-    out = []
+    out, looked = [], 0
     with _ydl() as ydl:
         for e in _candidates(query, n, orientation):
             if len(out) >= n:
@@ -78,6 +82,9 @@ def search(query: str, n: int, orientation: str | None = None, exclude: set[str]
             if e["id"] in exclude or e.get("live_status") not in (None, "not_live") \
                     or (d is not None and not MIN_DURATION <= d <= MAX_DURATION):
                 continue
+            if looked:
+                time.sleep(random.uniform(*REQUEST_PAUSE))
+            looked += 1
             try:
                 info = ydl.extract_info(e["url"], download=False)  # dimensions : une requête, sans télécharger
             except Exception:
@@ -121,7 +128,8 @@ def collect(query: str, n: int, orientation: str | None = None, samples_dir: Pat
         raise NoVideoFound(f"aucune nouvelle vidéo YouTube pour « {query} »"
                            + (f" ({orientation})" if orientation else "") + " : change de requête")
     dirs, errors = [], []
-    for info in found:
+    for i, info in enumerate(found):
+        time.sleep(random.uniform(*(DOWNLOAD_PAUSE if i else REQUEST_PAUSE)))  # après la recherche, puis entre deux
         try:
             dirs.append(download(info, query, samples_dir))
         except Exception as e:

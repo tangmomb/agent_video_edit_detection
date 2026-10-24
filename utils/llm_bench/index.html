@@ -170,7 +170,8 @@ async function init() {
   const info = await (await fetch("/api/models")).json();
   models = info.models;
   $("prompt").textContent = info.prompt;
-  $("reasoning-note").textContent = `Raisonnement « ${info.reasoning} » pour tous les modèles (« ${info.no_reasoning} » si son API refuse « ${info.reasoning} », noté dans le tableau).`;
+  const except = Object.entries(info.reasoning_by_model).map(([m, r]) => `${m} : ${r || "aucun effort précisé"}`);
+  $("reasoning-note").textContent = `Raisonnement « ${info.reasoning} » pour tous les modèles${except.length ? ` sauf ${except.join(", ")}` : ""}.`;
   const PROVIDERS = { mistral: "Mistral", openai: "OpenAI", anthropic: "Anthropic" };
   // Cochés par défaut : les modèles Mistral seulement (les autres sont plus chers, à cocher à la main).
   $("models").innerHTML = models.map((m, k) => {

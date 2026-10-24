@@ -9,8 +9,8 @@ frames.annotate.
     python -m model_training_pipeline batch collect      # récupère les batchs finis, puis reconstruit l'index
 
 Suivi des batchs envoyés dans data/batches.json : une image déjà envoyée n'est pas renvoyée tant que
-son batch n'est pas récupéré. Une requête en échec (refusée, expirée) est renvoyée au submit suivant ;
-si l'API a refusé l'effort « medium », le modèle est noté et renvoyé en « none ».
+son batch n'est pas récupéré. Une requête en échec (refusée, expirée) est renvoyée au submit suivant.
+Effort de raisonnement de chaque modèle : annotators.reasoning.
 """
 
 import json
@@ -36,7 +36,7 @@ OUT_PER_IMAGE = 15 + 150
 
 
 def _load() -> dict:
-    return json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {"jobs": [], "no_reasoning": []}
+    return json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {"jobs": []}
 
 
 def _save(state: dict) -> None:
@@ -145,17 +145,9 @@ def submit(max_usd: float, apis: dict | None = None, samples: list[Path] | None 
         api = apis.setdefault(provider, annotators.client(provider))
         for i in range(0, len(items), CHUNK):
             chunk = items[i:i + CHUNK]
-            reasoning = annotators.NO_REASONING if model in state["no_reasoning"] else annotators.REASONING
-            try:
-                job_id = _send(provider, api, model, chunk, reasoning)
-            except Exception as e:
-                # Mistral valide le fichier dès l'envoi : « medium » refusé, renvoyé en « none »
-                if reasoning == annotators.NO_REASONING or not annotators.refuses_reasoning(e):
-                    raise
-                state["no_reasoning"].append(model)
-                reasoning = annotators.NO_REASONING
-                job_id = _send(provider, api, model, chunk, reasoning)
-            job = {"provider": provider, "model": model, "job_id": job_id, "requests": len(chunk),
+            reasoning = annotators.reasoning(model)
+            job_id = _send(provider, api, model, chunk, reasoning)
+            job ={"provider": provider, "model": model, "job_id": job_id, "requests": len(chunk),
                    "reasoning": reasoning, "usd_estime": round(_estimate(model, chunk, state), 5),
                    "custom_ids": [_cid(s, f) for s, f in chunk],
                    "submitted": time.strftime("%Y-%m-%d %H:%M"), "status": None, "collected": False}
@@ -169,11 +161,14 @@ def _job(provider: str, api, job_id: str):
     return api.batches.retrieve(job_id) if provider == "openai" else api.batch.jobs.get(job_id=job_id)
 
 
-def status(apis: dict | None = None) -> list[dict]:
+def status(apis: dict | None = None, job_ids: set[str] | None = None) -> list[dict]:
+    """État des batchs (tous, ou seulement job_ids : l'API n'est interrogée que pour eux)."""
     state = _load()
     apis = apis if apis is not None else {}
     out = []
     for j in state["jobs"]:
+        if job_ids is not None and j["job_id"] not in job_ids:
+            continue
         if not j.get("collected"):
             api = apis.setdefault(j["provider"], annotators.client(j["provider"]))
             j["status"] = str(_job(j["provider"], api, j["job_id"]).status)
@@ -187,17 +182,14 @@ def in_flight(job_ids: set[str] | None = None) -> list[dict]:
     return [j for j in _load()["jobs"] if not j.get("collected") and (job_ids is None or j["job_id"] in job_ids)]
 
 
-def wait(job_ids: set[str], timeout_s: float, every_s: float = 30, apis: dict | None = None) -> bool:
-    """Attend que les batchs job_ids soient terminés côté API (sans les récupérer) ; False si le
-    délai est dépassé."""
-    t0 = time.time()
+def wait(job_ids: set[str], every_s: float = 180, apis: dict | None = None) -> None:
+    """Attend, sans limite, que les batchs job_ids soient terminés côté API (sans les récupérer) ;
+    les API les arrêtent d'elles-mêmes au bout de 24 h (statut expiré)."""
     while True:
-        pending = {j["job_id"] for j in status(apis) if j["job_id"] in job_ids and not j["collected"]
+        pending = {j["job_id"] for j in status(apis, job_ids) if not j["collected"]
                    and j["status"] not in DONE["openai"] | DONE["mistral"]}
         if not pending:
-            return True
-        if time.time() - t0 + every_s > timeout_s:
-            return False
+            return
         time.sleep(every_s)
 
 
@@ -213,15 +205,27 @@ def _download(provider: str, api, file_id: str | None) -> list[dict]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def collect(apis: dict | None = None) -> dict:
-    """Récupère les batchs terminés, fusionne leurs votes dans votes.json et reconstruit l'index."""
+def _timing(job) -> dict:
+    """Fin du batch et durée depuis sa création, d'après les horodatages de l'API (secondes Unix ;
+    OpenAI n'a pas de completed_at pour un batch en échec, expiré ou annulé)."""
+    ends = [getattr(job, k, None) for k in ("completed_at", "failed_at", "expired_at", "cancelled_at")]
+    end, start = next((t for t in ends if isinstance(t, int)), None), getattr(job, "created_at", None)
+    if not (isinstance(end, int) and isinstance(start, int)):
+        return {}
+    return {"finished": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(end)),
+            "duration_min": round((end - start) / 60, 1)}
+
+
+def collect(apis: dict | None = None, job_ids: set[str] | None = None) -> dict:
+    """Récupère les batchs terminés (tous, ou parmi job_ids), fusionne leurs votes dans votes.json et
+    reconstruit l'index."""
     state = _load()
     apis = apis if apis is not None else {}
     report = {"batchs_recuperes": 0, "votes": 0, "echecs": Counter(), "cost_usd": 0.0, "en_cours": 0,
               "jobs": {}}  # jobs : coût réel de chaque batch récupéré
     by_video: dict[str, dict] = {}
     for j in state["jobs"]:
-        if j.get("collected"):
+        if j.get("collected") or (job_ids is not None and j["job_id"] not in job_ids):
             continue
         api = apis.setdefault(j["provider"], annotators.client(j["provider"]))
         job = _job(j["provider"], api, j["job_id"])
@@ -239,9 +243,6 @@ def collect(apis: dict | None = None) -> dict:
             if line.get("error") or code != 200 or not isinstance(body, dict) or "choices" not in body:
                 err = json.dumps(line.get("error") or body or line)[:300]
                 report["echecs"][err[:120]] += 1
-                if j["reasoning"] == annotators.REASONING and annotators.refuses_reasoning(Exception(err)) \
-                        and j["model"] not in state["no_reasoning"]:
-                    state["no_reasoning"].append(j["model"])
                 continue  # vote toujours manquant : renvoyé au prochain submit
             text, used = annotators.read_chat(body)
             usd = annotators.cost(j["model"], used) * DISCOUNT
@@ -252,6 +253,7 @@ def collect(apis: dict | None = None) -> dict:
             job_cost += usd
         j["collected"] = True
         j["cost_usd"] = round(job_cost, 5)
+        j.update(_timing(job))
         report["cost_usd"] += job_cost
         report["batchs_recuperes"] += 1
         report["jobs"][j["job_id"]] = job_cost

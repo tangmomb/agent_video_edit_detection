@@ -28,8 +28,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
 from utils import dev_reload  # noqa: E402
-from video_source.annotators import (KEYS, MODELS, NO_REASONING, PROMPT, PROVIDER, REASONING, ask,  # noqa: E402
-                                     client, parse, refuses_reasoning)
+from video_source.annotators import (KEYS, MODELS, PROMPT, PROVIDER, REASONING, REASONING_BY_MODEL,  # noqa: E402
+                                     ask, client, parse, reasoning)
 from video_source.annotators import cost as _cost  # noqa: E402
 
 VIDEOS = HERE / "_videos"
@@ -59,23 +59,16 @@ def run(cfg: dict, api=None) -> dict:
     d = VIDEOS / Path(cfg["video"]).name
     paths = sorted((d / "frames").glob("*.jpg"))
     max_side = int(cfg.get("max_side", 768))
-    max_usd, reasoning = float(cfg.get("max_usd", 0.5)), REASONING
+    max_usd, effort = float(cfg.get("max_usd", 0.5)), reasoning(model)
     provider = PROVIDER[model]
     api = api or client(provider)
-    labels, raw, spent, last, refus = [], [], 0.0, 0.0, None
+    labels, raw, spent, last = [], [], 0.0, 0.0
     tokens = {"input": 0, "cached_input": 0, "output": 0}
     t0 = time.perf_counter()
     for i, path in enumerate(paths):  # une requête par image
         if spent + last > max_usd:  # la prochaine image coûterait à peu près autant que la dernière
             break
-        try:
-            text, used = ask(provider, api, model, path, max_side, reasoning)
-        except Exception as e:
-            if reasoning == NO_REASONING or not refuses_reasoning(e):
-                raise
-            # « medium » refusé : on continue en « none », et on garde la réponse de l'API
-            reasoning, refus = NO_REASONING, str(e)[:300]
-            text, used = ask(provider, api, model, path, max_side, NO_REASONING)
+        text, used = ask(provider, api, model, path, max_side, effort)
         for k in tokens:
             tokens[k] += used[k]
         last = _cost(model, used)
@@ -84,7 +77,7 @@ def run(cfg: dict, api=None) -> dict:
         answer = parse(text)
         labels.append({"i": i, "ajout": bool(answer), "manquant": answer is None})
     config = {"max_side": max_side, "batch": 1, "max_usd": max_usd,
-              "reasoning": reasoning if not refus else f"{reasoning} (« {REASONING} » refusé)", "refus_api": refus}
+              "reasoning": effort or "par défaut"}
     rec = {"model": model, "config": config, "images_total": len(paths),
            "frames": labels, "tokens": tokens, "cost_usd": round(_cost(model, tokens), 4),
            "duration_s": round(time.perf_counter() - t0, 1), "complete": len(labels) == len(paths),
@@ -176,7 +169,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(HTTPStatus.OK, {"models": [{"id": i, "nom": n, "vision": v, "prix": p, "fournisseur": f,
                                                           "cle": KEYS[f] if not os.environ.get(KEYS[f]) else None}
                                                          for i, n, v, p, f in MODELS],
-                                              "prompt": PROMPT, "reasoning": REASONING, "no_reasoning": NO_REASONING})
+                                              "prompt": PROMPT, "reasoning": REASONING,
+                                              "reasoning_by_model": REASONING_BY_MODEL})
         if u.path == "/api/estimate":
             q = parse_qs(u.query)
             return self._json(HTTPStatus.OK, estimate(q.get("video", [""])[0], int(q.get("max_side", ["768"])[0])))

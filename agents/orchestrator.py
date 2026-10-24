@@ -81,8 +81,8 @@ def make(lab: Lab, session: Session) -> Agent:
             dataset = info
         else:
             d = info["dataset"]
-            dataset = {k: d[k] for k in ("chaines_youtube", "videos", "images_extraites", "images_etiquetees",
-                                         "images_sans_etiquette", "videos_sans_ajout",
+            dataset = {k: d[k] for k in ("chaines_distinctes", "videos", "moyenne_videos_par_chaine",
+                                         "images_extraites", "images_etiquetees", "images_sans_etiquette", "videos_sans_ajout",
                                          "pourcentage_images_avec_ajout")}
             dataset["budgets"] = info["budgets"]
         return {"dataset": dataset,
@@ -99,7 +99,8 @@ def make(lab: Lab, session: Session) -> Agent:
         max_turns=30,
         tools=[
             Tool(name="global_status",
-                 description="État global : volumes du dataset (chaînes YouTube, vidéos, images extraites, "
+                 description="État global : volumes du dataset (chaînes YouTube distinctes dont proviennent "
+                             "les vidéos, vidéos, moyenne de vidéos par chaîne, images extraites, "
                              "images étiquetées et sans étiquette faute d'accord des annotateurs, vidéos "
                              "sans ajout, pourcentage d'images avec ajout), budgets restants (vidéos, "
                              "annotation en $, tests finaux), budget de session. "
@@ -122,12 +123,11 @@ def make(lab: Lab, session: Session) -> Agent:
 
 
 def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annotation_usd: float = 2.0,
-        batch_wait_s: int = 2 * 3600, client=None) -> Session:
-    lab = Lab(data_budget=data_budget, final_test_budget=final_tests, annotation_budget_usd=annotation_usd,
-              batch_wait_s=batch_wait_s)
+        client=None) -> Session:
+    lab = Lab(data_budget=data_budget, final_test_budget=final_tests, annotation_budget_usd=annotation_usd)
     session = Session(budget_usd, client=client,
                       params={"goal": goal, "data_budget": data_budget, "final_tests": final_tests,
-                              "annotation_usd": annotation_usd, "batch_wait_s": batch_wait_s})
+                              "annotation_usd": annotation_usd})
     try:
         report = session.run(make(lab, session), goal)
     except BaseException as e:
