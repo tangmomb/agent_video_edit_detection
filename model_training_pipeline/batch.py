@@ -191,7 +191,12 @@ def wait(job_ids: set[str], timeout_s: float, every_s: float = 30, apis: dict | 
 def _download(provider: str, api, file_id: str | None) -> list[dict]:
     if not file_id:
         return []
-    text = api.files.content(file_id).text if provider == "openai" else api.files.download(file_id=file_id).text
+    if provider == "openai":
+        text = api.files.content(file_id).text
+    else:
+        r = api.files.download(file_id=file_id)  # réponse en flux : à lire avant d'en prendre le texte
+        r.read()
+        text = r.text
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
