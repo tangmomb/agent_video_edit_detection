@@ -1,10 +1,11 @@
 """Génère utils/agents_tree.html : l'arbre des agents et de leurs outils, lu dans le code de agents/
 (descriptions, paramètres, modèle, tours), pour que la page suive le code.
 
-    .venv/Scripts/python.exe utils/agents_tree.py [--examples exemples.json] [--examples-note "…"]
+    .venv/Scripts/python.exe utils/agents_tree.py [--from-run runs/<NNN>_…] [--examples exemples.json]
 
-exemples.json (facultatif) : {nom d'outil: {"call": {...}, "response": ...}} ; chaque exemple est
-affiché sous son outil, précédé de --examples-note (d'où viennent les exemples).
+--from-run : chaque outil montre son premier appel réussi dans le journal de ce run (appel et réponse
+réels). exemples.json (facultatif) : {nom d'outil: {"call": {...}, "response": ..., "note": "…"}},
+pour les outils que le run n'a pas appelés ; --examples-note s'affiche quand un exemple n'a pas de note.
 """
 
 import argparse
@@ -109,6 +110,8 @@ def _param(name: str, spec: dict, required: bool) -> str:
 def _example(ex: dict | None, note: str) -> str:
     if not ex:
         return ""
+    if ex.get("missing"):  # outil non appelé pendant le run dont viennent les exemples
+        return f'<p class="exnote">{e(ex["missing"])}</p>'
     out = f'<details class="ex"><summary>Exemple</summary><p class="exnote">{e(ex.get("note") or note)}</p>'
     if ex.get("call") is not None:
         out += f'<div class="exlabel">Appel</div><pre>{e(json.dumps(ex["call"], ensure_ascii=False, indent=2))}</pre>'
@@ -116,7 +119,7 @@ def _example(ex: dict | None, note: str) -> str:
     return out + f'<div class="exlabel">Réponse</div><pre>{e(resp)}</pre></details>'
 
 
-def _tool(tool, kind: str, examples: dict, note: str, child: str = "") -> str:
+def _tool(tool, kind: str, examples: dict, note: str, child: str = "", agent: str = "") -> str:
     props = tool.input_schema.get("properties", {})
     req = set(tool.input_schema.get("required", []))
     params = ('<ul class="params">' + "".join(_param(n, s, n in req) for n, s in props.items()) + "</ul>"
@@ -125,7 +128,8 @@ def _tool(tool, kind: str, examples: dict, note: str, child: str = "") -> str:
     return (f'<li class="node {kind}"><details{" open" if kind == "delegate" else ""}><summary>'
             f'<span class="badge {kind}">{badge}</span><code class="tname">{e(tool.name)}</code></summary>'
             f'<div class="body"><p class="desc">{e(tool.description)}</p>{params}'
-            f'{_example(examples.get(tool.name), note)}</div></details>{child}</li>')
+            f'{_example(examples.get(f"{agent}.{tool.name}") or examples.get(tool.name), note)}'
+            f'</div></details>{child}</li>')
 
 
 def _agent(agent, examples: dict, note: str, subagents: dict, open_: bool = False) -> str:
@@ -134,9 +138,9 @@ def _agent(agent, examples: dict, note: str, subagents: dict, open_: bool = Fals
         sub = t.name.removeprefix("ask_")
         if sub in subagents:
             child = '<ul class="tree">' + _agent(subagents[sub], examples, note, {}) + "</ul>"
-            items.append(_tool(t, "delegate", examples, note, child))
+            items.append(_tool(t, "delegate", examples, note, child, agent.name))
         else:
-            items.append(_tool(t, "tool", examples, note))
+            items.append(_tool(t, "tool", examples, note, agent=agent.name))
     meta = f"{agent.model} · {agent.max_turns} tours max · {len(agent.tools)} outils"
     return (f'<li class="node agent"><details{" open" if open_ else ""}><summary><span class="badge agent">agent</span>'
             f'<span class="aname">{e(agent.name)}</span><span class="meta">{e(meta)}</span></summary>'
@@ -144,12 +148,17 @@ def _agent(agent, examples: dict, note: str, subagents: dict, open_: bool = Fals
             f'<ul class="tree">{"".join(items)}</ul></details></li>')
 
 
-def render(examples: dict, note: str) -> str:
+def _agents() -> list:
+    """L'orchestrateur puis ses trois sous-agents, construits comme pour un run."""
     lab = Lab()
-    root = orchestrator.make(lab, _Session())
-    subs = {name: mod.make(lab) for name, mod in (("dataset_builder", orchestrator.dataset_builder),
-                                                  ("model_researcher", orchestrator.model_researcher),
-                                                  ("evaluator", orchestrator.evaluator))}
+    return [orchestrator.make(lab, _Session()),
+            *(mod.make(lab) for mod in (orchestrator.dataset_builder, orchestrator.model_researcher,
+                                        orchestrator.evaluator))]
+
+
+def render(examples: dict, note: str) -> str:
+    root, *sub = _agents()
+    subs = {a.name: a for a in sub}
     return f"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agents et outils</title><style>{CSS}</style></head>
@@ -168,13 +177,43 @@ document.getElementById('close').onclick=()=>document.querySelectorAll('details'
 """
 
 
+def examples_from_run(run_dir: Path) -> dict:
+    """Premier appel réussi de chaque outil, par agent, dans le journal d'un run
+    (runs/<NNN>_…/pipeline.json) : appel et réponse réels, tels que l'agent les a reçus. Clés
+    « agent.outil » (un même outil, comme dataset_info, ne renvoie pas la même chose à chaque agent)."""
+    log = json.loads((run_dir / "pipeline.json").read_text(encoding="utf-8"))
+    out = {}
+    for s in log["steps"]:
+        key = f"{s['agent']}.{s.get('tool')}"
+        if s["type"] != "tool" or key in out or s["error"]:
+            continue
+        result = s["result"]
+        if isinstance(result, dict) and "error" in result:
+            continue  # refus d'un outil (budget épuisé…) : on attend un appel abouti
+        call = json.loads(s["input"]) if isinstance(s["input"], str) else s["input"]
+        out[key] = {"call": call or None,
+                          "response": "\n".join(result) if isinstance(result, list) else result,
+                          "note": f"Appel et réponse réels (run {run_dir.name.split('_')[0]} du "
+                                  f"{s['time'][8:10]}/{s['time'][5:7]}/{s['time'][:4]}, agent {s['agent']})."}
+    return out
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="utils/agents_tree.py")
+    p.add_argument("--from-run", type=Path, help="tire les exemples du journal de ce run (runs/<NNN>_…)")
     p.add_argument("--examples", type=Path, help="exemples d'appels et de réponses par outil (JSON)")
     p.add_argument("--examples-note", default="", help="d'où viennent les exemples")
     p.add_argument("--out", type=Path, default=HERE / "agents_tree.html")
     a = p.parse_args()
     examples = json.loads(a.examples.read_text(encoding="utf-8")) if a.examples else {}
+    if a.from_run:
+        examples.update(examples_from_run(a.from_run))
+        # outils sans appel dans ce run : dit-le plutôt que de montrer un exemple d'ailleurs
+        run = a.from_run.name.split("_")[0]
+        for agent in _agents():
+            for t in agent.tools:
+                examples.setdefault(f"{agent.name}.{t.name}",
+                                    {"missing": f"Pas d'exemple : outil non appelé pendant le run {run}."})
     a.out.write_text(render(examples, a.examples_note), encoding="utf-8")
     print(a.out)
 
