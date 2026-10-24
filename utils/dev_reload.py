@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WATCH = ["interface", "utils", "agents", "model_training_pipeline", "00_edit_generator"]
+WATCH = ["interface", "utils", "agents", "model_training_pipeline", "00_video_source"]
 POLL_S = 0.7
 BOOT = time.time()
 

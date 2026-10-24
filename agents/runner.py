@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from edit_generator.config import ROOT
+from video_source.config import ROOT
 
 RUNS_DIR = ROOT / "runs"
 

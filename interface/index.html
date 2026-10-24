@@ -166,8 +166,10 @@ button:hover { border-color: var(--muted); }
 <script>
 const $ = (id) => document.getElementById(id);
 let model = null, data = null, threshold = 0.5, filter = "all", cur = -1, labels = null;
-// Étiquette retenue d'une image : la correction manuelle si elle existe, sinon celle du LLM.
+// Étiquette retenue d'une image : la correction manuelle si elle existe, sinon celle des annotateurs
+// (null : désaccord des annotateurs, image non comptée dans la comparaison).
 const truth = (i) => labels && (labels.frames[i].manuel ?? labels.frames[i].ajout);
+const known = (i) => labels && i < labels.frames.length && truth(i) !== null;
 
 const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 const pct = (x) => `${Math.round(x * 1000) / 10} %`;
@@ -251,7 +253,7 @@ async function annotate() {
   const st = $("annot-status"), btn = $("annot-btn");
   btn.disabled = true;
   st.className = "";
-  st.innerHTML = `<span class="spinner"></span>Annotation des ${data.frames.length} images par Mistral Large 4…`;
+  st.innerHTML = `<span class="spinner"></span>Annotation des ${data.frames.length} images par les 3 LLM annotateurs…`;
   try {
     const r = await fetch("/api/annotate", { method: "POST", body: JSON.stringify({ job: data.job }) });
     const j = await r.json();
@@ -298,11 +300,12 @@ function render() {
 
   // Comparaison aux étiquettes, au seuil courant (images annotées seulement).
   const n_lab = labels ? labels.frames.length : 0;
-  const err = frames.map((f, i) => i >= n_lab ? "" : truth(i) && !on[i] ? "miss" : !truth(i) && on[i] ? "fa" : "");
+  const err = frames.map((f, i) => !known(i) ? "" : truth(i) && !on[i] ? "miss" : !truth(i) && on[i] ? "fa" : "");
   if (labels) {
-    $("truth").querySelectorAll(".c").forEach((c, i) => c.classList.toggle("on", i < n_lab && truth(i)));
+    $("truth").querySelectorAll(".c").forEach((c, i) => c.classList.toggle("on", i < n_lab && truth(i) === true));
     let tp = 0, fp = 0, fn = 0;
     for (let i = 0; i < n_lab; i++) {
+      if (!known(i)) continue;
       if (on[i] && truth(i)) tp++; else if (on[i]) fp++; else if (truth(i)) fn++;
     }
     $("c-recall").textContent = tp + fn ? pct(tp / (tp + fn)) : "–";
@@ -330,7 +333,7 @@ function render() {
     let ref = "";
     if (labels && i < n_lab) {
       const l = labels.frames[i], who = l.manuel === null ? "LLM" : "corrigé";
-      const what = truth(i) ? `ajout${l.manuel === null && l.types.length ? ` (${l.types.join(", ")})` : ""}` : "rien";
+      const what = truth(i) === null ? "désaccord" : truth(i) ? `ajout${l.manuel === null && l.types.length ? ` (${l.types.join(", ")})` : ""}` : "rien";
       ref = `<div class="ref" title="${(l.description || "").replace(/"/g, "&quot;")}"><span>${who} : ${what}</span>
         <button data-fix="${i}">corriger</button></div>`;
     }

@@ -6,10 +6,9 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-DATA_DIR = Path(os.getenv("EDIT_GENERATOR_DATA_DIR", ROOT / "data"))
-CACHE_DIR = DATA_DIR / "cache"
+DATA_DIR = Path(os.getenv("VIDEO_SOURCE_DATA_DIR", ROOT / "data"))
 SAMPLES_DIR = DATA_DIR / "videos_samples"
-ASSETS_DIR = ROOT / "assets"
+FRAMES_DIR = DATA_DIR / "videos_samples_frames"  # images extraites et embeddings (model_training_pipeline)
 
 
 def ffmpeg_bin() -> str:

@@ -1,112 +1,55 @@
-"""Annotation d'images de vraies vidéos par un LLM de vision (Mistral), pour mesurer le modèle sur
-du réel. Les étiquettes servent à l'évaluation seulement, jamais à l'entraînement.
+"""Annotation d'images de vraies vidéos envoyées dans l'interface, par les trois LLM annotateurs
+du dataset (video_source.annotators : une image n'a d'étiquette que s'ils sont tous d'accord), pour
+mesurer le modèle sur une vidéo choisie. Ces étiquettes servent à l'évaluation seulement : le
+dataset d'entraînement est collecté par model_training_pipeline (generate_data).
 
 Une vidéo annotée est rangée dans data/real_videos/<id>/ : video.*, frames/, labels.json (étiquette
-du LLM et correction manuelle éventuelle de chaque image) et preds.json (notes du modèle).
-Le banc utils/llm_bench compare plusieurs modèles Mistral sur cette même annotation.
+des annotateurs et correction manuelle éventuelle de chaque image) et preds.json (notes du modèle).
+Le banc utils/llm_bench compare les modèles candidats sur cette même annotation.
 """
 
-import base64
-import io
 import json
-import os
 import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from PIL import Image
-
-from agents.runner import LARGE, PRICES, _tokens
-from edit_generator.config import DATA_DIR
+from video_source import annotators
+from video_source.config import DATA_DIR
 
 REAL_DIR = DATA_DIR / "real_videos"
-MODEL = LARGE
-BATCH = 6  # images par requête
-MAX_SIDE = 768  # plus grand côté envoyé ; le nombre de tokens d'une image suit son nombre de pixels
+MODEL = "accord de " + ", ".join(annotators.ANNOTATORS)
 MAX_USD = 0.50  # plafond par vidéo : l'annotation s'arrête avant de le dépasser
-
-PROMPT = """Tu annotes des images extraites de vidéos pour entraîner un détecteur d'ajouts de montage.
-
-Un ajout de montage est un élément graphique posé PAR-DESSUS l'image en post-production : texte \
-incrusté (mot-clé, titre, question, sous-titre), bandeau nom/fonction (lower third), image ou photo \
-incrustée, forme ou pictogramme, carton plein écran, logo ou filigrane de chaîne ou de marque, \
-compteur, flèche, émoji. Ce n'est PAS un ajout : ce qui fait partie de la scène filmée (enseigne, \
-affiche, écran, texte sur un vêtement ou un objet, panneau), même si c'est du texte.
-
-Pour chaque image, dans l'ordre, réponds uniquement par un objet JSON de la forme :
-{"images": [{"id": <numéro de l'image>, "ajout": true|false, "types": ["mot-clé" | "titre" | \
-"question" | "sous-titre" | "bandeau" | "image" | "forme" | "carton" | "logo" | "autre"], \
-"description": "<court>"}]}
-"types" est vide quand "ajout" vaut false. Dans le doute sur un élément très petit ou à moitié \
-visible, décris-le et tranche."""
+WORKERS = 8  # images annotées en parallèle
 
 
-def _data_url(path: Path, max_side: int) -> str:
-    img = Image.open(path).convert("RGB")
-    img.thumbnail((max_side, max_side))
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=85)
-    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-
-
-def _client():
-    from mistralai.client import Mistral
-    return Mistral(api_key=os.environ["MISTRAL_API_KEY"])
-
-
-def cost(model: str, tokens: dict) -> float | None:
-    """Coût en $ d'après les tarifs connus (agents.runner.PRICES) ; None si le modèle n'y est pas."""
-    p = PRICES.get(model)
-    if p is None:
-        return None
-    fresh = tokens["input"] - tokens["cached_input"]
-    return (fresh * p["input"] + tokens["cached_input"] * p.get("cached_input", p["input"])
-            + tokens["output"] * p["output"]) / 1e6
-
-
-def annotate(images: list[dict], client=None, max_usd: float | None = MAX_USD, model: str = MODEL,
-             max_side: int = MAX_SIDE, reasoning: str | None = None, batch: int = BATCH) -> dict:
-    """images : [{"id": int, "path": Path}] ; renvoie les étiquettes dans le même ordre, avec les
-    tokens consommés, le coût (si le tarif du modèle est connu) et la durée."""
-    client = client or _client()
-    labels, spent, last = [], 0.0, 0.0
-    tokens = {"input": 0, "cached_input": 0, "output": 0}
+def annotate(images: list[dict], apis: dict | None = None, max_usd: float | None = MAX_USD) -> dict:
+    """images : [{"id": int, "path": Path}] ; renvoie les étiquettes dans le même ordre (ajout :
+    True / False, None en cas de désaccord des annotateurs), le coût et la durée."""
+    apis = apis if apis is not None else {}
+    labels, spent = [], 0.0
     t0 = time.perf_counter()
-    for i in range(0, len(images), batch):
-        if max_usd is not None and spent + last > max_usd:  # le prochain lot coûterait autant que le dernier
-            break
-        chunk = images[i:i + batch]
-        content = [{"type": "text", "text": PROMPT}]
-        for im in chunk:
-            content += [{"type": "text", "text": f"Image n°{im['id']}"},
-                        {"type": "image_url", "image_url": _data_url(im["path"], max_side)}]
-        kw = {} if reasoning is None else {"reasoning_effort": reasoning}
-        r = client.chat.complete(model=model, messages=[{"role": "user", "content": content}],
-                                 response_format={"type": "json_object"}, max_tokens=4000, **kw)
-        used = _tokens(r.usage)
-        for k in tokens:
-            tokens[k] += used[k]
-        last = cost(model, used) or 0.0
-        spent += last
-        try:
-            answer = json.loads(r.choices[0].message.content).get("images", [])
-        except (json.JSONDecodeError, AttributeError):
-            answer = []
-        got = {str(x.get("id")): x for x in answer if isinstance(x, dict)}
-        for im in chunk:
-            x = got.get(str(im["id"]), {})
-            labels.append({"id": im["id"], "ajout": bool(x.get("ajout")), "types": x.get("types") or [],
-                           "description": x.get("description", ""), "manquant": not x})
-    return {"labels": labels, "model": model, "tokens": tokens, "cost_usd": round(cost(model, tokens), 4)
-            if model in PRICES else None, "duration_s": round(time.perf_counter() - t0, 1),
-            "complete": len(labels) == len(images)}
+    with ThreadPoolExecutor(WORKERS) as pool:
+        for i in range(0, len(images), WORKERS):
+            chunk = images[i:i + WORKERS]
+            # le prochain lot coûterait à peu près autant par image que les précédents
+            if max_usd is not None and labels and spent + spent / len(labels) * len(chunk) > max_usd:
+                break
+            for im, v in zip(chunk, pool.map(lambda im: annotators.vote(im["path"], apis), chunk)):
+                spent += v["cost_usd"]
+                labels.append({"id": im["id"], "ajout": None if v["label"] is None else bool(v["label"]),
+                               "types": [], "manquant": False,
+                               "description": " · ".join(f"{m} : {'ajout' if a else 'rien' if a is False else '?'}"
+                                                         for m, a in v["votes"].items())})
+    return {"labels": labels, "model": MODEL, "cost_usd": round(spent, 4),
+            "duration_s": round(time.perf_counter() - t0, 1), "complete": len(labels) == len(images)}
 
 
-def annotate_video(result: dict, job: Path, client=None) -> dict:
+def annotate_video(result: dict, job: Path, apis: dict | None = None) -> dict:
     """Étiquettes des images d'une analyse de l'interface (result.json d'un job)."""
     frames = result["frames"]
     images = [{"id": i, "path": job / "frames" / f["url"].rsplit("/", 1)[1]} for i, f in enumerate(frames)]
-    out = annotate(images, client)
+    out = annotate(images, apis)
     for lab in out["labels"]:
         lab["t"] = frames[lab.pop("id")]["t"]
     return out
@@ -129,7 +72,7 @@ def save(job: Path, result: dict, annotation: dict) -> Path:
 
 
 def set_manual(job_id: str, i: int, value: bool | None) -> dict:
-    """Correction manuelle de l'image i (None = revenir à l'étiquette du LLM)."""
+    """Correction manuelle de l'image i (None = revenir à l'étiquette des annotateurs)."""
     path = REAL_DIR / Path(job_id).name / "labels.json"
     labels = json.loads(path.read_text(encoding="utf-8"))
     labels["frames"][i]["manuel"] = value

@@ -1,18 +1,18 @@
-# edit_generator
+# Détecteur d'ajouts de montage
 
-Génère des vidéos annotées pour l'agent d'extraction : clips libres de droits + éléments de montage
-aléatoires (mots-clés, questions, sous-titres, bandeaux, images, formes) avec leur vérité terrain.
+Classifieur d'images : « cette image de vidéo contient-elle un ajout de montage (habillage, texte,
+sous-titres, image incrustée, logo…) ou est-elle brute de la caméra ? ». Il est entraîné sur de
+vraies vidéos YouTube, annotées image par image par trois LLM de vision.
 
-Sources (`00_edit_generator/sources.py`, choisies selon les clés présentes dans `.env`) :
-- vidéos : Pixabay (`PIXABAY_API_KEY`) ;
-- photos incrustées : Unsplash (`UNSPLASH_ACCESS_KEY`), sinon images synthétiques.
+## video_source : vraies vidéos et annotation
 
-Les réponses d'API sont mises en cache 24 h dans `data/cache/api/` (exigé par Pixabay, utile pour le
-quota Unsplash de 50 req/h).
-Les quotas sont suivis par `00_edit_generator/ratelimit.py` (état persisté dans `data/cache/api/`) :
-Pixabay attend jusqu'à 90 s puis réessaie ; Unsplash n'attend pas (photos en cache ou
-synthétiques). Une génération s'interrompt après 3 échecs de quota d'affilée, et seules les
-vidéos réussies consomment le budget. `dataset_info` expose l'état (`quotas_api`).
+- `00_video_source/youtube.py` : recherche et téléchargement YouTube avec yt-dlp (aucune clé). Une
+  vidéo n'est prise qu'une fois, 5 min au plus, image seule en ≤ 720p ; portrait = Shorts. Sortie :
+  `data/videos_samples/yt_<id>/video.*` + `meta.json` (titre, chaîne, url, requête, dimensions).
+- `00_video_source/annotators.py` : une requête par image, réponse `{"ajout": true|false}`. Le
+  dataset est annoté par `gpt-6-luna`, `gpt-5.6-luna` et `zai-glm-5-3-flash` (les meilleurs du banc
+  `utils/llm_bench`) : une image n'a d'étiquette que s'ils sont **tous d'accord**, sinon elle est
+  écartée (ni entraînée ni mesurée), sans revue manuelle. Votes dans `votes.json` à côté de la vidéo.
 
 ## Installation
 
@@ -23,43 +23,39 @@ cp .env.example .env                        # puis renseigner les clés
 ```
 
 ffmpeg est fourni par `imageio-ffmpeg` (aucune installation système).
-Sur un serveur sans polices, déposer des `.ttf` dans `assets/fonts/`.
 
 ## Utilisation
 
 ```bash
-edit_generator generate --n 20 --seed 0 --preview            # requêtes aléatoires
-edit_generator generate --n 5 --query pasta --orientation portrait
-edit_generator generate --local-video clip.mp4 --seed 1      # sans banque de vidéos
-edit_generator preview data/videos_samples/s000000                  # planche avec les bbox
+video_source collect --query "recette pâtes rapide" --n 5                # téléchargement seul (gratuit)
+video_source collect --query "vlog voyage" --n 3 --orientation portrait
+python -m model_training_pipeline annotate --max-usd 0.50              # vote des 3 LLM (payant)
+video_source preview data/videos_samples/yt_<id>                        # planche avec les étiquettes
 ```
-
-Sortie : `data/videos_samples/s<seed>/video.mp4` + `annotations.json` (format décrit dans
-`00_edit_generator/annotations.py`, avec `bbox_at(el, t)` / `opacity_at(el, t)` pour les animations).
 
 ## model_training_pipeline : classifieur « la frame contient un ajout de montage »
 
 ```bash
-python -m model_training_pipeline frames    # frames à 1 fps + labels (data/videos_samples_frames/index.jsonl)
+python -m model_training_pipeline frames    # frames à 1 fps + index (data/videos_samples_frames/index.jsonl), sans appel payant
 python -m model_training_pipeline info      # état du dataset
 ```
 
-Cible binaire `label_any` (au moins un ajout visible sur l'image).
-Split train/val/test par rush brut (pas de fuite entre échantillons tirés du même rush).
+Cible binaire `label_any` (au moins un ajout visible sur l'image), `null` sans accord des annotateurs.
+Split train/val/test par chaîne YouTube (une chaîne garde son habillage d'une vidéo à l'autre).
 Métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val et
 appliqué tel quel sur test ; AUC et AP en repères (`model_training_pipeline/metrics.py`).
 
 ## Agents : pipeline de création du classifieur
 
 ```
-Orchestrateur ──► Dataset Builder   (génère données + annotations)
+Orchestrateur ──► Dataset Builder   (collecte vidéos YouTube + annotation par 3 LLM)
       │      ──► Model Researcher  (entraîne, expérimente sur val)
       │      ──► Evaluator         (mesure, analyse les erreurs, test final)
       └──◄── rapports des agents : décide du cycle suivant
 ```
 
 ```bash
-python -m agents --budget-usd 1.00 --data-budget 250 --final-tests 2   # appels API payants
+python -m agents --budget-usd 1.00 --annotation-usd 2.00 --data-budget 250 --final-tests 2   # appels API payants
 ```
 
 Organisation :
@@ -73,9 +69,10 @@ Organisation :
   se termine par une « Vérification automatique » (outils réellement appelés, échecs) écrite par
   le code, pour que l'orchestrateur ne croie pas un rapport inventé ;
 - `agents/<agent>.py` : prompt + sous-ensemble d'outils du lab propres à chaque agent ;
-  le Dataset Builder génère sans se soucier des splits, le Model Researcher découpe le dataset en
+  le Dataset Builder collecte sans se soucier des splits (`generate_data` : recherche YouTube,
+  téléchargement, annotation dans la limite de `--annotation-usd`), le Model Researcher découpe le dataset en
   splits train/val/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
-  rush brut, stratifiés par défaut sur type, orientation et clips vides ;
+  chaîne YouTube, stratifiés par défaut sur orientation et vidéos sans ajout ;
   l'ancien découpage `hash`, non figé, est refusé). Le test est figé au premier split
   (`data/splits/test_set.json`) : les splits suivants ne redécoupent que train/val. Le Dataset
   Builder ne fait qu'ajouter des données ; le Model Researcher peut exclure un clip défectueux
@@ -92,4 +89,4 @@ Organisation :
 Journaux : `runs/<NNN>_<horodatage>/pipeline.json` (toutes les étapes de tous les agents, dans
 l'ordre, réécrit à chaque étape) + `report.md`. Expériences :
 `model_results/` (un dossier `<exp_id>/` par entraînement, `production.json`). Historique des
-générations de vidéos : `data/data_requests.jsonl`.
+collectes de vidéos : `data/data_requests.jsonl`.

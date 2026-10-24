@@ -1,27 +1,33 @@
-"""Construit le dataset de frames étiquetées à partir des échantillons edit_generator.
+"""Construit le dataset de frames étiquetées à partir des vraies vidéos de video_source.
+
+Les images sont extraites à FPS par seconde, puis chacune est soumise aux trois LLM
+d'annotators.ANNOTATORS (annotate, appels payants) ; les votes sont gardés dans votes.json à côté
+de la vidéo. build() ne fait aucun appel payant : il relit les votes.
 
 Chaque ligne de index.jsonl :
-  frame, sample_id, t, source (rush brut : le split se fait par rush, voir lab.make_split),
-  visible      : ids des éléments visibles sur l'image
-  label_any    : 1 si au moins un élément visible (la cible du classifieur)
+  frame, sample_id, t, source (chaîne YouTube : le split se fait par chaîne, voir lab.make_split),
+  label_any    : 1 / 0 si les trois LLM sont d'accord (ajout de montage ou image brute),
+                 None en cas de désaccord ou d'image pas encore annotée (jamais utilisée pour
+                 entraîner ni mesurer, mais gardée pour la composante temporelle)
 """
 
 import json
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from edit_generator import annotations
-from edit_generator.config import DATA_DIR, SAMPLES_DIR, ffmpeg_bin
-
-FRAMES_DIR = DATA_DIR / "videos_samples_frames"
+from video_source import annotators
+from video_source.config import FRAMES_DIR, SAMPLES_DIR, ffmpeg_bin
+from video_source.youtube import load_meta
 
 FPS = 1.0  # frames extraites par seconde de vidéo
+LONG_SIDE = 640
+WORKERS = 8  # images annotées en parallèle
 
 
-def source_key(ann: dict) -> str:
-    s = ann["source"]
-    return f"{s['kind']}:{s.get('video_id') or s.get('path')}"
+def source_key(meta: dict) -> str:
+    return f"youtube:{meta['channel_id']}"
 
 
 # Version de l'extraction, notée dans img/<sample_id>/.extraction : des frames extraites par une
@@ -32,9 +38,8 @@ EXTRACTION = "fps-round-up"
 def extract(video: Path, out_dir: Path, fps: float, long_side: int) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     scale = f"scale='if(gt(iw,ih),{long_side},-2)':'if(gt(iw,ih),-2,{long_side})'"
-    # round=up : la frame i est celle de l'instant i/fps, celui où on calcule son label. Avec le
-    # défaut (round=near), ffmpeg prend la frame ~0,5 s plus tard : 7,5 % de labels faux près des
-    # apparitions/disparitions d'ajouts (constaté sur s000013, octobre 2026).
+    # round=up : la frame i est celle de l'instant i/fps. Avec le défaut (round=near), ffmpeg prend
+    # la frame ~0,5 s plus tard (constaté sur les vidéos générées, octobre 2026).
     cmd = [ffmpeg_bin(), "-y", "-hide_banner", "-loglevel", "error", "-i", str(video),
            "-vf", f"fps={fps}:round=up,{scale}", "-q:v", "3", str(out_dir / "%05d.jpg")]
     subprocess.run(cmd, check=True)
@@ -54,34 +59,67 @@ def _drop(out_dir: Path, sample_id: str) -> None:
         f.unlink()
 
 
-def label(ann: dict, t: float) -> dict:
-    # Sans animation, un ajout est à opacité 0 ou 1 ; le seuil ne joue que si on réactive les fondus.
-    visible = [el["id"] for el in ann["elements"] if annotations.opacity_at(el, t) >= 0.5]
-    return {"visible": visible, "label_any": int(bool(visible))}
+def frames_of(sdir: Path, out_dir: Path = FRAMES_DIR, fps: float = FPS, long_side: int = LONG_SIDE) -> list[Path]:
+    """Images extraites de la vidéo (extraites au besoin)."""
+    meta = load_meta(sdir)
+    frames_dir = Path(out_dir) / "img" / meta["sample_id"]
+    if _stale(frames_dir):
+        _drop(Path(out_dir), meta["sample_id"])
+    frames = sorted(frames_dir.glob("*.jpg")) if frames_dir.exists() else []
+    return frames or extract(sdir / meta["video"]["file"], frames_dir, fps, long_side)
+
+
+def load_votes(sdir: Path) -> dict:
+    path = Path(sdir) / "votes.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"frames": {}, "cost_usd": 0.0}
+
+
+def annotate(sdir: Path, max_usd: float | None = None, apis: dict | None = None,
+             out_dir: Path = FRAMES_DIR) -> dict:
+    """Fait voter les annotateurs sur les images pas encore annotées de la vidéo (appels payants).
+    S'arrête avant de dépasser max_usd ; reprend là où il s'était arrêté. Renvoie le bilan."""
+    sdir = Path(sdir)
+    votes = load_votes(sdir)
+    todo = [f for f in frames_of(sdir, out_dir) if f.name not in votes["frames"]]
+    apis = apis if apis is not None else {}
+    spent, done, stopped = 0.0, 0, False
+    with ThreadPoolExecutor(WORKERS) as pool:
+        for i in range(0, len(todo), WORKERS):
+            chunk = todo[i:i + WORKERS]
+            # le prochain lot coûterait à peu près autant par image que les précédents
+            if max_usd is not None and done and spent + spent / done * len(chunk) > max_usd:
+                stopped = True
+                break
+            for f, v in zip(chunk, pool.map(lambda f: annotators.vote(f, apis), chunk)):
+                votes["frames"][f.name] = {"votes": v["votes"], "label": v["label"]}
+                votes["cost_usd"] += v["cost_usd"]
+                spent += v["cost_usd"]
+            done += len(chunk)
+            # écrit après chaque lot : une annotation interrompue reprend là où elle s'est arrêtée
+            (sdir / "votes.json").write_text(json.dumps(votes, ensure_ascii=False), encoding="utf-8")
+    labels = [v["label"] for v in votes["frames"].values()]
+    return {"sample_id": sdir.name, "images_annotees": len(labels), "cost_usd": round(spent, 4),
+            "images_avec_accord": sum(lab is not None for lab in labels),
+            "images_restantes": len(todo) - done, "arret_budget": stopped}
 
 
 def build(samples_dir: Path = SAMPLES_DIR, out_dir: Path = FRAMES_DIR, fps: float = FPS,
-          long_side: int = 640) -> Path:
+          long_side: int = LONG_SIDE) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
-    for sdir in sorted(Path(samples_dir).glob("s*")):
-        if not (sdir / "annotations.json").exists():
+    for sdir in sorted(Path(samples_dir).glob("yt_*")):
+        if not (sdir / "meta.json").exists():
             continue
-        ann = annotations.load(sdir)
-        key = source_key(ann)
-        frames_dir = out_dir / "img" / ann["sample_id"]
-        if _stale(frames_dir):
-            _drop(out_dir, ann["sample_id"])
-        frames = sorted(frames_dir.glob("*.jpg")) if frames_dir.exists() else []
-        if not frames:
-            frames = extract(sdir / ann["video"]["file"], frames_dir, fps, long_side)
-        for i, f in enumerate(frames):
+        meta = load_meta(sdir)
+        votes = load_votes(sdir)["frames"]
+        for i, f in enumerate(frames_of(sdir, out_dir, fps, long_side)):
             t = round(i / fps, 3)
-            if t >= ann["video"]["duration"]:
+            if meta["video"]["duration"] and t >= meta["video"]["duration"]:
                 break
             rows.append({"frame": str(f.relative_to(out_dir)).replace("\\", "/"),
-                         "sample_id": ann["sample_id"], "t": t, "source": key, **label(ann, t)})
+                         "sample_id": meta["sample_id"], "t": t, "source": source_key(meta),
+                         "label_any": votes.get(f.name, {}).get("label")})
     index = out_dir / "index.jsonl"
     with open(index, "w", encoding="utf-8") as fh:
         for r in rows:

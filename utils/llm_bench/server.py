@@ -11,8 +11,6 @@ fournisseur (clés MISTRAL_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY du .env).
 """
 
 import argparse
-import base64
-import io
 import json
 import os
 import subprocess
@@ -24,87 +22,17 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from dotenv import load_dotenv
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
 from utils import dev_reload  # noqa: E402
+from video_source.annotators import (KEYS, MODELS, PROMPT, PROVIDER, REASONING, ask, client,  # noqa: E402
+                                     parse, refuses_reasoning)
+from video_source.annotators import cost as _cost  # noqa: E402
 
-load_dotenv(ROOT / ".env")
 VIDEOS = HERE / "_videos"
-
-# Modèles comparés (docs.mistral.ai/models, developers.openai.com/api/docs/pricing,
-# platform.claude.com, octobre 2026) : identifiant d'API, nom, lecture d'images, tarif en $ par
-# million de tokens, fournisseur.
-MODELS = [
-    ("mistral-large-4-0", "Mistral Large 4", True, {"input": 1.36, "cached_input": 0.14, "output": 4.18}, "mistral"),
-    ("mistral-large-2512", "Mistral Large 3", True, {"input": 0.50, "output": 1.50}, "mistral"),
-    ("mistral-small-2603", "Mistral Small 4", True, {"input": 0.15, "output": 0.60}, "mistral"),
-    ("ministral-14b-2512", "Ministral 3 14B", True, {"input": 0.20, "output": 0.20}, "mistral"),
-    ("zai-glm-5-3-flash", "Z.ai GLM 5.3 Flash", True, {"input": 0.15, "cached_input": 0.03, "output": 0.50}, "mistral"),
-    ("gpt-6-luna", "GPT-6 Luna", True, {"input": 0.10, "cached_input": 0.01, "output": 0.50}, "openai"),
-    ("gpt-5.6-luna", "GPT-5.6 Luna", True, {"input": 0.20, "cached_input": 0.02, "output": 1.20}, "openai"),
-    ("claude-haiku-5-5", "Claude Haiku 5.5", True, {"input": 0.10, "output": 0.50}, "anthropic"),
-]
-PRICES = {m[0]: m[3] for m in MODELS}
-PROVIDER = {m[0]: m[4] for m in MODELS}
-KEYS = {"mistral": "MISTRAL_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
-REASONING = "medium"  # même effort de raisonnement pour tous les modèles qui raisonnent
-
-PROMPT = """Dis si cette image est brute de la caméra ou non.
-Réponds true dès que quelque chose a été ajouté au montage : habillage, texte, titre, sous-titres,
-photo ou image incrustée, logo, cadre, effet graphique ou tout autre élément qui ne vient pas de la caméra.
-Réponds false seulement si l'image est telle que la caméra l'a filmée.
-Réponds uniquement en JSON : {"ajout": true|false}"""
-
-
-def client(provider: str):
-    key = os.environ.get(KEYS[provider])
-    if not key:
-        raise ValueError(f"{KEYS[provider]} absente du .env : impossible d'interroger {provider}")
-    if provider == "openai":
-        from openai import OpenAI
-        return OpenAI(api_key=key)
-    if provider == "anthropic":
-        from anthropic import Anthropic
-        return Anthropic(api_key=key)
-    from mistralai.client import Mistral
-    return Mistral(api_key=key)
-
-
-def _ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: str | None) -> tuple[str, dict]:
-    """Une requête (consigne + une image) ; renvoie le texte de la réponse et les tokens consommés.
-    reasoning=None : sans effort de raisonnement imposé."""
-    url = _data_url(path, max_side)
-    if provider == "anthropic":
-        # Pas de fallbacks : on compare des modèles, la réponse doit venir du modèle demandé.
-        r = api.messages.create(
-            model=model, max_tokens=8000,
-            messages=[{"role": "user", "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
-                                             "data": url.split(",", 1)[1]}},
-                {"type": "text", "text": PROMPT}]}],
-            output_config={"format": {"type": "json_schema", "schema": {
-                "type": "object", "properties": {"ajout": {"type": "boolean"}},
-                "required": ["ajout"], "additionalProperties": False}},
-                **({"effort": reasoning} if reasoning else {})})
-        u = r.usage
-        cached, created = u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0
-        text = "" if r.stop_reason == "refusal" else "".join(b.text for b in r.content if b.type == "text")
-        return text, {"input": u.input_tokens + cached + created, "cached_input": cached, "output": u.output_tokens}
-    if provider == "openai":
-        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": {"url": url}}]
-        req = {"model": model, "messages": [{"role": "user", "content": content}],
-               "response_format": {"type": "json_object"}, "max_completion_tokens": 8000}
-        r = api.chat.completions.create(**req, **({"reasoning_effort": reasoning} if reasoning else {}))
-    else:
-        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": url}]
-        req = {"model": model, "messages": [{"role": "user", "content": content}],
-               "response_format": {"type": "json_object"}, "max_tokens": 8000}
-        r = api.chat.complete(**req, **({"reasoning_effort": reasoning} if reasoning else {}))
-    return _text(r.choices[0].message.content), _usage(r.usage)
 
 
 def extract(video: Path, out: Path) -> list[Path]:
@@ -121,36 +49,6 @@ def frames_of(vid: str) -> list[dict]:
     d = VIDEOS / Path(vid).name / "frames"
     return [{"i": i, "t": i, "url": f"/_videos/{d.parent.name}/frames/{p.name}"}
             for i, p in enumerate(sorted(d.glob("*.jpg")))]
-
-
-def _data_url(path: Path, max_side: int) -> str:
-    img = Image.open(path).convert("RGB")
-    img.thumbnail((max_side, max_side))
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=85)
-    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-
-
-def _cost(model: str, tokens: dict) -> float:
-    p = PRICES[model]
-    fresh = tokens["input"] - tokens["cached_input"]
-    return (fresh * p["input"] + tokens["cached_input"] * p.get("cached_input", p["input"])
-            + tokens["output"] * p["output"]) / 1e6
-
-
-def _text(content) -> str:
-    """Texte de la réponse : avec le raisonnement, content est une liste de morceaux (réflexion puis
-    texte) ; on ne garde que le texte."""
-    if isinstance(content, str):
-        return content
-    get = lambda c, k: c.get(k) if isinstance(c, dict) else getattr(c, k, None)  # noqa: E731
-    return "".join(get(c, "text") or "" for c in content or [] if get(c, "type") == "text")
-
-
-def _usage(u) -> dict:
-    details = getattr(u, "prompt_tokens_details", None)
-    cached = (details.get("cached_tokens") if isinstance(details, dict) else getattr(details, "cached_tokens", 0)) or 0
-    return {"input": u.prompt_tokens or 0, "cached_input": cached, "output": u.completion_tokens or 0}
 
 
 def run(cfg: dict, api=None) -> dict:
@@ -171,23 +69,19 @@ def run(cfg: dict, api=None) -> dict:
         if spent + last > max_usd:  # la prochaine image coûterait à peu près autant que la dernière
             break
         try:
-            text, used = _ask(provider, api, model, path, max_side, reasoning)
+            text, used = ask(provider, api, model, path, max_side, reasoning)
         except Exception as e:
-            if not reasoning or not any(w in str(e).lower() for w in ("reason", "effort")):
+            if not reasoning or not refuses_reasoning(e):
                 raise
             reasoning, refus = None, str(e)[:300]  # refusé : on continue sans, et on garde la réponse de l'API
-            text, used = _ask(provider, api, model, path, max_side, None)
+            text, used = ask(provider, api, model, path, max_side, None)
         for k in tokens:
             tokens[k] += used[k]
         last = _cost(model, used)
         spent += last
         raw.append(text)
-        try:
-            answer = json.loads(text.strip().removeprefix("```json").removeprefix("```").removesuffix("```"))
-        except json.JSONDecodeError:
-            answer = None
-        ok = isinstance(answer, dict) and "ajout" in answer
-        labels.append({"i": i, "ajout": ok and bool(answer["ajout"]), "manquant": not ok})
+        answer = parse(text)
+        labels.append({"i": i, "ajout": bool(answer), "manquant": answer is None})
     config = {"max_side": max_side, "batch": 1, "max_usd": max_usd,
               "reasoning": reasoning or f"« {REASONING} » refusé, lancé sans", "refus_api": refus}
     rec = {"model": model, "config": config, "images_total": len(paths),

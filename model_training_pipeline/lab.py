@@ -3,13 +3,16 @@ opérations sur les données, les modèles et les évaluations, sans aucune dép
 Les agents (package agents/) n'exposent qu'un sous-ensemble de ces méthodes comme outils.
 
 Règles :
-- cible binaire label_any (au moins un ajout visible sur l'image) ;
+- données : vraies vidéos YouTube (video_source.youtube), une image par seconde ; cible binaire
+  label_any (au moins un ajout de montage sur l'image), donnée par l'accord unanime des trois LLM
+  d'annotators.ANNOTATORS. Une image sans accord n'est ni entraînée ni mesurée ;
 - métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val ;
-- la génération ignore les splits ; un split est un découpage train/val/test nommé et figé,
-  fait par rush brut (make_split, stockés dans data/splits/) : les vidéos générées après sa
-  création n'y entrent pas. Chaque expérience retient son split : on ne compare que des
-  expériences faites sur le même split. L'ancien découpage « hash » (hash du rush) n'est plus
-  utilisable : il grossissait à chaque génération, donc son val changeait sans changer de nom ;
+- la collecte (generate_data) ignore les splits ; un split est un découpage train/val/test nommé
+  et figé, fait par chaîne YouTube (make_split, stockés dans data/splits/) : une chaîne garde le
+  même habillage d'une vidéo à l'autre, elle ne doit pas être des deux côtés. Les vidéos collectées
+  après sa création n'y entrent pas. Chaque expérience retient son split : on ne compare que des
+  expériences faites sur le même split. L'ancien découpage « hash » n'est plus utilisable : il
+  grossissait à chaque collecte, donc son val changeait sans changer de nom ;
 - les décisions se prennent sur *val* ; *test* n'est accessible que par final_test, en
   nombre limité par session ;
 - chaque entraînement est enregistré dans model_results/<exp_id>/ (à la racine du projet).
@@ -23,7 +26,7 @@ import time
 from collections import Counter
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 from sklearn.decomposition import PCA
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -31,36 +34,32 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from edit_generator import annotations
-from edit_generator.config import DATA_DIR, ROOT, SAMPLES_DIR
-from edit_generator.generator import ELEMENT_TYPES
-from edit_generator.ratelimit import QuotaExceeded, api_quotas
+from video_source import youtube
+from video_source.config import DATA_DIR, ROOT, SAMPLES_DIR
 
 from . import metrics
 from .features import extraction_cost, get_features
-from .frames import FPS, FRAMES_DIR, build, load_index, source_key
+from .frames import FPS, FRAMES_DIR, annotate, build, frames_of, load_index, load_votes, source_key
 
 EXP_DIR = ROOT / "model_results"
-DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des générations, à côté des vidéos
+DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
 SPLITS_DIR = DATA_DIR / "splits"
-# Clips du test, figés au premier split : les splits suivants ne refont que train/val, et les
-# vidéos générées ensuite n'entrent jamais en test (le Model Researcher ne peut pas l'influencer).
+# Chaînes du test, figées au premier split : les splits suivants ne refont que train/val, et les
+# vidéos collectées ensuite n'entrent jamais en test (le Model Researcher ne peut pas l'influencer).
 TEST_SET = SPLITS_DIR / "test_set.json"
-# Clips retirés des splits créés ensuite (défaut de rendu, doublon) : exclude_clips, Model Researcher.
+# Clips retirés des splits créés ensuite (vidéo défectueuse, doublon) : exclude_clips, Model Researcher.
 EXCLUDED = DATA_DIR / "excluded.json"
 # Découpage d'avant make_split, non figé : refusé pour entraîner et tester.
 LEGACY_SPLIT = "hash"
 SPLITS = ("train", "val", "test")
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
-STRATIFY_KEYS = ("type", "orientation", "clip_vide")
+STRATIFY_KEYS = ("orientation", "clip_vide")
 MODELS = ("logreg", "mlp", "hgb")
 # Groupes d'images de train qu'on peut rééchantillonner (paramètre balance) ou pondérer (weights) :
-# un type d'élément = images positives dont tous les ajouts visibles sont de ce type ;
-# positif / negatif = images avec / sans ajout ; clip_vide = images des clips sans aucun ajout ;
-# orientation.
-BALANCE_GROUPS = (*ELEMENT_TYPES, "positif", "negatif", "clip_vide", "portrait", "paysage")
+# positif / negatif = images avec / sans ajout ; clip_vide = images des vidéos sans aucune image
+# avec ajout ; orientation.
+BALANCE_GROUPS = ("positif", "negatif", "clip_vide", "portrait", "paysage")
 MAX_FACTOR = 10  # facteur maximal de balance et de weights
-MAX_QUOTA_FAILURES = 3  # échecs de quota d'affilée avant d'interrompre une génération
 
 
 def _jsonable(o):
@@ -108,37 +107,29 @@ def _compact(e: dict, errors: dict | None = None) -> dict:
     return out
 
 
-def _area_bucket(a: float) -> str:
-    return "<1%" if a < 0.01 else "1-3%" if a < 0.03 else "3-8%" if a < 0.08 else ">8%"
+def _orient(meta: dict) -> str:
+    return "portrait" if meta["video"]["height"] > meta["video"]["width"] else "paysage"
 
 
-def _has_box(el: dict) -> bool:
-    """L'élément est posé sur un fond (encadré de texte, bandeau, carton plein écran)."""
-    return bool(el["style"].get("box") or el["type"] == "lower_third")
-
-
-def _orient(ann: dict) -> str:
-    return "portrait" if ann["video"]["height"] > ann["video"]["width"] else "paysage"
-
-
-def _video_traits(ann: dict, keys: list[str]) -> set[str]:
+def _video_traits(meta: dict, empty: bool, keys: list[str]) -> set[str]:
     """Caractéristiques d'une vidéo selon les clés de stratification (STRATIFY_KEYS)."""
     out = set()
     for k in keys:
-        if k == "type":
-            out |= {f"type:{el['type']}" for el in ann["elements"]}
-        elif k == "orientation":
-            out.add(f"orientation:{_orient(ann)}")
-        elif k == "clip_vide" and not ann["elements"]:
+        if k == "orientation":
+            out.add(f"orientation:{_orient(meta)}")
+        elif k == "clip_vide" and empty:
             out.add("clip_vide")
     return out
 
 
 class Lab:
-    def __init__(self, data_budget: int = 250, final_test_budget: int = 2, max_per_request: int = 100):
+    def __init__(self, data_budget: int = 250, final_test_budget: int = 2, max_per_request: int = 20,
+                 annotation_budget_usd: float = 2.0):
         self.data_budget = data_budget
         self.max_per_request = max_per_request
         self.generated = 0
+        self.annotation_budget_usd = annotation_budget_usd
+        self.annotation_spent = 0.0
         self.final_tests_left = final_test_budget
         self._rows: list[dict] | None = None
         self._ann_cache: dict[str, dict] = {}
@@ -154,7 +145,7 @@ class Lab:
         return self._rows
 
     def _split_map(self, split_id: str) -> dict[str, str]:
-        """sample_id -> train/val/test. Les clips exclus à la création du split, ou générés après,
+        """sample_id -> train/val/test. Les clips exclus à la création du split, ou collectés après,
         n'y figurent pas. Une exclusion postérieure ne change pas un split existant : son val et
         son test restent ceux sur lesquels ses expériences ont été mesurées."""
         if split_id == LEGACY_SPLIT:
@@ -184,13 +175,25 @@ class Lab:
         return set(clips)
 
     def _idx(self, split: str, split_id: str) -> np.ndarray:
-        """Images du split (celles sur lesquelles on entraîne et on mesure)."""
+        """Images étiquetées du split (celles sur lesquelles on entraîne et on mesure) : les images
+        sans accord des annotateurs n'y sont jamais."""
         m = self._split_map(split_id)
         return np.array([i for i, r in enumerate(self.rows)
-                         if m.get(r["sample_id"]) == split], dtype=int)
+                         if m.get(r["sample_id"]) == split and r["label_any"] is not None], dtype=int)
 
     def _y(self) -> np.ndarray:
-        return np.array([r["label_any"] for r in self.rows])
+        # 0 pour les images sans étiquette : elles ne sont jamais sélectionnées par _idx.
+        return np.array([r["label_any"] or 0 for r in self.rows])
+
+    def _positive_samples(self) -> set[str]:
+        """Vidéos ayant au moins une image avec ajout (accord des annotateurs)."""
+        return {r["sample_id"] for r in self.rows if r["label_any"] == 1}
+
+    def _empty_samples(self) -> set[str]:
+        """Vidéos sans aucun ajout : des images étiquetées, toutes brutes (une vidéo pas encore
+        annotée n'en fait pas partie)."""
+        labeled = {r["sample_id"] for r in self.rows if r["label_any"] is not None}
+        return labeled - self._positive_samples()
 
     def _prev(self) -> np.ndarray:
         prev = np.full(len(self.rows), -1)
@@ -201,8 +204,9 @@ class Lab:
         return prev
 
     def _ann(self, sample_id: str) -> dict:
+        """meta.json de la vidéo (titre, chaîne, dimensions, requête)."""
         if sample_id not in self._ann_cache:
-            self._ann_cache[sample_id] = annotations.load(SAMPLES_DIR / sample_id)
+            self._ann_cache[sample_id] = youtube.load_meta(SAMPLES_DIR / sample_id)
         return self._ann_cache[sample_id]
 
     def _X(self, features: list[str], temporal: str, prev: np.ndarray) -> tuple[np.ndarray, float]:
@@ -221,26 +225,19 @@ class Lab:
 
     # ------------------------------------------------------------------ outils
     def _composition(self, sids: set[str], with_positives: bool = True) -> dict:
-        """Composition d'un ensemble de vidéos : volumes et répartitions des éléments."""
+        """Composition d'un ensemble de vidéos : volumes, orientation, accord des annotateurs."""
         rows = [r for r in self.rows if r["sample_id"] in sids]
+        labeled = [r for r in rows if r["label_any"] is not None]
         anns = [self._ann(s) for s in sorted(sids)]
-        els = [(a, el) for a in anns for el in a["elements"]]
-
-        def count(key):
-            return dict(Counter(key(a, el) for a, el in els).most_common())
-
-        out = {"rushes_bruts_uniques": len({r["source"] for r in rows}), "clips_generes": len(sids),
-               "images_extraites_des_clips": len(rows),
-               "clips_sans_ajout": sum(not a["elements"] for a in anns),
-               "clips_avec_ajout": sum(bool(a["elements"]) for a in anns),
-               "clips_par_orientation": dict(Counter(_orient(a) for a in anns)),
-               "elements_par_type": count(lambda a, el: el["type"]),
-               "elements_par_surface": count(lambda a, el: _area_bucket(
-                   el["bbox"][2] * el["bbox"][3] / (a["video"]["width"] * a["video"]["height"]))),
-               "elements_par_fond": count(lambda a, el: "avec fond" if _has_box(el) else "sans fond")}
+        out = {"chaines_youtube": len({r["source"] for r in rows}), "videos": len(sids),
+               "images_extraites": len(rows), "images_etiquetees": len(labeled),
+               # désaccord des annotateurs (ou annotation interrompue) : images jamais utilisées
+               "images_sans_etiquette": len(rows) - len(labeled),
+               "videos_sans_ajout": len(sids & self._empty_samples()),
+               "videos_par_orientation": dict(Counter(_orient(a) for a in anns))}
         if with_positives:
             out["pourcentage_images_avec_ajout"] = (
-                round(100 * sum(r["label_any"] for r in rows) / len(rows), 1) if rows else None)
+                round(100 * sum(r["label_any"] for r in labeled) / len(labeled), 1) if labeled else None)
         return out
 
     def _split_summaries(self) -> list[dict]:
@@ -252,17 +249,18 @@ class Lab:
             out.append({"split_id": sid, **{s: sum(v == s for v in m.values()) for s in SPLITS},
                         "note": sp["note"], "date": sp["date"], "params": sp["params"],
                         "clips_exclus": len(sp["excluded"]),
-                        # vidéos générées après la création du split
+                        # vidéos collectées après la création du split
                         "clips_hors_split": len(all_sids - set(m) - set(sp["excluded"]))})
         return out
 
     def dataset_info(self, split_id: str | None = None) -> dict:
         rows = self.rows
-        budgets = {"clips_generables_restants": self.data_budget - self.generated,
-                   "final_tests_restants": self.final_tests_left, "quotas_api": api_quotas()}
+        budgets = {"videos_collectables_restantes": self.data_budget - self.generated,
+                   "budget_annotation_restant_usd": round(self.annotation_budget_usd - self.annotation_spent, 3),
+                   "final_tests_restants": self.final_tests_left}
         if not rows:
             return {"dataset_vide": True, "budgets": budgets,
-                    "message": "Aucune vidéo annotée : le dataset est à constituer (generate_data)."}
+                    "message": "Aucune vidéo : le dataset est à constituer (generate_data)."}
         sids = sorted({r["sample_id"] for r in rows})
         info = {"fps": FPS, "dataset": self._composition(set(sids)), "budgets": budgets}
         if split_id:
@@ -271,67 +269,65 @@ class Lab:
                 "split_id": split_id,
                 **{s: self._composition({k for k, v in m.items() if v == s}, with_positives=s != "test")
                    for s in SPLITS}}
-        clips = Counter(source_key(self._ann(s)) for s in sids)
+        chains = Counter(source_key(self._ann(s)) for s in sids)
         info["diversite"] = {
-            "rushes_bruts_uniques": len(clips), "clips_generes": len(sids),
-            # Vidéos générées avant que generate_data n'écarte les rushes déjà utilisés.
-            "rushes_bruts_reutilises": {k: n for k, n in clips.most_common() if n > 1},
+            "chaines_youtube": len(chains), "videos": len(sids),
+            # Plusieurs vidéos d'une même chaîne partagent son habillage : elles diversifient peu.
+            "videos_par_chaine_la_plus_representee": dict(chains.most_common(5)),
         }
         return _jsonable(info)
 
-    def _used_sources(self) -> set[str]:
-        return {source_key(annotations.load(p.parent)) for p in SAMPLES_DIR.glob("s*/annotations.json")}
-
-    def generate_data(self, n: int, reason: str, query: str | None = None, orientation: str | None = None,
-                      type_weights: dict | None = None, lang: str = "mix",
-                      empty_prob: float | None = None) -> dict:
-        from edit_generator.generator import GenerationConfig, generate_sample
-        from edit_generator.sources import default_photo_source, default_video_source
-
+    def generate_data(self, n: int, reason: str, query: str, orientation: str | None = None) -> dict:
+        """Collecte n nouvelles vraies vidéos YouTube pour la requête, puis fait annoter chacune de
+        leurs images par les trois LLM (appels payants, plafonnés par annotation_budget_usd).
+        Termine d'abord l'annotation des vidéos laissées en cours par un budget épuisé."""
         n = min(int(n), self.max_per_request, self.data_budget - self.generated)
         if n <= 0:
-            return {"error": "budget de génération épuisé pour cette session"}
-        # Un rush brut ne sert qu'une fois : deux vidéos sur le même fond gonflent le dataset sans
-        # le diversifier, et le split se fait par rush.
-        used = self._used_sources()
-
-        def accept(src: dict) -> bool:
-            return source_key({"source": src}) not in used
-
-        seeds = [int(p.name[1:]) for p in SAMPLES_DIR.glob("s*") if p.name[1:].isdigit()]
-        start = max(seeds, default=0) + 1
-        cfg = GenerationConfig(lang=lang)
-        if empty_prob is not None:
-            cfg.empty_prob = float(empty_prob)
-        if type_weights:
-            cfg.type_weights = {**cfg.type_weights, **{k: float(v) for k, v in type_weights.items()}}
-        videos, photos = default_video_source(), default_photo_source()
-        ok, errors, quota_streak, stopped = 0, [], 0, None
-        for seed in range(start, start + n):
+            return {"error": "budget de vidéos épuisé pour cette session"}
+        if self.annotation_spent >= self.annotation_budget_usd:
+            return {"error": "budget d'annotation épuisé pour cette session"}
+        if not (query or "").strip():
+            raise ValueError("query obligatoire : la recherche YouTube")
+        pending = [d for d in sorted(SAMPLES_DIR.glob("yt_*"))
+                   if (d / "meta.json").exists() and len(load_votes(d)["frames"]) < len(frames_of(d))]
+        try:
+            got = youtube.collect(query, n, orientation)
+        except youtube.NoVideoFound as e:
+            got = {"dirs": [], "errors": [str(e)]}
+        errors, annotated, stopped = list(got["errors"]), [], None
+        cost = 0.0
+        for d in pending + got["dirs"]:
+            left = self.annotation_budget_usd - self.annotation_spent
+            if left <= 0:
+                stopped = ("budget d'annotation épuisé : vidéos suivantes téléchargées mais non annotées "
+                           "(leur annotation reprendra au prochain generate_data)")
+                break
             try:
-                out = generate_sample(seed, SAMPLES_DIR, cfg, query=query, orientation=orientation,
-                                      video_source=videos, photo_source=photos, accept_source=accept)
-                used.add(source_key(annotations.load(out)))
-                ok += 1
-                quota_streak = 0
-            except QuotaExceeded as e:
-                errors.append(str(e)[:120])
-                quota_streak += 1
-                if quota_streak >= MAX_QUOTA_FAILURES:
-                    stopped = f"arrêt après {quota_streak} échecs de quota d'affilée : {e}"
-                    break
+                res = annotate(d, max_usd=left)
             except Exception as e:
-                errors.append(str(e)[:120])
-        self.generated += ok  # seules les vidéos réussies consomment le budget
+                errors.append(f"{d.name} : annotation en échec : {str(e)[:120]}")
+                continue
+            self.annotation_spent += res["cost_usd"]
+            cost += res["cost_usd"]
+            annotated.append(res)
+            if res["arret_budget"]:
+                stopped = f"budget d'annotation épuisé pendant {d.name} : vidéo en partie annotée"
+                break
+        self.generated += len(got["dirs"])  # seules les vidéos téléchargées consomment le budget
         build()
         self._rows = None
         with open(DATA_REQUESTS, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"n": n, "ok": ok, "query": query, "orientation": orientation,
-                                 "type_weights": type_weights, "lang": lang, "empty_prob": cfg.empty_prob, "reason": reason, "time": time.time()}) + "\n")
-        return {"generees": ok, "echecs": len(errors), "exemples_erreurs": errors[:3],
-                "arret": stopped,
-                "images_total": len(self.rows), "budget_restant": self.data_budget - self.generated,
-                "quotas_api": api_quotas()}
+            fh.write(json.dumps({"n": n, "ok": len(got["dirs"]), "query": query, "orientation": orientation,
+                                 "cost_usd": round(cost, 4), "reason": reason, "time": time.time()}) + "\n")
+        return _jsonable({
+            "videos_collectees": len(got["dirs"]), "videos_reprises": len(pending),
+            "echecs": len(errors), "exemples_erreurs": errors[:3],
+            "arret": stopped,
+            "images_annotees": sum(a["images_annotees"] for a in annotated),
+            "images_avec_accord": sum(a["images_avec_accord"] for a in annotated),
+            "cout_annotation_usd": round(cost, 4),
+            "images_total": len(self.rows), "videos_collectables_restantes": self.data_budget - self.generated,
+            "budget_annotation_restant_usd": round(self.annotation_budget_usd - self.annotation_spent, 3)})
 
     def data_requests(self) -> list[dict]:
         path = DATA_REQUESTS
@@ -340,17 +336,17 @@ class Lab:
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     def data_requested_history(self) -> dict:
-        """Historique des générations regroupé par requête Pixabay : une requête où on obtient moins
-        de clips que demandé est en voie d'épuisement (ses rushes ne servent qu'une fois)."""
+        """Historique des collectes regroupé par requête YouTube : une requête où on obtient moins
+        de vidéos que demandé s'épuise (une vidéo n'est prise qu'une fois)."""
         out: dict[str, dict] = {}
         for r in self.data_requests():
-            label = r.get("query") or ("rushes en cache" if r.get("source") == "cache" else "aléatoire")
-            t = out.setdefault(label,
-                               {"appels": 0, "clips_demandes": 0, "clips_generes": 0, "orientations": []})
+            t = out.setdefault(r["query"], {"appels": 0, "videos_demandees": 0, "videos_obtenues": 0,
+                                            "orientations": [], "cout_annotation_usd": 0.0})
             t["appels"] += 1
-            t["clips_demandes"] += r["n"]
-            t["clips_generes"] += r["ok"]
-            o = r.get("orientation") or "aléatoire"
+            t["videos_demandees"] += r["n"]
+            t["videos_obtenues"] += r["ok"]
+            t["cout_annotation_usd"] = round(t["cout_annotation_usd"] + r.get("cost_usd", 0.0), 4)
+            o = r.get("orientation") or "toutes"
             if o not in t["orientations"]:
                 t["orientations"].append(o)
         return out
@@ -358,7 +354,7 @@ class Lab:
     def exclude_clips(self, clips: dict) -> dict:
         """Retire des clips des splits créés ensuite : {sample_id: raison}. Les splits existants ne
         changent pas, pour qu'une exclusion ne puisse pas rendre un val déjà mesuré plus facile.
-        Réservé aux défauts constatés sur le clip lui-même (rendu cassé, doublon), jamais aux
+        Réservé aux défauts constatés sur le clip lui-même (vidéo cassée, doublon), jamais aux
         erreurs d'un modèle. Les fichiers ne sont pas supprimés."""
         all_sids = {r["sample_id"] for r in self.rows}
         if not clips:
@@ -374,8 +370,8 @@ class Lab:
 
     def make_split(self, note: str, val_ratio: float = 0.2, test_ratio: float = 0.2,
                    stratify: list[str] | None = None, seed: int = 0) -> dict:
-        """Crée un split train/val/test figé. Toutes les vidéos d'un même rush brut vont du même
-        côté. Chaque caractéristique de stratify (type d'élément, orientation, clip vide) est
+        """Crée un split train/val/test figé. Toutes les vidéos d'une même chaîne YouTube vont du
+        même côté. Chaque caractéristique de stratify (orientation, clip vide) est
         répartie au plus près des proportions visées (stratification itérative, caractéristiques
         les plus rares d'abord) ; par défaut toutes, [] pour un tirage purement aléatoire.
         Le test est figé au premier split (TEST_SET) : ensuite, test_ratio est ignoré et seuls
@@ -393,12 +389,13 @@ class Lab:
         all_sids = {r["sample_id"] for r in self.rows}
         frozen = self._test_clips()
 
-        clips: dict[str, set[str]] = {}  # rush brut -> caractéristiques de ses vidéos
+        clips: dict[str, set[str]] = {}  # chaîne -> caractéristiques de ses vidéos
+        empty = self._empty_samples()
         for sid in sorted(all_sids - set(exclude)):
             ann = self._ann(sid)
-            clips.setdefault(source_key(ann), set()).update(_video_traits(ann, stratify))
+            clips.setdefault(source_key(ann), set()).update(_video_traits(ann, sid in empty, stratify))
         if len(clips) < 3:
-            raise ValueError("il faut au moins 3 rushes bruts pour faire un split")
+            raise ValueError("il faut au moins 3 chaînes YouTube pour faire un split")
         ratios = {"train": 1 - val_ratio - test_ratio, "val": val_ratio, "test": test_ratio}
         total = Counter(t for traits in clips.values() for t in traits)
         rng = np.random.default_rng(seed)
@@ -454,7 +451,7 @@ class Lab:
             raise ValueError(f"model dans {MODELS}")
         tr, va = self._idx("train", split_id), self._idx("val", split_id)
         if not len(tr) or not len(va):
-            raise ValueError("splits train/val vides : il faut d'abord générer des données")
+            raise ValueError("splits train/val vides : il faut d'abord collecter des données")
         params = params or {}
         tr, balance_report = self._balance(tr, balance or {})
         sample_weight = self._weights(tr, weights or {})
@@ -521,22 +518,17 @@ class Lab:
 
         return _jsonable({
             "experiment_id": experiment_id, "precision_visee": precision, **op,
-            "positifs_rates_par_type": rates(lambda r: {e["type"] for e in self._visible(r)}),
-            "positifs_rates_par_plus_grande_surface": rates(
-                lambda r: {_area_bucket(max(e["area_ratio"] for e in self._visible(r)))}),
-            "positifs_rates_avec_fond": rates(
-                lambda r: {"avec fond" if any(e["has_box"] for e in self._visible(r)) else "sans fond"}),
-            "positifs_rates_par_nb_elements": rates(lambda r: {min(len(r["visible"]), 4)}),
             "positifs_rates_par_orientation": rates(lambda r: {self._orientation(r)}),
+            "positifs_rates_par_chaine": rates(lambda r: {self._ann(r["sample_id"])["channel"]}),
             "faux_positifs_par_orientation": dict(Counter(self._orientation(r) for r in fp_rows)),
             "faux_positifs_par_clip": dict(Counter(r["sample_id"] for r in fp_rows).most_common(8)),
-            "exemples_rates": [{"image": r["frame"], "t": r["t"],
-                                "elements": self._visible(r)} for r in fn_rows[:10]],
+            "exemples_rates": [{"image": r["frame"], "t": r["t"], "video": self._ann(r["sample_id"])["title"]}
+                               for r in fn_rows[:10]],
         })
 
     def show_examples(self, experiment_id: str, kind: str = "missed", n: int = 4,
                       precision: float = metrics.DEFAULT_PRECISION) -> list[dict]:
-        """Renvoie des blocs image (frames val, ajouts encadrés en rouge) pour inspection visuelle."""
+        """Renvoie des blocs image (frames val) pour inspection visuelle."""
         frames, y, probs, op = self._val_at(experiment_id, precision)
         pred = probs >= op["threshold"]
         want = (y == 1) & ~pred if kind == "missed" else (y == 0) & pred
@@ -546,14 +538,6 @@ class Lab:
         for i in np.flatnonzero(want)[:n]:
             r = by_frame[frames[i]]
             img = Image.open(FRAMES_DIR / r["frame"]).convert("RGB")
-            ann = self._ann(r["sample_id"])
-            sx, sy = img.width / ann["video"]["width"], img.height / ann["video"]["height"]
-            draw = ImageDraw.Draw(img)
-            for el in ann["elements"]:
-                b = annotations.bbox_at(el, r["t"])
-                if b and el["id"] in r["visible"]:
-                    x, yy, w, h = b
-                    draw.rectangle([x * sx, yy * sy, (x + w) * sx, (yy + h) * sy], outline="red", width=3)
             buf = io.BytesIO()
             img.save(buf, "JPEG", quality=80)
             blocks.append({"type": "text", "text": f"{label} {r['sample_id']} t={r['t']} p={probs[i]:.2f} "
@@ -594,16 +578,16 @@ class Lab:
             if (split_id and sid != split_id) or (not split_id and not mine and sid != latest):
                 continue
             va = self._idx("val", sid)
-            # Rushes par partie, recomptés sur les clips réellement assignés : rushes_shared (rushes
-            # présents dans plusieurs parties) doit rester à 0, sinon val/test fuient dans train.
+            # Chaînes par partie, recomptées sur les clips réellement assignés : chaines_shared
+            # (chaînes présentes dans plusieurs parties) doit rester à 0, sinon val/test fuient dans train.
             m = self._split_map(sid)
             parts: dict[str, set[str]] = {}
             for r in self.rows:
                 if r["sample_id"] in m:
                     parts.setdefault(r["source"], set()).add(m[r["sample_id"]])
             entry = {"split_id": sid,
-                     **{f"rushes_{s}": sum(ps == {s} for ps in parts.values()) for s in SPLITS},
-                     "rushes_shared": sum(len(ps) > 1 for ps in parts.values()),
+                     **{f"chaines_{s}": sum(ps == {s} for ps in parts.values()) for s in SPLITS},
+                     "chaines_shared": sum(len(ps) > 1 for ps in parts.values()),
                      **{f"clips_{s}": sp[s] for s in SPLITS},
                      "val_images": len(va), "val_images_positives": int(y[va].sum()),
                      "clips_hors_split": sp["clips_hors_split"]}
@@ -719,17 +703,9 @@ class Lab:
 
     def _balance_groups(self, r: dict) -> set[str]:
         """Groupes de rééquilibrage d'une frame (voir BALANCE_GROUPS)."""
-        ann = self._ann(r["sample_id"])
-        groups = {self._orientation(r)}
-        if not ann["elements"]:
+        groups = {self._orientation(r), "positif" if r["label_any"] else "negatif"}
+        if r["sample_id"] in self._empty_samples():
             groups.add("clip_vide")
-        if not r["label_any"]:
-            groups.add("negatif")
-        else:
-            groups.add("positif")
-            types = {el["type"] for el in ann["elements"] if el["id"] in r["visible"]}
-            if len(types) == 1:
-                groups.add(types.pop())
         return groups
 
     def _balance(self, tr: np.ndarray, balance: dict) -> tuple[np.ndarray, dict]:
@@ -778,8 +754,8 @@ class Lab:
         out = {"fps": FPS, "split_id": split_id}
         for split in SPLITS:
             idx = self._idx(split, split_id)
-            out[split] = {"clips_generes": len({self.rows[i]["sample_id"] for i in idx}),
-                          "images_extraites_des_clips": len(idx)}
+            out[split] = {"videos": len({self.rows[i]["sample_id"] for i in idx}),
+                          "images_etiquetees": len(idx)}
         return out
 
     def _next_exp_id(self) -> str:
@@ -798,9 +774,8 @@ class Lab:
         return preds["frames"], y, probs, op
 
     def _val_errors(self, experiment_id: str) -> dict | None:
-        """Résumé des erreurs val au seuil de précision par défaut, pour list_experiments : ajouts
-        ratés par type (une image ratée compte pour chaque type visible), clips à fausses alertes.
-        Le détail est dans analyze_errors."""
+        """Résumé des erreurs val au seuil de précision par défaut, pour list_experiments : clips aux
+        ajouts ratés, clips à fausses alertes. Le détail est dans analyze_errors."""
         try:
             frames, y, probs, op = self._val_at(experiment_id, metrics.DEFAULT_PRECISION)
         except ValueError:
@@ -812,24 +787,11 @@ class Lab:
             if f not in by_frame:
                 continue
             if yi and not pi:
-                fn.update({e["type"] for e in self._visible(by_frame[f])})
+                fn[by_frame[f]["sample_id"]] += 1
             elif pi and not yi:
                 fp[by_frame[f]["sample_id"]] += 1
-        return {"fn_par_type": dict(fn.most_common()),
+        return {"fn_par_clip": dict(fn.most_common(5)),
                 "fp_par_clip": dict(fp.most_common(5))}
-
-    def _visible(self, r: dict) -> list[dict]:
-        """Éléments visibles sur l'image, avec surface relative et présence d'un fond."""
-        ann = self._ann(r["sample_id"])
-        W, H = ann["video"]["width"], ann["video"]["height"]
-        out = []
-        for el in ann["elements"]:
-            if el["id"] in r["visible"]:
-                b = annotations.bbox_at(el, r["t"]) or el["bbox"]
-                out.append({"type": el["type"], "text": el.get("text"),
-                            "area_ratio": round(b[2] * b[3] / (W * H), 4),
-                            "has_box": _has_box(el)})
-        return out
 
     def _orientation(self, r: dict) -> str:
         v = self._ann(r["sample_id"])["video"]

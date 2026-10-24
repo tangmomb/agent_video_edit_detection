@@ -7,8 +7,9 @@ est traitée exactement comme à l'entraînement : frames à FPS par seconde (fr
 embeddings (features), même composante temporelle (lab._X), même classifieur.
 Fichiers de travail dans interface/_jobs/<id>/ (frames + résultat), effaçables à tout moment.
 
-Une vidéo peut ensuite être annotée par Mistral Large 4 (bouton de la page, appel payant, plafonné par
-vidéo) puis corrigée à la main : elle est alors rangée dans data/real_videos/<id>/ (voir annotate.py)
+Une vidéo peut ensuite être annotée par les trois LLM annotateurs du dataset (bouton de la page,
+appels payants, plafonnés par vidéo ; une image n'a d'étiquette que s'ils sont d'accord) puis
+corrigée à la main : elle est alors rangée dans data/real_videos/<id>/ (voir annotate.py)
 et la page compare le modèle à ces étiquettes.
 """
 
@@ -159,7 +160,7 @@ class Handler(SimpleHTTPRequestHandler):
         return json.loads(self.rfile.read(size) or b"{}")
 
     def _annotate(self):
-        """Étiquettes LLM de la vidéo d'un job (appel payant à Mistral la première fois seulement)."""
+        """Étiquettes LLM de la vidéo d'un job (appels payants aux trois annotateurs la première fois seulement)."""
         job = JOBS / Path(self._body().get("job", "")).name
         if not (job / "result.json").exists():
             return self._json(HTTPStatus.NOT_FOUND, {"error": "analyse introuvable"})

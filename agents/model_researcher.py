@@ -13,23 +13,23 @@ expériences demandées par l'orchestrateur : choix des embeddings figés (CLIP 
 les deux concaténés ; image entière ou quadrants), du classifieur et de ses hyperparamètres, de \
 l'information temporelle, du rééchantillonnage de train (balance : retirer ou dupliquer des \
 images d'un groupe) et de la pondération de la perte (weights : faire peser davantage un groupe \
-difficile, par exemple les petites formes que le modèle rate). Le seuil est choisi par le code sur \
+difficile, par exemple les images brutes que le modèle prend pour des ajouts). Le seuil est choisi par le code sur \
 val (meilleur rappel à 95 % de précision) : pondérer toutes les images positives ou négatives revient \
-surtout à le déplacer ; vise plutôt un groupe précis. Tu ne génères pas de données et tu ne mesures jamais sur test : \
+surtout à le déplacer ; vise plutôt un groupe précis. Tu ne collectes pas de données et tu ne mesures jamais sur test : \
 seul l'Evaluator y accède.
 
 Splits : les splits existants sont dans list_experiments ; décide-les à partir de la composition du \
 dataset (dataset_info), jamais des erreurs d'un \
 modèle. Crée un split quand aucun n'existe, quand le dataset a nettement grossi (clips_hors_split) \
-ou quand val ne couvre pas les cas importants (types d'ajout, orientation, clips sans \
-ajout) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
+ou quand val ne couvre pas les cas importants (orientation, vidéos sans \
+ajout, assez de chaînes) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
 raison précise. Le test est figé au premier split : les suivants ne redécoupent que train et val, \
 et seul exclude_clips retire un clip des splits. Ne refais jamais un split pour améliorer un \
 score val : un val choisi pour être facile ne mesure plus rien. \
 Vérifie la composition de val et test (dataset_info avec split_id) avant d'entraîner.
 
 Exclusions : exclude_clips retire un clip des splits créés ensuite ; les splits existants ne \
-changent pas, il faut donc un nouveau split pour qu'elle compte. Ne l'utilise que pour un défaut du clip lui-même (rendu cassé, doublon), jamais parce qu'un modèle \
+changent pas, il faut donc un nouveau split pour qu'elle compte. Ne l'utilise que pour un défaut du clip lui-même (vidéo cassée, doublon), jamais parce qu'un modèle \
 s'y trompe : les cas où le modèle échoue sont précisément ceux qu'il faut garder, et retirer un \
 clip difficile du val fausse la mesure. Justifie chaque exclusion dans ton rapport.
 
@@ -57,8 +57,8 @@ def make(lab: Lab) -> Agent:
             Tool(
                 name="make_split",
                 description="Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos "
-                            "générées ensuite n'y entrent pas). Les vidéos d'un même rush brut restent du "
-                            "même côté. Le test est commun à tous les splits (figé au premier) : seuls train "
+                            "collectées ensuite n'y entrent pas). Les vidéos d'une même chaîne YouTube restent "
+                            "du même côté. Le test est commun à tous les splits (figé au premier) : seuls train "
                             "et val sont redécoupés. Renvoie l'id du split et la composition de train, val et test.",
                 input_schema={
                     "type": "object",
@@ -71,9 +71,9 @@ def make(lab: Lab) -> Agent:
                                                       "split seulement : ignoré ensuite (test figé)."},
                         "stratify": {"type": "array", "items": {"type": "string", "enum": list(STRATIFY_KEYS)},
                                      "description": "Caractéristiques à répartir au plus près des proportions "
-                                                    "visées dans chaque split : type (d'élément), orientation, "
-                                                    "clip_vide. Par défaut toutes ; [] = tirage purement "
-                                                    "aléatoire."},
+                                                    "visées dans chaque split : orientation, clip_vide (vidéo "
+                                                    "sans aucune image avec ajout). Par défaut toutes ; [] = "
+                                                    "tirage purement aléatoire."},
                         "seed": {"type": "integer", "description": "Graine du tirage (défaut 0)."},
                     },
                     "required": ["note"],
@@ -108,19 +108,18 @@ def make(lab: Lab) -> Agent:
                                                    "intacts) : {groupe: facteur, 0 à 10}. Sous 1, on garde "
                                                    "cette fraction des images ; au-dessus, on les duplique "
                                                    "(3 = trois exemplaires). Groupes : "
-                                                   + ", ".join(BALANCE_GROUPS) + ". Un type d'élément = "
-                                                   "images positives dont tous les ajouts visibles sont de ce "
-                                                   "type ; positif / negatif = images avec / sans ajout ; "
-                                                   "clip_vide = images des clips sans aucun ajout. Ex. "
-                                                   "{'shape': 3, 'negatif': 0.7}. Le dataset n'est pas "
-                                                   "modifié."},
+                                                   + ", ".join(BALANCE_GROUPS) + ". positif / negatif = "
+                                                   "images avec / sans ajout ; clip_vide = images des vidéos "
+                                                   "sans aucune image avec ajout ; portrait / paysage = "
+                                                   "orientation de la vidéo. Ex. {'negatif': 2, 'paysage': 0.7}. "
+                                                   "Le dataset n'est pas modifié."},
                         "weights": {"type": "object", "additionalProperties": {"type": "number"},
                                     "description": "Poids des images de train dans la perte, sans changer "
                                                    "les données : {groupe: poids, > 0 et au plus 10}, mêmes "
                                                    "groupes que balance. Une image dans plusieurs groupes prend "
                                                    "le plus grand poids, les autres gardent 1. S'ajoute à la "
                                                    "pondération équilibrée des classes déjà appliquée (logreg, "
-                                                   "hgb). Ex. {'shape': 3}."},
+                                                   "hgb). Ex. {'clip_vide': 3}."},
                         "note": {"type": "string",
                                  "description": "Hypothèse testée, en une phrase, sans recopier la config."},
                         "split_id": {"type": "string",
@@ -134,8 +133,8 @@ def make(lab: Lab) -> Agent:
             Tool(
                 name="exclude_clips",
                 description="Retire des clips des splits créés ensuite (make_split), sans supprimer de "
-                            "fichier ; les splits existants ne changent pas. Réservé aux clips défectueux "
-                            "ou dupliqués.",
+                            "fichier ; les splits existants ne changent pas. Réservé aux vidéos défectueuses "
+                            "ou dupliquées.",
                 input_schema={
                     "type": "object",
                     "properties": {

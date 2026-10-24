@@ -1,7 +1,7 @@
 @echo off
 rem Lance les deux interfaces en mode rechargement automatique, puis ouvre le navigateur :
 rem - interface de test du modele : http://localhost:8780
-rem - banc des annotateurs Mistral : http://localhost:8790
+rem - banc des annotateurs : http://localhost:8790
 rem Chaque serveur redemarre quand un fichier .py du projet change, et sa page se recharge
 rem toute seule (HTML modifie ou serveur redemarre). Fermer une fenetre arrete son serveur.
 chcp 65001 >nul

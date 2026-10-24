@@ -17,7 +17,7 @@ SYSTEM = CONTEXT + """
 
 Ton rôle : Orchestrateur. Tu pilotes l'amélioration du classifieur d'ajouts de montage en coordonnant trois \
 agents, que tu sollicites avec les outils ask_* :
-- Dataset Builder : génère des données synthétiques annotées, sans se soucier des splits ;
+- Dataset Builder : collecte de vraies vidéos YouTube annotées par trois LLM, sans se soucier des splits ;
 - Model Researcher : constitue les splits train/val/test, entraîne des modèles et mène des \
 expériences sur val ;
 - Evaluator : mesure, analyse les erreurs, vérifie les améliorations et accède au test.
@@ -33,10 +33,10 @@ Les agents ne peuvent faire que ce que leurs outils permettent (liste plus bas) 
 jamais d'écrire ou d'exécuter un script, de lancer une commande ou de lire des fichiers. Chaque \
 rapport se termine par une « Vérification automatique » produite par le code, qui liste les outils \
 réellement appelés et leurs erreurs : elle fait foi. Toute affirmation du rapport qu'elle ne \
-confirme pas (données générées, modèle entraîné, chiffres) est à considérer comme fausse. Relis \
+confirme pas (données collectées, modèle entraîné, chiffres) est à considérer comme fausse. Relis \
 global_status après chaque délégation plutôt que de croire le rapport sur parole.
 
-Si une étape est impossible (dataset vide et budget de génération à 0, test final épuisé, etc.), \
+Si une étape est impossible (dataset vide et budget de vidéos ou d'annotation à 0, test final épuisé, etc.), \
 ne la redemande pas sous une autre forme : rédige directement le rapport final en expliquant ce \
 qui bloque.
 
@@ -74,18 +74,17 @@ def make(lab: Lab, session: Session) -> Agent:
         return ask
 
     def global_status() -> dict:
-        # Volumes seulement : le détail de composition (types d'ajout, orientation)
+        # Volumes seulement : le détail de composition (orientation, chaînes)
         # sert aux sous-agents, qui le lisent par leur propre dataset_info.
         info = lab.dataset_info()
         if info.get("dataset_vide"):
             dataset = info
         else:
             d = info["dataset"]
-            dataset = {"rushes_bruts_uniques": d["rushes_bruts_uniques"], "clips_generes": d["clips_generes"],
-                       "images_extraites_des_clips": d["images_extraites_des_clips"],
-                       "clips_sans_ajout": d["clips_sans_ajout"], "clips_avec_ajout": d["clips_avec_ajout"],
-                       "pourcentage_images_avec_ajout": d["pourcentage_images_avec_ajout"],
-                       "budgets": {k: v for k, v in info["budgets"].items() if k != "quotas_api"}}
+            dataset = {k: d[k] for k in ("chaines_youtube", "videos", "images_extraites", "images_etiquetees",
+                                         "images_sans_etiquette", "videos_sans_ajout",
+                                         "pourcentage_images_avec_ajout")}
+            dataset["budgets"] = info["budgets"]
         return {"dataset": dataset,
                 "budget_session_usd": {"depense": round(session.spent, 2), "total": session.budget_usd,
                                        "reserve_rapport_usd": round(session.reserve_usd, 2),
@@ -100,15 +99,16 @@ def make(lab: Lab, session: Session) -> Agent:
         max_turns=30,
         tools=[
             Tool(name="global_status",
-                 description="État global : volumes du dataset (clips générés, rushes bruts uniques, images "
-                             "extraites des clips, clips sans et avec ajout, pourcentage d'images avec "
-                             "ajout), budgets restants (génération, tests finaux), budget de session. "
-                             "Les splits sont dans list_experiments ; le détail de composition (types "
-                             "d'ajout, orientation) n'est visible que des sous-agents.",
+                 description="État global : volumes du dataset (chaînes YouTube, vidéos, images extraites, "
+                             "images étiquetées et sans étiquette faute d'accord des annotateurs, vidéos "
+                             "sans ajout, pourcentage d'images avec ajout), budgets restants (vidéos, "
+                             "annotation en $, tests finaux), budget de session. "
+                             "Les splits sont dans list_experiments ; le détail de composition "
+                             "(orientation, chaînes) n'est visible que des sous-agents.",
                  input_schema={"type": "object", "properties": {}}, fn=global_status),
             list_experiments_tool(lab),
             Tool(name="ask_dataset_builder",
-                 description="Délègue une génération de données au Dataset Builder ; renvoie son rapport.",
+                 description="Délègue une collecte de données au Dataset Builder ; renvoie son rapport.",
                  input_schema=TASK, fn=delegate("dataset_builder")),
             Tool(name="ask_model_researcher",
                  description="Délègue un lot d'expériences au Model Researcher ; renvoie son rapport.",
@@ -121,10 +121,12 @@ def make(lab: Lab, session: Session) -> Agent:
     )
 
 
-def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, client=None) -> Session:
-    lab = Lab(data_budget=data_budget, final_test_budget=final_tests)
+def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annotation_usd: float = 2.0,
+        client=None) -> Session:
+    lab = Lab(data_budget=data_budget, final_test_budget=final_tests, annotation_budget_usd=annotation_usd)
     session = Session(budget_usd, client=client,
-                      params={"goal": goal, "data_budget": data_budget, "final_tests": final_tests})
+                      params={"goal": goal, "data_budget": data_budget, "final_tests": final_tests,
+                              "annotation_usd": annotation_usd})
     try:
         report = session.run(make(lab, session), goal)
     except BaseException as e:
