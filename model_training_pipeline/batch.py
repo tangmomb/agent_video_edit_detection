@@ -10,7 +10,7 @@ frames.annotate.
 
 Suivi des batchs envoyés dans data/batches.json : une image déjà envoyée n'est pas renvoyée tant que
 son batch n'est pas récupéré. Une requête en échec (refusée, expirée) est renvoyée au submit suivant ;
-si l'API a refusé l'effort de raisonnement, le modèle est noté et renvoyé sans.
+si l'API a refusé l'effort « medium », le modèle est noté et renvoyé en « none ».
 """
 
 import json
@@ -48,11 +48,12 @@ def _cid(sdir: Path, frame: Path) -> str:
     return f"{sdir.name}/{frame.name}"
 
 
-def _todo(state: dict) -> dict[str, list[tuple[Path, Path]]]:
-    """{modèle: [(dossier vidéo, image)]} : votes manquants, hors requêtes d'un batch en cours."""
+def _todo(state: dict, samples: list[Path] | None = None) -> dict[str, list[tuple[Path, Path]]]:
+    """{modèle: [(dossier vidéo, image)]} : votes manquants (de toutes les vidéos, ou de samples),
+    hors requêtes d'un batch en cours."""
     in_flight = {(j["model"], c) for j in state["jobs"] if not j.get("collected") for c in j["custom_ids"]}
     out = defaultdict(list)
-    for sdir in sorted(SAMPLES_DIR.glob("yt_*")):
+    for sdir in sorted(SAMPLES_DIR.glob("yt_*")) if samples is None else [Path(d) for d in samples]:
         if not (sdir / "meta.json").exists():
             continue
         votes = frames.load_votes(sdir)
@@ -63,17 +64,25 @@ def _todo(state: dict) -> dict[str, list[tuple[Path, Path]]]:
     return out
 
 
-def estimate() -> dict:
-    """Requêtes à envoyer par modèle et coût estimé au tarif batch (ordre de grandeur)."""
-    todo = _todo(_load())
+def _estimate(model: str, items: list[tuple[Path, Path]]) -> float:
+    """Coût estimé au tarif batch des requêtes d'un modèle (ordre de grandeur)."""
+    if not items:
+        return 0.0
+    w, h = Image.open(items[0][1]).size
+    k = min(1.0, annotators.MAX_SIDE / max(w, h))
+    cols, rows = -(-round(w * k) // 16), -(-round(h * k) // 16)
+    tin = len(items) * (cols * rows + rows + len(annotators.PROMPT) // 3.5)
+    return annotators.cost(model, {"input": int(tin), "cached_input": 0,
+                                   "output": len(items) * OUT_PER_IMAGE}) * DISCOUNT
+
+
+def estimate(samples: list[Path] | None = None) -> dict:
+    """Requêtes à envoyer par modèle et coût estimé au tarif batch (ordre de grandeur), pour toutes
+    les vidéos ou seulement samples."""
+    todo = _todo(_load(), samples)
     out, total = {}, 0.0
     for model, items in todo.items():
-        w, h = Image.open(items[0][1]).size
-        k = min(1.0, annotators.MAX_SIDE / max(w, h))
-        cols, rows = -(-round(w * k) // 16), -(-round(h * k) // 16)
-        tin = len(items) * (cols * rows + rows + len(annotators.PROMPT) // 3.5)
-        usd = annotators.cost(model, {"input": int(tin), "cached_input": 0,
-                                      "output": len(items) * OUT_PER_IMAGE}) * DISCOUNT
+        usd = _estimate(model, items)
         out[model] = {"requetes": len(items), "usd_estime": round(usd, 4)}
         total += usd
     return {"par_modele": out, "total_usd_estime": round(total, 4),
@@ -107,38 +116,39 @@ def _send(provider: str, api, model: str, chunk: list[tuple[Path, Path]], reason
         path.unlink(missing_ok=True)
 
 
-def submit(max_usd: float, apis: dict | None = None) -> dict:
-    """Envoie les votes manquants, par modèle et par paquets de CHUNK requêtes ; refuse si le coût
-    estimé dépasse max_usd."""
-    est = estimate()
+def submit(max_usd: float, apis: dict | None = None, samples: list[Path] | None = None) -> dict:
+    """Envoie les votes manquants (de toutes les vidéos, ou de samples), par modèle et par paquets de
+    CHUNK requêtes ; refuse si le coût estimé dépasse max_usd."""
+    est = estimate(samples)
     if est["total_usd_estime"] > max_usd:
         raise ValueError(f"coût estimé {est['total_usd_estime']} $ > plafond {max_usd} $ : rien n'est envoyé")
     state = _load()
     apis = apis if apis is not None else {}
     sent = []
-    for model, items in _todo(state).items():
+    for model, items in _todo(state, samples).items():
         provider = annotators.PROVIDER[model]
         if provider not in DONE:
             raise ValueError(f"pas de batch pour {provider} ({model})")
         api = apis.setdefault(provider, annotators.client(provider))
         for i in range(0, len(items), CHUNK):
             chunk = items[i:i + CHUNK]
+            reasoning = annotators.NO_REASONING if model in state["no_reasoning"] else annotators.REASONING
             try:
-                reasoning = None if model in state["no_reasoning"] else annotators.REASONING
                 job_id = _send(provider, api, model, chunk, reasoning)
             except Exception as e:
-                # Mistral valide le fichier dès l'envoi : effort refusé, on renvoie sans (comme en direct)
-                if reasoning is None or not annotators.refuses_reasoning(e):
+                # Mistral valide le fichier dès l'envoi : « medium » refusé, renvoyé en « none »
+                if reasoning == annotators.NO_REASONING or not annotators.refuses_reasoning(e):
                     raise
                 state["no_reasoning"].append(model)
-                reasoning = None
+                reasoning = annotators.NO_REASONING
                 job_id = _send(provider, api, model, chunk, reasoning)
             job = {"provider": provider, "model": model, "job_id": job_id, "requests": len(chunk),
-                   "reasoning": reasoning, "custom_ids": [_cid(s, f) for s, f in chunk],
+                   "reasoning": reasoning, "usd_estime": round(_estimate(model, chunk), 5),
+                   "custom_ids": [_cid(s, f) for s, f in chunk],
                    "submitted": time.strftime("%Y-%m-%d %H:%M"), "status": None, "collected": False}
             state["jobs"].append(job)
             _save(state)  # après chaque envoi : un batch créé n'est jamais oublié
-            sent.append({k: job[k] for k in ("provider", "model", "job_id", "requests")})
+            sent.append({k: job[k] for k in ("provider", "model", "job_id", "requests", "usd_estime")})
     return {"envoyes": sent, "estimation": est}
 
 
@@ -159,6 +169,25 @@ def status(apis: dict | None = None) -> list[dict]:
     return out
 
 
+def in_flight(job_ids: set[str] | None = None) -> list[dict]:
+    """Batchs envoyés pas encore récupérés (tous, ou parmi job_ids)."""
+    return [j for j in _load()["jobs"] if not j.get("collected") and (job_ids is None or j["job_id"] in job_ids)]
+
+
+def wait(job_ids: set[str], timeout_s: float, every_s: float = 30, apis: dict | None = None) -> bool:
+    """Attend que les batchs job_ids soient terminés côté API (sans les récupérer) ; False si le
+    délai est dépassé."""
+    t0 = time.time()
+    while True:
+        pending = {j["job_id"] for j in status(apis) if j["job_id"] in job_ids and not j["collected"]
+                   and j["status"] not in DONE["openai"] | DONE["mistral"]}
+        if not pending:
+            return True
+        if time.time() - t0 + every_s > timeout_s:
+            return False
+        time.sleep(every_s)
+
+
 def _download(provider: str, api, file_id: str | None) -> list[dict]:
     if not file_id:
         return []
@@ -170,7 +199,8 @@ def collect(apis: dict | None = None) -> dict:
     """Récupère les batchs terminés, fusionne leurs votes dans votes.json et reconstruit l'index."""
     state = _load()
     apis = apis if apis is not None else {}
-    report = {"batchs_recuperes": 0, "votes": 0, "echecs": Counter(), "cost_usd": 0.0, "en_cours": 0}
+    report = {"batchs_recuperes": 0, "votes": 0, "echecs": Counter(), "cost_usd": 0.0, "en_cours": 0,
+              "jobs": {}}  # jobs : coût réel de chaque batch récupéré
     by_video: dict[str, dict] = {}
     for j in state["jobs"]:
         if j.get("collected"):
@@ -183,6 +213,7 @@ def collect(apis: dict | None = None) -> dict:
             continue
         out_id = job.output_file_id if j["provider"] == "openai" else job.output_file
         err_id = job.error_file_id if j["provider"] == "openai" else job.error_file
+        job_cost = 0.0
         for line in _download(j["provider"], api, out_id) + _download(j["provider"], api, err_id):
             sid, frame = line["custom_id"].split("/", 1)
             resp = line.get("response") or {}
@@ -190,7 +221,7 @@ def collect(apis: dict | None = None) -> dict:
             if line.get("error") or code != 200 or not isinstance(body, dict) or "choices" not in body:
                 err = json.dumps(line.get("error") or body or line)[:300]
                 report["echecs"][err[:120]] += 1
-                if j["reasoning"] and annotators.refuses_reasoning(Exception(err)) \
+                if j["reasoning"] == annotators.REASONING and annotators.refuses_reasoning(Exception(err)) \
                         and j["model"] not in state["no_reasoning"]:
                     state["no_reasoning"].append(j["model"])
                 continue  # vote toujours manquant : renvoyé au prochain submit
@@ -200,9 +231,12 @@ def collect(apis: dict | None = None) -> dict:
                 by_video[sid] = frames.load_votes(SAMPLES_DIR / sid)
             frames.add_votes(by_video[sid], frame, {j["model"]: annotators.parse(text)}, usd)
             report["votes"] += 1
-            report["cost_usd"] += usd
+            job_cost += usd
         j["collected"] = True
+        j["cost_usd"] = round(job_cost, 5)
+        report["cost_usd"] += job_cost
         report["batchs_recuperes"] += 1
+        report["jobs"][j["job_id"]] = job_cost
     for sid, votes in by_video.items():
         frames.save_votes(SAMPLES_DIR / sid, votes)
     _save(state)  # votes écrits d'abord : un batch marqué récupéré a toujours ses votes sur disque

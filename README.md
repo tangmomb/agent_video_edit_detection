@@ -13,6 +13,9 @@ vraies vidéos YouTube, annotées image par image par trois LLM de vision.
   dataset est annoté par `gpt-6-luna`, `gpt-5.6-luna` et `zai-glm-5-3-flash` (les meilleurs du banc
   `utils/llm_bench`) : une image n'a d'étiquette que s'ils sont **tous d'accord**, sinon elle est
   écartée (ni entraînée ni mesurée), sans revue manuelle. Votes dans `votes.json` à côté de la vidéo.
+  Effort de raisonnement `medium` pour tous, `none` pour un modèle dont l'API refuse `medium`
+  (`zai-glm-5-3-flash`). L'annotation passe par les API batch d'OpenAI et de Mistral (-50 %),
+  suivies dans `data/batches.json`.
 
 ## Installation
 
@@ -29,7 +32,11 @@ ffmpeg est fourni par `imageio-ffmpeg` (aucune installation système).
 ```bash
 video_source collect --query "recette pâtes rapide" --n 5                # téléchargement seul (gratuit)
 video_source collect --query "vlog voyage" --n 3 --orientation portrait
-python -m model_training_pipeline annotate --max-usd 0.50              # vote des 3 LLM (payant)
+python -m model_training_pipeline batch estimate                       # requêtes à envoyer, coût estimé (gratuit)
+python -m model_training_pipeline batch submit --max-usd 0.50          # vote des 3 LLM en batch (payant, -50 %)
+python -m model_training_pipeline batch status
+python -m model_training_pipeline batch collect                        # votes des batchs terminés -> index
+python -m model_training_pipeline annotate --max-usd 0.50              # variante en appels directs (plein tarif)
 video_source preview data/videos_samples/yt_<id>                        # planche avec les étiquettes
 ```
 
@@ -55,7 +62,7 @@ Orchestrateur ──► Dataset Builder   (collecte vidéos YouTube + annotation
 ```
 
 ```bash
-python -m agents --budget-usd 1.00 --annotation-usd 2.00 --data-budget 250 --final-tests 2   # appels API payants
+python -m agents --budget-usd 1.00 --annotation-usd 2.00 --batch-wait-min 120 --data-budget 250 --final-tests 2   # appels API payants
 ```
 
 Organisation :
@@ -70,7 +77,8 @@ Organisation :
   le code, pour que l'orchestrateur ne croie pas un rapport inventé ;
 - `agents/<agent>.py` : prompt + sous-ensemble d'outils du lab propres à chaque agent ;
   le Dataset Builder collecte sans se soucier des splits (`generate_data` : recherche YouTube,
-  téléchargement, annotation dans la limite de `--annotation-usd`), le Model Researcher découpe le dataset en
+  téléchargement, annotation en mode batch dans la limite de `--annotation-usd`, attente des résultats
+  au plus `--batch-wait-min`, sinon récupérés à la collecte suivante), le Model Researcher découpe le dataset en
   splits train/val/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
   chaîne YouTube, stratifiés par défaut sur orientation et vidéos sans ajout ;
   l'ancien découpage `hash`, non figé, est refusé). Le test est figé au premier split

@@ -31,7 +31,8 @@ MODELS = [
 PRICES = {m[0]: m[3] for m in MODELS}
 PROVIDER = {m[0]: m[4] for m in MODELS}
 KEYS = {"mistral": "MISTRAL_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
-REASONING = "medium"  # même effort de raisonnement pour tous les modèles qui raisonnent
+REASONING = "medium"  # même effort de raisonnement pour tous les modèles…
+NO_REASONING = "none"  # …sauf ceux dont l'API refuse « medium » (zai-glm-5-3-flash : none ou high)
 MAX_SIDE = 768  # plus grand côté envoyé ; le nombre de tokens d'une image suit son nombre de pixels
 
 # Les trois annotateurs du dataset (meilleurs du banc, octobre 2026).
@@ -152,7 +153,7 @@ def parse(text: str) -> bool | None:
     return bool(answer["ajout"]) if isinstance(answer, dict) and "ajout" in answer else None
 
 
-_no_reasoning: set[str] = set()  # modèles dont l'API a refusé le raisonnement : on ne réessaie plus
+_no_reasoning: set[str] = set()  # modèles dont l'API a refusé « medium » : passés en « none »
 
 
 def vote(path: Path, apis: dict | None = None, models=ANNOTATORS, max_side: int = MAX_SIDE) -> dict:
@@ -165,14 +166,14 @@ def vote(path: Path, apis: dict | None = None, models=ANNOTATORS, max_side: int 
         provider = PROVIDER[model]
         if provider not in apis:
             apis[provider] = client(provider)
-        reasoning = None if model in _no_reasoning else REASONING
+        reasoning = NO_REASONING if model in _no_reasoning else REASONING
         try:
             text, used = ask(provider, apis[provider], model, path, max_side, reasoning)
         except Exception as e:
-            if not reasoning or not refuses_reasoning(e):
+            if reasoning == NO_REASONING or not refuses_reasoning(e):
                 raise
             _no_reasoning.add(model)
-            text, used = ask(provider, apis[provider], model, path, max_side, None)
+            text, used = ask(provider, apis[provider], model, path, max_side, NO_REASONING)
         spent += cost(model, used)
         votes[model] = parse(text)
     return {"votes": votes, "cost_usd": spent, "label": consensus(votes)}

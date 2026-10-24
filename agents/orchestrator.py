@@ -122,11 +122,12 @@ def make(lab: Lab, session: Session) -> Agent:
 
 
 def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annotation_usd: float = 2.0,
-        client=None) -> Session:
-    lab = Lab(data_budget=data_budget, final_test_budget=final_tests, annotation_budget_usd=annotation_usd)
+        batch_wait_s: int = 2 * 3600, client=None) -> Session:
+    lab = Lab(data_budget=data_budget, final_test_budget=final_tests, annotation_budget_usd=annotation_usd,
+              batch_wait_s=batch_wait_s)
     session = Session(budget_usd, client=client,
                       params={"goal": goal, "data_budget": data_budget, "final_tests": final_tests,
-                              "annotation_usd": annotation_usd})
+                              "annotation_usd": annotation_usd, "batch_wait_s": batch_wait_s})
     try:
         report = session.run(make(lab, session), goal)
     except BaseException as e:

@@ -23,7 +23,11 @@ très exploitée (voir data_requested_history) finit par ne plus rien donner, et
 nouvelle vidéo YouTube » signifie qu'il faut changer de requête ou d'orientation. La requête \
 (query) est une recherche YouTube : quelques mots-clés (« recette pâtes rapide », « vlog voyage \
 japon »), qui fixent le thème et donc, indirectement, le style de montage. Chaque image collectée \
-est annotée par trois LLM (payant) : le budget d'annotation limite le volume.
+est annotée par trois LLM en mode batch (payant, résultats différés) : le budget d'annotation \
+limite le volume, et chaque collecte attend les résultats, ce qui peut prendre de quelques minutes \
+à une heure ou plus. Si l'annotation est encore en cours à la fin de l'attente \
+(batchs_encore_en_cours), ses images n'ont pas encore d'étiquette : ne relance pas une collecte \
+pour autant, les résultats seront récupérés au prochain appel.
 
 Rapport final (court, en français) : ce que tu as collecté et pourquoi, la composition du dataset \
 après collecte (chaînes, vidéos, images étiquetées, part d'images sans accord des annotateurs, \
@@ -49,8 +53,10 @@ def make(lab: Lab) -> Agent:
                 name="generate_data",
                 description="Collecte de nouvelles vraies vidéos YouTube (jamais prises, 5 min au plus) "
                             "pour une recherche, les ajoute au dataset, extrait leurs images (1 par seconde) "
-                            "et les fait annoter par trois LLM (une image n'est étiquetée que s'ils sont "
-                            "d'accord). Coûteux en temps et en budget d'annotation : justifie chaque collecte.",
+                            "et les fait annoter par trois LLM en mode batch (une image n'est étiquetée que "
+                            "s'ils sont d'accord), puis attend les résultats. Récupère d'abord les annotations "
+                            "terminées depuis l'appel précédent. Coûteux en temps et en budget d'annotation : "
+                            "justifie chaque collecte.",
                 input_schema={
                     "type": "object",
                     "properties": {
