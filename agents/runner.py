@@ -42,8 +42,9 @@ RUNS_DIR = LAB_DIR / "runs"
 
 # Modèles au format LiteLLM « fournisseur/identifiant », épinglés (pas d'alias -latest) pour qu'un
 # changement de modèle côté fournisseur ne modifie pas le comportement en silence.
-LARGE = "mistral/mistral-large-4-0"   # Mistral Large 4 (v26.10) : raisonnement, vision, 1M de contexte
-SMALL = "mistral/mistral-small-2603"  # Mistral Small 4 (v26.03) : raisonnement, vision, 256K
+# GPT-6 Luna : meilleure AP cachée du banc b1 (25/10/2026) à égalité avec GPT-5.6 Luna, pour un
+# tiers du coût ; Mistral Large 4, l'ancien défaut, était moins bon et dix fois plus cher.
+DEFAULT_MODEL = "openai/gpt-6-luna"
 # $/million de tokens : tarifs relevés à la main (table des modèles du banc des annotateurs,
 # octobre 2026), prioritaires sur ceux de LiteLLM, parfois en retard. cached_input : tokens
 # d'entrée servis depuis le cache, quand l'API les signale et que le fournisseur publie un prix.
@@ -83,7 +84,7 @@ class Agent:
     system: str
     tools: list[Tool] = field(default_factory=list)
     max_turns: int = 25
-    model: str = LARGE  # Small 4 inventait des actions et des sorties de commandes (run du 22/10/2026)
+    model: str = DEFAULT_MODEL  # Mistral Small 4 inventait des actions et des sorties de commandes (22/10/2026)
     reasoning: str = "high"  # reasoning_effort, traduit par LiteLLM pour chaque fournisseur
 
 
@@ -129,6 +130,14 @@ def price(model: str) -> dict:
     if info.get("cache_read_input_token_cost"):
         out["cached_input"] = info["cache_read_input_token_cost"] * 1e6
     return out
+
+
+def _supports_reasoning(model: str) -> bool:
+    import litellm
+    try:
+        return bool(litellm.supports_reasoning(model=model))
+    except Exception:
+        return False
 
 
 class Session:
@@ -227,9 +236,12 @@ class Session:
         model = self.model or agent.model
         price(model)  # tarif inconnu : erreur avant le premier appel
         effort = REASONING_BY_MODEL.get(model, agent.reasoning)
-        # Effort transmis tel quel : la table de capacités de LiteLLM a du retard (zai-glm-5-3-flash
-        # y figure sans raisonnement et l'appel serait refusé) ; c'est l'API du fournisseur qui juge.
-        reasoning = {"reasoning_effort": effort, "allowed_openai_params": ["reasoning_effort"]} if effort else {}
+        reasoning = {"reasoning_effort": effort} if effort else {}
+        if effort and not _supports_reasoning(model):
+            # Table de capacités de LiteLLM en retard (zai-glm-5-3-flash y figure sans raisonnement :
+            # appel refusé) : effort transmis tel quel, c'est l'API du fournisseur qui juge. Pas pour
+            # les autres : LiteLLM le traduit (Anthropic refuse le champ brut reasoning_effort).
+            reasoning["allowed_openai_params"] = ["reasoning_effort"]
         tool_schemas = [t.schema() for t in agent.tools]
         # Prompt système et schémas d'outils : fixes pendant un run, enregistrés une fois par agent.
         self.trace["agents"].setdefault(agent.name, {"system": agent.system, "tools": tool_schemas})
@@ -266,7 +278,10 @@ class Session:
                 self.trace["run"]["tokens"][k] += v
             # Message complet, raisonnement compris : LiteLLM le rejoue si le fournisseur l'exige
             # (blocs signés d'Anthropic) et le retire sinon (Mistral refuse ces champs en entrée).
-            messages.append(msg.model_dump(exclude_none=True))
+            # provider_specific_fields : annotation interne de LiteLLM, que Mistral refuse aussi.
+            replay = msg.model_dump(exclude_none=True)
+            replay.pop("provider_specific_fields", None)
+            messages.append(replay)
             thinking, texts = _split(msg)
             calls = msg.tool_calls or []
             for t in texts:

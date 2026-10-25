@@ -83,8 +83,8 @@ Organisation :
   partagé, journaux. Une réserve (15 % du budget, 0,05 $ minimum) est gardée pour le rapport
   final de l'orchestrateur : les sous-agents s'arrêtent avant, les délégations sont alors
   refusées, et un agent à court de budget ou de tours rédige un dernier rapport sans outils au
-  lieu d'être coupé net. Les quatre agents utilisent Mistral Large 4, ou le modèle donné par
-  `--agent-model` (même modèle pour les quatre, ex. `openai/gpt-6-luna`). Chaque rapport de sous-agent
+  lieu d'être coupé net. Les quatre agents utilisent GPT-6 Luna (choisi d'après le banc `agents.bench`), ou le
+  modèle donné par `--agent-model` (même modèle pour les quatre, ex. `openai/gpt-5.6-luna`). Chaque rapport de sous-agent
   se termine par une « Vérification automatique » (outils réellement appelés, échecs) écrite par
   le code, pour que l'orchestrateur ne croie pas un rapport inventé ;
 - `agents/<agent>.py` : prompt + sous-ensemble d'outils du lab propres à chaque agent ;

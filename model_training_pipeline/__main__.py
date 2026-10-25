@@ -23,6 +23,9 @@ def main() -> None:
                    help="envoie les batchs sans attendre (récupération plus tard : batch collect)")
     c.add_argument("--pause", type=float, nargs=2, metavar=("MIN", "MAX"),
                    help="attente aléatoire entre deux téléchargements, en s (défaut : 60 180)")
+    c.add_argument("--direct", action="store_true",
+                   help="annotation en appels directs dès chaque téléchargement (prix plein, sans attente)")
+    c.add_argument("--orientation", choices=["portrait", "landscape"], help="seulement ces requêtes")
     args = p.parse_args()
 
     if args.cmd == "collect":
@@ -32,7 +35,8 @@ def main() -> None:
 
         from .collect import collect
         print(json.dumps(collect(args.target, args.per_query, args.max_usd, args.dry_run, not args.no_wait,
-                                 tuple(args.pause or DOWNLOAD_PAUSE)), indent=2, ensure_ascii=False))
+                                 tuple(args.pause or DOWNLOAD_PAUSE), args.direct, args.orientation),
+                         indent=2, ensure_ascii=False))
         return
 
     if args.cmd == "frames":

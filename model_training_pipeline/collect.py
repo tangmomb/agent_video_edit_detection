@@ -7,6 +7,9 @@ attente et récupération dans le même appel, comme generate_data.
 --dry-run : cherche les vidéos (lecture des pages YouTube) sans rien télécharger ni annoter.
 --no-wait : envoie les batchs et rend la main ; les récupérer plus tard avec
 `python -m model_training_pipeline batch collect` (le PC peut être éteint entre-temps).
+--direct : annotation en appels directs dès chaque téléchargement, sans batch (prix plein, deux fois
+plus cher, mais résultats immédiats : un batch peut attendre des heures).
+--orientation : seulement les requêtes de cette orientation.
 Les vidéos déjà téléchargées mais sans tous leurs votes (collecte interrompue) sont reprises.
 """
 
@@ -18,7 +21,7 @@ from video_source import youtube
 from video_source.config import SAMPLES_DIR
 
 from . import batch
-from .frames import build
+from .frames import annotate, build
 
 # Thèmes variés pour varier les styles de montage : vidéos très habillées (actualités, gaming,
 # sport), sous-titrées (tutos, recettes, Shorts), sobres (vlogs, interviews, plans fixes).
@@ -43,21 +46,35 @@ def _channels() -> set[str]:
 
 
 def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run: bool = False,
-            wait: bool = True, download_pause: tuple[float, float] = youtube.DOWNLOAD_PAUSE) -> dict:
+            wait: bool = True, download_pause: tuple[float, float] = youtube.DOWNLOAD_PAUSE,
+            direct: bool = False, only: str | None = None) -> dict:
     avoid = _channels()
     got: list[tuple[str, str | None, object]] = []  # (requête, orientation, dossier ou info)
     asked: dict[tuple, int] = {}
-    errors, est = [], 0.0
+    errors, est, cost = [], 0.0, 0.0
     stopped = None
+    factor = 1 / batch.DISCOUNT if direct else 1.0  # estimations au tarif batch ; direct : prix plein
+
+    def annotate_now(d) -> None:
+        nonlocal cost
+        res = annotate(d, max_usd=max_usd - cost)
+        cost += res["cost_usd"]
+        print(f"[collect] {d.name} annotée : {res['images_avec_accord']}/{res['images_annotees']} avec accord, "
+              f"{res['cost_usd']:.3f} $ (total {cost:.2f} $)", flush=True)
+
     if not dry_run:  # reprise : vidéos téléchargées dont des votes manquent (hors batchs en cours)
         for p in sorted(SAMPLES_DIR.glob("yt_*/meta.json")):
-            e = batch.estimate([p.parent])["total_usd_estime"]
+            e = batch.estimate([p.parent])["total_usd_estime"] * factor
             if e and est + e <= max_usd:
                 est += e
                 got.append((youtube.load_meta(p.parent).get("query"), None, p.parent))
+                if direct:
+                    annotate_now(p.parent)
         if got:
             print(f"[collect] reprise de {len(got)} vidéo(s) déjà téléchargée(s) (≈ {est:.2f} $)", flush=True)
     for query, orientation in QUERIES:
+        if only and orientation != only:
+            continue
         if len(got) >= target:
             break
         n = min(per_query, target - len(got))
@@ -78,13 +95,15 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
             except Exception as e:
                 errors.append(f"{info['id']} : {str(e)[:120]}")
                 continue
-            e = batch.estimate([d])["total_usd_estime"]  # extrait les images au passage
+            e = batch.estimate([d])["total_usd_estime"] * factor  # extrait les images au passage
             if est + e > max_usd:
                 stopped = f"plafond de {max_usd} $ atteint : {d.name} téléchargée mais pas annotée"
                 break
             est += e
             got.append((query, orientation, d))
             print(f"[collect] {len(got)}/{target} {d.name} (≈ {e:.3f} $, total ≈ {est:.2f} $)", flush=True)
+            if direct:
+                annotate_now(d)
         if stopped:
             break
     if dry_run:
@@ -92,9 +111,9 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
                 "par_requete": {q: sum(1 for x in got if x[0] == q) for q, _ in asked}, "erreurs": errors}
 
     dirs = [d for _, _, d in got]
-    cost, failed, jobs_all = 0.0, 0, []
-    # 2e passage pour les requêtes en échec, comme generate_data
-    for _ in range(2 if dirs else 0):
+    failed, jobs_all = 0, []
+    # 2e passage pour les requêtes en échec, comme generate_data (direct : déjà annotées)
+    for _ in range(2 if dirs and not direct else 0):
         sent = batch.submit(float("inf"), samples=dirs)["envoyes"]
         if not sent:
             break

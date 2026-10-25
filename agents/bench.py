@@ -231,7 +231,35 @@ def _table(results: list[dict]) -> str:
                      f"{f(op.get('precision'))} | {f(p.get('val_recall'))} | {(p.get('test') or {}).get('statut', '—')} | "
                      f"{f(r.get('experiences'))} | {f(r.get('outils_en_echec'))} | {f(r.get('cout_usd'), 2)} | "
                      f"{f(r.get('duree_min'), 1)} |")
-    return head + "\n".join(lines) + "\n"
+    return _summary(results) + "\n" + head + "\n".join(lines) + "\n"
+
+
+def _summary(results: list[dict]) -> str:
+    """Moyenne ± écart-type par modèle sur ses runs notés (un seul run ne départage rien)."""
+    import statistics as st
+
+    def ms(vals: list[float], nd: int = 3) -> str:
+        if not vals:
+            return "—"
+        sd = f" ± {st.stdev(vals):.{nd}f}" if len(vals) > 1 else ""
+        return f"{st.mean(vals):.{nd}f}{sd}"
+    head = ("| Modèle | Runs notés | AP caché | Rappel caché | Précision cachée | Tests finaux réussis | "
+            "Coût $ | Durée min |\n|" + "---|" * 8 + "\n")
+    by: dict[str, list[dict]] = defaultdict(list)
+    for r in results:
+        by[r["modele"]].append(r)
+    rows = []
+    for m, rs in by.items():
+        scored = [r for r in rs if (r.get("cache") or {}).get("ap") is not None]
+        ops = [r["cache"]["au_seuil_val"] for r in scored]
+        rows.append((st.mean(r["cache"]["ap"] for r in scored) if scored else -1, m,
+                     f"| {m} | {len(scored)}/{len(rs)} | {ms([r['cache']['ap'] for r in scored])} | "
+                     f"{ms([o['recall'] for o in ops])} | {ms([o['precision'] for o in ops])} | "
+                     f"{sum((r.get('production') or {}).get('test', {}).get('statut') == 'réussi' for r in rs)}/{len(rs)} | "
+                     f"{ms([r['cout_usd'] for r in rs if r.get('cout_usd') is not None], 2)} | "
+                     f"{ms([r['duree_min'] for r in rs if r.get('duree_min')], 1)} |"))
+    return "## Par modèle (moyenne ± écart-type)\n\n" + head + "\n".join(r for _, _, r in sorted(rows, reverse=True)) \
+        + "\n\n## Par run\n\n"
 
 
 def main() -> None:
