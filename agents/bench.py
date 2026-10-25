@@ -14,7 +14,9 @@ Tout vit dans bench/<nom>/ :
 Chaque run part de base/data, sans collecte (--data-budget 0), avec le même budget pour tous : un
 budget large teste la qualité pure, le coût réel est noté à côté. La note vient du jeu caché : le
 modèle de production choisi en fin de run (production.json) y est mesuré au seuil fixé sur val,
-avec les mêmes embeddings qu'à l'entraînement. Le comportement vient de pipeline.json (coût,
+avec les mêmes embeddings qu'à l'entraînement : rappel et précision à ce seuil (la précision
+visée tient-elle sur des chaînes jamais vues ?), AP, et rappel idéal à 95 % (meilleur seuil
+possible sur le jeu caché : qualité du modèle sans l'erreur de seuil). Le comportement vient de pipeline.json (coût,
 durée, outils en échec, expériences, test final). Les images sont des liens physiques vers le
 dataset (jamais réécrites) ; les fichiers texte, réécrits par le labo, sont copiés.
 """
@@ -35,6 +37,7 @@ BENCH_DIR = ROOT / "bench"
 MODELS = ["anthropic/claude-haiku-5-5", "mistral/mistral-large-4-0", "mistral/mistral-large-2512",
           "mistral/zai-glm-5-3-flash", "openai/gpt-5.6-luna", "openai/gpt-6-luna"]
 GOAL = "Lance une session d'amélioration du classifieur d'ajouts de montage."
+TARGET = 0.95  # précision visée (metrics.DEFAULT_PRECISION, sans importer sklearn ici)
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -171,8 +174,9 @@ def _score_one(exp_dir: str, threshold: float, hidden: list[str]) -> dict:
     y = lab._y()[idx]
     probs = clf.predict_proba(X[idx])[:, 1]
     s = metrics.summary(y, probs)
+    ideal = metrics.recall_at_precision(y, probs, metrics.DEFAULT_PRECISION)
     return {"au_seuil_val": metrics.operating_point(y, probs, threshold), "auc": s["auc"], "ap": s["ap"],
-            "images": len(y), "positifs": int(y.sum())}
+            "rappel_ideal": ideal["recall"] if ideal else 0.0, "images": len(y), "positifs": int(y.sum())}
 
 
 def _trace(wdir: Path) -> dict:
@@ -221,14 +225,14 @@ def score(name: str) -> list[dict]:
 def _table(results: list[dict]) -> str:
     def f(v, nd=3):
         return "—" if v is None else (f"{v:.{nd}f}" if isinstance(v, float) else str(v))
-    head = ("| Modèle | Run | Statut | AP caché | Rappel caché | Précision cachée | Rappel val | "
-            "Test final | Expériences | Outils en échec | Coût $ | Durée min |\n|" + "---|" * 12 + "\n")
+    head = ("| Modèle | Run | Statut | AP caché | Rappel caché | Précision cachée | Rappel idéal | Rappel val | "
+            "Test final | Expériences | Outils en échec | Coût $ | Durée min |\n|" + "---|" * 13 + "\n")
     lines = []
     for r in sorted(results, key=lambda r: (r["modele"], r["run"])):
         c, p = r.get("cache") or {}, r.get("production") or {}
         op = c.get("au_seuil_val") or {}
         lines.append(f"| {r['modele']} | {r['run']} | {r['statut']} | {f(c.get('ap'))} | {f(op.get('recall'))} | "
-                     f"{f(op.get('precision'))} | {f(p.get('val_recall'))} | {(p.get('test') or {}).get('statut', '—')} | "
+                     f"{f(op.get('precision'))} | {f(c.get('rappel_ideal'))} | {f(p.get('val_recall'))} | {(p.get('test') or {}).get('statut', '—')} | "
                      f"{f(r.get('experiences'))} | {f(r.get('outils_en_echec'))} | {f(r.get('cout_usd'), 2)} | "
                      f"{f(r.get('duree_min'), 1)} |")
     return _summary(results) + "\n" + head + "\n".join(lines) + "\n"
@@ -243,8 +247,8 @@ def _summary(results: list[dict]) -> str:
             return "—"
         sd = f" ± {st.stdev(vals):.{nd}f}" if len(vals) > 1 else ""
         return f"{st.mean(vals):.{nd}f}{sd}"
-    head = ("| Modèle | Runs notés | AP caché | Rappel caché | Précision cachée | Tests finaux réussis | "
-            "Coût $ | Durée min |\n|" + "---|" * 8 + "\n")
+    head = ("| Modèle | Runs notés | AP caché | Rappel caché | Précision cachée | Précision tenue | "
+            "Rappel idéal | Tests finaux réussis | Coût $ | Durée min |\n|" + "---|" * 10 + "\n")
     by: dict[str, list[dict]] = defaultdict(list)
     for r in results:
         by[r["modele"]].append(r)
@@ -255,11 +259,15 @@ def _summary(results: list[dict]) -> str:
         rows.append((st.mean(r["cache"]["ap"] for r in scored) if scored else -1, m,
                      f"| {m} | {len(scored)}/{len(rs)} | {ms([r['cache']['ap'] for r in scored])} | "
                      f"{ms([o['recall'] for o in ops])} | {ms([o['precision'] for o in ops])} | "
+                     f"{sum(o['precision'] >= TARGET for o in ops)}/{len(ops)} | "
+                     f"{ms([r['cache']['rappel_ideal'] for r in scored if 'rappel_ideal' in r['cache']])} | "
                      f"{sum((r.get('production') or {}).get('test', {}).get('statut') == 'réussi' for r in rs)}/{len(rs)} | "
                      f"{ms([r['cout_usd'] for r in rs if r.get('cout_usd') is not None], 2)} | "
                      f"{ms([r['duree_min'] for r in rs if r.get('duree_min')], 1)} |"))
-    return "## Par modèle (moyenne ± écart-type)\n\n" + head + "\n".join(r for _, _, r in sorted(rows, reverse=True)) \
-        + "\n\n## Par run\n\n"
+    return ("## Par modèle (moyenne ± écart-type)\n\nPrécision tenue : runs dont la précision cachée atteint "
+            f"{TARGET}. Rappel idéal : rappel à {TARGET} de précision au meilleur seuil possible sur le jeu "
+            "caché (qualité du modèle, sans l'erreur de seuil).\n\n" + head
+            + "\n".join(r for _, _, r in sorted(rows, reverse=True)) + "\n\n## Par run\n\n")
 
 
 def main() -> None:
@@ -271,7 +279,7 @@ def main() -> None:
     s.add_argument("--seed", type=int, default=0)
     r = sub.add_parser("run", help="runs d'agents (PAYANT)")
     r.add_argument("--name", required=True)
-    r.add_argument("--runs", type=int, default=3, help="runs par modèle")
+    r.add_argument("--runs", type=int, default=5, help="runs par modèle (3 ne départagent que les gros écarts)")
     r.add_argument("--budget", type=float, required=True, help="budget agents de chaque run, en $ (le même pour tous)")
     r.add_argument("--models", nargs="+", default=MODELS)
     r.add_argument("--final-tests", type=int, default=1)

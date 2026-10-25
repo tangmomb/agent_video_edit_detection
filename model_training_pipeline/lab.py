@@ -7,12 +7,18 @@ Règles :
   label_any (au moins un ajout de montage sur l'image), donnée par l'accord unanime des trois LLM
   d'annotators.ANNOTATORS. Une image sans accord n'est ni entraînée ni mesurée ;
 - métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val ;
-- la collecte (generate_data) ignore les splits ; un split est un découpage train/val/test nommé
-  et figé, fait par chaîne YouTube (make_split, stockés dans data/splits/) : une chaîne garde le
+- la collecte (generate_data) ignore les splits ; un split est un découpage dev/test nommé et
+  figé, fait par chaîne YouTube (make_split, stockés dans data/splits/) : une chaîne garde le
   même habillage d'une vidéo à l'autre, elle ne doit pas être des deux côtés. Les vidéos collectées
   après sa création n'y entrent pas. Chaque expérience retient son split : on ne compare que des
   expériences faites sur le même split. L'ancien découpage « hash » n'est plus utilisable : il
   grossissait à chaque collecte, donc son val changeait sans changer de nom ;
+- *val* est une validation croisée par chaîne sur dev (FOLDS plis) : chaque image de dev est
+  prédite par un modèle qui n'a vu aucune vidéo de sa chaîne. Un val fixe ne comptait que 5 à 13
+  chaînes (banc b1) : trop peu pour comparer des modèles, et son seuil ne tenait pas la précision
+  sur d'autres chaînes. Le seuil est le seuil prudent de metrics (bootstrap par chaîne) ; le
+  modèle enregistré est la moyenne des modèles de plis (FoldEnsemble). Les anciens splits train/val/test se lisent
+  comme dev (train + val) / test ;
 - les décisions se prennent sur *val* ; *test* n'est accessible que par final_test, en
   nombre limité par session ;
 - chaque entraînement est enregistré dans model_results/<exp_id>/ (à la racine du projet).
@@ -44,14 +50,15 @@ from .frames import FPS, FRAMES_DIR, build, load_index, source_key
 EXP_DIR = LAB_DIR / "model_results"
 DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
 SPLITS_DIR = DATA_DIR / "splits"
-# Chaînes du test, figées au premier split : les splits suivants ne refont que train/val, et les
+# Chaînes du test, figées au premier split : les splits suivants mettent tout le reste en dev, et les
 # vidéos collectées ensuite n'entrent jamais en test (le Model Researcher ne peut pas l'influencer).
 TEST_SET = SPLITS_DIR / "test_set.json"
 # Clips retirés des splits créés ensuite (vidéo défectueuse, doublon) : exclude_clips, Model Researcher.
 EXCLUDED = DATA_DIR / "excluded.json"
 # Découpage d'avant make_split, non figé : refusé pour entraîner et tester.
 LEGACY_SPLIT = "hash"
-SPLITS = ("train", "val", "test")
+SPLITS = ("dev", "test")
+FOLDS = 5  # plis de la validation croisée sur dev
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
 STRATIFY_KEYS = ("orientation", "clip_vide")
 MODELS = ("logreg", "mlp", "hgb")
@@ -107,6 +114,45 @@ def _compact(e: dict, errors: dict | None = None) -> dict:
     return out
 
 
+class FoldEnsemble:
+    """Moyenne des probabilités des modèles de la validation croisée (model.pkl des expériences)."""
+
+    def __init__(self, models: list):
+        self.models = models
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        return np.mean([m.predict_proba(X) for m in self.models], axis=0)
+
+
+def _stratified(clips: dict[str, set[str]], ratios: dict, seed: int) -> dict[str, object]:
+    """Répartit des chaînes entre des parties (ratios : part visée de chacune) en gardant chaque
+    caractéristique au plus près des proportions visées : stratification itérative, chaînes aux
+    caractéristiques les plus rares d'abord."""
+    total = Counter(t for traits in clips.values() for t in traits)
+    rng = np.random.default_rng(seed)
+    order = list(clips)
+    rng.shuffle(order)
+    order.sort(key=lambda c: min((total[t] for t in clips[c]), default=10 ** 9))
+    n = len(clips)
+    # volumes visés en chaînes, au plus fort reste : leur somme vaut toujours n
+    raw = {s: r * n for s, r in ratios.items()}
+    cap = {s: int(v) for s, v in raw.items()}
+    for s in sorted(raw, key=lambda s: raw[s] - cap[s], reverse=True)[:n - sum(cap.values())]:
+        cap[s] += 1
+    got, got_t, assign = Counter(), {s: Counter() for s in ratios}, {}
+    for c in order:
+        def deficit(s):
+            # Déficits relatifs (rapportés à la cible) : en absolu, un cas rare (vu une seule
+            # fois) partirait toujours dans la partie la plus grosse.
+            trait = sum(1 - got_t[s][t] / (ratios[s] * total[t]) for t in clips[c])
+            return trait, 1 - got[s] / (ratios[s] * n), rng.random()
+        s = max([s for s in ratios if got[s] < cap[s]], key=deficit)
+        assign[c] = s
+        got[s] += 1
+        got_t[s].update(clips[c])
+    return assign
+
+
 def _orient(meta: dict) -> str:
     return "portrait" if meta["video"]["height"] > meta["video"]["width"] else "paysage"
 
@@ -133,6 +179,7 @@ class Lab:
         self.final_tests_left = final_test_budget
         self._rows: list[dict] | None = None
         self._ann_cache: dict[str, dict] = {}
+        self._folds_cache: dict[str, dict[str, int]] = {}
         EXP_DIR.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ données
@@ -145,7 +192,7 @@ class Lab:
         return self._rows
 
     def _split_map(self, split_id: str) -> dict[str, str]:
-        """sample_id -> train/val/test. Les clips exclus à la création du split, ou collectés après,
+        """sample_id -> dev/test. Les clips exclus à la création du split, ou collectés après,
         n'y figurent pas. Une exclusion postérieure ne change pas un split existant : son val et
         son test restent ceux sur lesquels ses expériences ont été mesurées."""
         if split_id == LEGACY_SPLIT:
@@ -156,8 +203,31 @@ class Lab:
             raise ValueError(f"split inconnu : {split_id} (splits existants dans list_experiments ; sinon make_split)")
         sp = json.loads(path.read_text(encoding="utf-8"))
         excluded = set(sp["excluded"])
-        return {r["sample_id"]: sp["clips"][r["source"]] for r in self.rows
+        part = {"train": "dev", "val": "dev"}  # anciens splits train/val/test
+        return {r["sample_id"]: part.get(sp["clips"][r["source"]], sp["clips"][r["source"]]) for r in self.rows
                 if r["source"] in sp["clips"] and r["sample_id"] not in excluded}
+
+    def _channel_traits(self, sids, stratify: list[str]) -> dict[str, set[str]]:
+        """Chaîne -> caractéristiques de ses vidéos (clés de stratification)."""
+        clips: dict[str, set[str]] = {}
+        empty = self._empty_samples()
+        for sid in sorted(sids):
+            ann = self._ann(sid)
+            clips.setdefault(source_key(ann), set()).update(_video_traits(ann, sid in empty, stratify))
+        return clips
+
+    def _folds(self, split_id: str) -> dict[str, int]:
+        """Chaîne de dev -> pli de validation croisée, stratifié comme le split (mêmes clés, même
+        graine) : déterministe, donc le même pour toutes les expériences du split."""
+        if split_id not in self._folds_cache:
+            params = json.loads((SPLITS_DIR / f"{split_id}.json").read_text(encoding="utf-8"))["params"]
+            dev = {s for s, v in self._split_map(split_id).items() if v == "dev"}
+            clips = self._channel_traits(dev, params.get("stratify", list(STRATIFY_KEYS)))
+            k = min(FOLDS, len(clips))
+            if k < 2:
+                raise ValueError("il faut au moins 2 chaînes en dev pour la validation croisée")
+            self._folds_cache[split_id] = _stratified(clips, {f: 1 / k for f in range(k)}, params.get("seed", 0))
+        return self._folds_cache[split_id]
 
     def _excluded(self) -> dict[str, str]:
         return json.loads(EXCLUDED.read_text(encoding="utf-8")) if EXCLUDED.exists() else {}
@@ -381,65 +451,35 @@ class Lab:
         return {"clips_exclus": excluded,
                 "effet": "appliqué aux splits créés à partir de maintenant (make_split) ; splits existants inchangés"}
 
-    def make_split(self, note: str, val_ratio: float = 0.2, test_ratio: float = 0.2,
-                   stratify: list[str] | None = None, seed: int = 0) -> dict:
-        """Crée un split train/val/test figé. Toutes les vidéos d'une même chaîne YouTube vont du
-        même côté. Chaque caractéristique de stratify (orientation, clip vide) est
-        répartie au plus près des proportions visées (stratification itérative, caractéristiques
-        les plus rares d'abord) ; par défaut toutes, [] pour un tirage purement aléatoire.
-        Le test est figé au premier split (TEST_SET) : ensuite, test_ratio est ignoré et seuls
-        train et val sont redécoupés."""
+    def make_split(self, note: str, test_ratio: float = 0.2, stratify: list[str] | None = None,
+                   seed: int = 0) -> dict:
+        """Crée un split dev/test figé. Toutes les vidéos d'une même chaîne YouTube vont du même
+        côté. Le test est tiré au premier split en répartissant chaque caractéristique de stratify
+        (orientation, clip vide) au plus près de test_ratio, puis figé (TEST_SET) : ensuite
+        test_ratio est ignoré et toutes les autres vidéos vont en dev. stratify (par défaut toutes,
+        [] pour un tirage purement aléatoire) et seed fixent aussi les plis de dev (_folds)."""
         # Par défaut tout est stratifié : sans ça, un cas rare peut tomber entièrement en test et
-        # jamais en val (run 004).
+        # jamais en dev (run 004).
         stratify = list(STRATIFY_KEYS) if stratify is None else list(stratify)
         exclude = self._excluded()
         if not note.strip():
             raise ValueError("note obligatoire : pourquoi ce split")
-        if not (0 < val_ratio < 1 and 0 < test_ratio < 1 and val_ratio + test_ratio <= 0.6):
-            raise ValueError("val_ratio et test_ratio doivent être > 0, avec val + test <= 0.6")
+        if not 0 < test_ratio <= 0.4:
+            raise ValueError("test_ratio doit être > 0 et au plus 0.4")
         if set(stratify) - set(STRATIFY_KEYS):
             raise ValueError(f"stratify parmi {STRATIFY_KEYS}")
-        all_sids = {r["sample_id"] for r in self.rows}
         frozen = self._test_clips()
-
-        clips: dict[str, set[str]] = {}  # chaîne -> caractéristiques de ses vidéos
-        empty = self._empty_samples()
-        for sid in sorted(all_sids - set(exclude)):
-            ann = self._ann(sid)
-            clips.setdefault(source_key(ann), set()).update(_video_traits(ann, sid in empty, stratify))
+        clips = self._channel_traits({r["sample_id"] for r in self.rows} - set(exclude), stratify)
         if len(clips) < 3:
             raise ValueError("il faut au moins 3 chaînes YouTube pour faire un split")
-        ratios = {"train": 1 - val_ratio - test_ratio, "val": val_ratio, "test": test_ratio}
-        total = Counter(t for traits in clips.values() for t in traits)
-        rng = np.random.default_rng(seed)
-        order = list(clips)
-        rng.shuffle(order)
-        order.sort(key=lambda c: min((total[t] for t in clips[c]), default=10 ** 9))
-        n_clips, got, assign = len(clips), Counter(), {}
-        cap = {s: max(1, round(ratios[s] * n_clips)) for s in SPLITS}  # volumes visés, en clips
-        got_t: dict[str, Counter] = {s: Counter() for s in SPLITS}
-        if frozen is not None:  # test imposé : ses clips d'abord, le reste en train/val
-            for c in [c for c in order if c in frozen]:
-                assign[c] = "test"
-                got["test"] += 1
-                got_t["test"].update(clips[c])
-            order = [c for c in order if c not in frozen]
-            cap["test"] = got["test"]
-        cap["train"] = n_clips - cap["val"] - cap["test"]
-        for c in order:
-            def deficit(s):
-                # Déficits relatifs (rapportés à la cible) : en absolu, un cas rare (vu une seule
-                # fois) partirait toujours en train, le split le plus gros.
-                trait = sum(1 - got_t[s][t] / (ratios[s] * total[t]) for t in clips[c])
-                return trait, 1 - got[s] / (ratios[s] * n_clips), rng.random()
-            s = max([s for s in SPLITS if got[s] < cap[s] and (s != "test" or frozen is None)], key=deficit)
-            assign[c] = s
-            got[s] += 1
-            got_t[s].update(clips[c])
+        if frozen is None:
+            assign = _stratified(clips, {"dev": 1 - test_ratio, "test": test_ratio}, seed)
+        else:  # test imposé : ses chaînes en test, tout le reste en dev
+            assign = {c: "test" if c in frozen else "dev" for c in clips}
 
         SPLITS_DIR.mkdir(parents=True, exist_ok=True)
         split_id = f"split_{len(list(SPLITS_DIR.glob('split_*.json'))) + 1:03d}"
-        params = {"val_ratio": val_ratio, "test_ratio": None if frozen is not None else test_ratio,
+        params = {"test_ratio": None if frozen is not None else test_ratio,
                   "test_fige": frozen is not None, "stratify": stratify, "seed": seed}
         (SPLITS_DIR / f"{split_id}.json").write_text(json.dumps(
             {"split_id": split_id, "note": note, "date": time.strftime("%Y-%m-%d %H:%M"), "params": params,
@@ -448,6 +488,7 @@ class Lab:
             self._test_clips()  # fige le test de ce premier split
         m = self._split_map(split_id)
         return _jsonable({"split_id": split_id, "params": params, "clips_exclus": len(exclude),
+                          "plis_de_validation": len(set(self._folds(split_id).values())),
                           **{s: self._composition({k for k, v in m.items() if v == s},
                                                   with_positives=s != "test") for s in SPLITS}})
 
@@ -462,34 +503,43 @@ class Lab:
             raise ValueError("split_id obligatoire : un split créé par make_split (voir list_experiments)")
         if model not in MODELS:
             raise ValueError(f"model dans {MODELS}")
-        tr, va = self._idx("train", split_id), self._idx("val", split_id)
-        if not len(tr) or not len(va):
-            raise ValueError("splits train/val vides : il faut d'abord collecter des données")
+        dev = self._idx("dev", split_id)
+        if not len(dev):
+            raise ValueError("dev vide : il faut d'abord collecter des données")
         params = params or {}
-        tr, balance_report = self._balance(tr, balance or {})
-        sample_weight = self._weights(tr, weights or {})
+        folds = self._folds(split_id)
+        fold = np.array([folds[self.rows[i]["source"]] for i in dev])
+        groups = np.array([self.rows[i]["source"] for i in dev])
         X, feat_ms = self._X(embeddings, temporal, self._prev())
         y = self._y()
 
-        clf = self._make(model, params)
         t0 = time.time()
-        fit_kw = {} if sample_weight is None else {f"{clf.steps[-1][0]}__sample_weight": sample_weight}
-        clf.fit(X[tr], y[tr], **fit_kw)
+        probs, fold_models = np.zeros(len(dev)), []
+        for k in np.unique(fold):  # chaque pli prédit par un modèle qui n'a vu aucune de ses chaînes
+            out = fold == k
+            fold_models.append(self._fit(model, params, dev[~out], balance, weights, X, y)[0])
+            probs[out] = fold_models[-1].predict_proba(X[dev[out]])[:, 1]
+        # Modèle gardé : la moyenne des modèles de plis, dont les scores sont ceux sur lesquels le
+        # seuil est choisi. Un modèle réentraîné sur tout dev est plus confiant : au même seuil, il
+        # perdait 4 à 9 points de précision sur les chaînes cachées du banc b1.
+        clf = FoldEnsemble(fold_models)
+        balance_report = self._balance(dev, balance or {})[1]
+        weighted = bool(weights)
         train_s = time.time() - t0
         t0 = time.time()
-        probs = clf.predict_proba(X[va])[:, 1]
-        pred_ms = 1000 * (time.time() - t0) / len(va)
+        clf.predict_proba(X[dev])
+        pred_ms = 1000 * (time.time() - t0) / len(dev)
 
         exp_id = self._next_exp_id()
         result = {
-            "val": metrics.summary(y[va], probs), "train_s": train_s,
+            "val": metrics.summary(y[dev], probs, groups), "train_s": train_s,
             "ms_par_frame": feat_ms + pred_ms, "n_features": X.shape[1],
-            "n_train": len(tr), "n_val": len(va), "data": self._data_snapshot(split_id),
+            "n_dev": len(dev), "plis": len(np.unique(fold)), "data": self._data_snapshot(split_id),
             "date": time.strftime("%Y-%m-%d %H:%M"),
         }
         if balance_report:
             result["reequilibrage_train"] = balance_report
-        if sample_weight is not None:
+        if weighted:
             result["ponderation_train"] = {g: f"poids {float(w):g}" for g, w in sorted(weights.items())}
         # Clé "features" gardée dans config.json : l'interface et final_test la relisent.
         config = {"split_id": split_id, "features": embeddings, "model": model, "temporal": temporal,
@@ -498,10 +548,11 @@ class Lab:
         d.mkdir(parents=True)
         (d / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
         (d / "metrics.json").write_text(json.dumps(_jsonable(result), indent=2), encoding="utf-8")
-        # Prédictions val indexées par frame : restent valides si le dataset grossit ensuite.
+        # Prédictions val (hors pli) indexées par frame : restent valides si le dataset grossit
+        # ensuite ; groups (chaîne de chaque image) sert au seuil prudent.
         (d / "val_preds.json").write_text(json.dumps(
-            {"frames": [self.rows[i]["frame"] for i in va], "y": y[va].tolist(),
-             "probs": [round(float(p), 5) for p in probs]}), encoding="utf-8")
+            {"frames": [self.rows[i]["frame"] for i in dev], "y": y[dev].tolist(),
+             "probs": [round(float(p), 5) for p in probs], "groups": groups.tolist()}), encoding="utf-8")
         with open(d / "model.pkl", "wb") as fh:
             pickle.dump(clf, fh)
         # Format court : la config est celle de l'appel, le détail reste dans metrics.json.
@@ -590,9 +641,9 @@ class Lab:
             mine = [_compact(e, self._val_errors(e["id"])) for e in exps if e.get("split_id") == sid]
             if (split_id and sid != split_id) or (not split_id and not mine and sid != latest):
                 continue
-            va = self._idx("val", sid)
+            dev = self._idx("dev", sid)
             # Chaînes par partie, recomptées sur les clips réellement assignés : chaines_shared
-            # (chaînes présentes dans plusieurs parties) doit rester à 0, sinon val/test fuient dans train.
+            # (chaînes présentes dans plusieurs parties) doit rester à 0, sinon test fuit dans dev.
             m = self._split_map(sid)
             parts: dict[str, set[str]] = {}
             for r in self.rows:
@@ -602,7 +653,7 @@ class Lab:
                      **{f"chaines_{s}": sum(ps == {s} for ps in parts.values()) for s in SPLITS},
                      "chaines_shared": sum(len(ps) > 1 for ps in parts.values()),
                      **{f"clips_{s}": sp[s] for s in SPLITS},
-                     "val_images": len(va), "val_images_positives": int(y[va].sum()),
+                     "images_dev": len(dev), "images_dev_positives": int(y[dev].sum()),
                      "clips_hors_split": sp["clips_hors_split"]}
             if sp["clips_exclus"]:
                 entry["clips_exclus"] = sp["clips_exclus"]
@@ -662,8 +713,10 @@ class Lab:
         for e in self.list_experiments():
             if e.get("split_id") != big:
                 continue
-            _, y, probs, _ = self._val_at(e["id"], 0.0)  # toutes les prédictions val de l'expérience
-            op = metrics.recall_at_precision(y, probs, precision)
+            try:
+                op = self._val_at(e["id"], precision)[3]
+            except ValueError:  # précision jamais atteinte sur val
+                op = None
             ranked.append({"experiment_id": e["id"], "val_recall": op["recall"] if op else 0.0,
                            "ap": e["val"]["ap"] or 0.0, "auc": e["val"]["auc"] or 0.0,
                            "ms_par_frame": e["ms_par_frame"], "test": self._test_status(e["id"], precision)})
@@ -713,6 +766,16 @@ class Lab:
                                                  max_leaf_nodes=int(params.get("max_leaf_nodes", 31)),
                                                  class_weight="balanced", random_state=0)
         return make_pipeline(*steps, clf)
+
+    def _fit(self, model: str, params: dict, tr: np.ndarray, balance: dict | None, weights: dict | None,
+             X: np.ndarray, y: np.ndarray):
+        """Entraîne sur les images tr, rééchantillonnées et pondérées : (classifieur, rapport du
+        rééchantillonnage, pondéré ou non)."""
+        tr, report = self._balance(tr, balance or {})
+        w = self._weights(tr, weights or {})
+        clf = self._make(model, params)
+        clf.fit(X[tr], y[tr], **({} if w is None else {f"{clf.steps[-1][0]}__sample_weight": w}))
+        return clf, report, w is not None
 
     def _balance_groups(self, r: dict) -> set[str]:
         """Groupes de rééquilibrage d'une frame (voir BALANCE_GROUPS)."""
@@ -781,7 +844,14 @@ class Lab:
         """Prédictions val d'une expérience et son point de fonctionnement à la précision visée."""
         preds = json.loads((EXP_DIR / experiment_id / "val_preds.json").read_text(encoding="utf-8"))
         y, probs = np.array(preds["y"]), np.array(preds["probs"])
-        op = metrics.recall_at_precision(y, probs, precision)
+        # Seuil déjà calculé à l'entraînement pour les précisions usuelles (le bootstrap du seuil
+        # prudent coûte) ; sinon recalculé, prudent si les chaînes sont connues.
+        val = json.loads((EXP_DIR / experiment_id / "metrics.json").read_text(encoding="utf-8"))["val"]
+        known = val.get(f"rappel_a_precision_{precision}")
+        if isinstance(known, dict):
+            op = metrics.operating_point(y, probs, known["threshold"])
+        else:
+            op = metrics.recall_at_precision(y, probs, precision, preds.get("groups"))
         if op is None:
             raise ValueError(f"précision {precision} jamais atteinte sur val par {experiment_id}")
         return preds["frames"], y, probs, op

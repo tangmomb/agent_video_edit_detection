@@ -65,9 +65,12 @@ class Model:
         if prod.get("experiment_id") == self.exp_id:
             self.threshold, self.precision = prod["threshold"], prod["precision_visee"]
         else:  # seuil de l'expérience à la précision par défaut, choisi sur val comme dans le labo
-            preds = json.loads((d / "val_preds.json").read_text(encoding="utf-8"))
             self.precision = metrics.DEFAULT_PRECISION
-            op = metrics.recall_at_precision(np.array(preds["y"]), np.array(preds["probs"]), self.precision)
+            op = self.metrics["val"].get(f"rappel_a_precision_{self.precision}")
+            if not isinstance(op, dict):  # pas atteinte à l'entraînement : recalcul (seuil prudent si chaînes connues)
+                preds = json.loads((d / "val_preds.json").read_text(encoding="utf-8"))
+                op = metrics.recall_at_precision(np.array(preds["y"]), np.array(preds["probs"]), self.precision,
+                                                 preds.get("groups"))
             self.threshold = op["threshold"]
         for spec in self.config["features"]:  # charge les encodeurs au démarrage, pas à la 1re vidéo
             _encoder(spec.partition(":")[0], DEVICE)

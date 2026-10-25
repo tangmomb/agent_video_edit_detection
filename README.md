@@ -48,15 +48,19 @@ python -m model_training_pipeline info      # état du dataset
 ```
 
 Cible binaire `label_any` (au moins un ajout visible sur l'image), `null` sans accord des annotateurs.
-Split train/val/test par chaîne YouTube (une chaîne garde son habillage d'une vidéo à l'autre).
-Métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val et
-appliqué tel quel sur test ; AUC et AP en repères (`model_training_pipeline/metrics.py`).
+Split dev/test par chaîne YouTube (une chaîne garde son habillage d'une vidéo à l'autre).
+Métrique principale : rappel à précision fixée (95 % par défaut) sur val, une validation croisée
+par chaîne sur dev (5 plis : chaque image est prédite par un modèle qui n'a vu aucune vidéo de sa
+chaîne). Le seuil y est choisi prudemment (centile 80 des seuils de 200 tirages de chaînes avec
+remise), puis appliqué tel quel sur test à la moyenne des modèles de plis ; AUC et AP en repères
+(`model_training_pipeline/metrics.py`). Un val fixe ne comptait que 5 à 13 chaînes : son seuil ne
+tenait pas la précision sur d'autres chaînes (banc b1 : 0.53 à 1.0 pour 0.95 visé).
 
 ## Agents : pipeline de création du classifieur
 
 ```
 Orchestrateur ──► Dataset Builder   (collecte vidéos YouTube + annotation par 3 LLM)
-      │      ──► Model Researcher  (entraîne, expérimente sur val)
+      │      ──► Model Researcher  (entraîne, expérimente en validation croisée)
       │      ──► Evaluator         (mesure, analyse les erreurs, test final)
       └──◄── rapports des agents : décide du cycle suivant
 ```
@@ -67,11 +71,13 @@ python -m agents --budget-usd 1.00 --annotation-usd 2.00 --data-budget 250 --fin
 
 Banc d'agents (`agents/bench.py`) : compare des modèles LLM, le même pour les quatre agents, sur un
 instantané figé du dataset dans `bench/<nom>/`, sans toucher aux vraies données. Une part des
-chaînes est cachée aux agents ; le modèle de production de chaque run y est mesuré.
+chaînes est cachée aux agents ; le modèle de production de chaque run y est mesuré : AP, rappel
+et précision au seuil choisi par le run (la précision visée tient-elle ?) et rappel idéal à 95 %
+(meilleur seuil possible : qualité du modèle sans l'erreur de seuil).
 
 ```bash
 python -m agents.bench snapshot --name b1                  # instantané + jeu caché (gratuit)
-python -m agents.bench run --name b1 --runs 3 --budget 1.5 # 6 modèles x 3 runs (appels API payants)
+python -m agents.bench run --name b1 --runs 5 --budget 1.0 # 6 modèles x 5 runs (appels API payants)
 python -m agents.bench score --name b1                     # tableau bench/b1/results.md (gratuit)
 ```
 
@@ -91,10 +97,11 @@ Organisation :
   le Dataset Builder collecte sans se soucier des splits (`generate_data` : recherche YouTube,
   téléchargement, annotation en mode batch dans la limite de `--annotation-usd`, attente des résultats
   sans limite, dans le même appel), le Model Researcher découpe le dataset en
-  splits train/val/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
-  chaîne YouTube, stratifiés par défaut sur orientation et vidéos sans ajout ;
-  l'ancien découpage `hash`, non figé, est refusé). Le test est figé au premier split
-  (`data/splits/test_set.json`) : les splits suivants ne redécoupent que train/val. Le Dataset
+  splits dev/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
+  chaîne YouTube, stratifiés par défaut sur orientation et vidéos sans ajout, comme les plis de
+  dev ; l'ancien découpage `hash`, non figé, est refusé ; les anciens splits train/val/test se
+  lisent comme dev/test). Le test est figé au premier split (`data/splits/test_set.json`) : les
+  splits suivants mettent tout le reste en dev. Le Dataset
   Builder ne fait qu'ajouter des données ; le Model Researcher peut exclure un clip défectueux
   (`exclude_clips`, `data/excluded.json`), ce qui ne vaut que pour les splits créés ensuite. Seul l'Evaluator mesure sur test.
   Aucun agent ne met de modèle en production : en fin de run, le code (`Lab().select_production()`)

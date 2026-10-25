@@ -19,7 +19,7 @@ list_experiments) ; deux expériences sur des splits différents ne se comparent
 demande un ré-entraînement sur le même split. Signale un split créé après l'analyse d'erreurs d'un \
 modèle qui ferait monter le score sans que le modèle change. Appuie chaque conclusion sur les \
 chiffres (analyze_errors) et sur l'inspection visuelle de quelques cas (show_examples), côté \
-ajouts ratés comme côté fausses alertes. Sois sceptique : sur un petit split val, un écart de \
+ajouts ratés comme côté fausses alertes. Sois sceptique : avec peu de chaînes, un écart de \
 quelques points n'est pas une preuve. N'utilise final_test que sur un candidat déjà retenu sur \
 val, et dis clairement si le test confirme val (précision visée tenue au seuil choisi sur val).
 
@@ -56,7 +56,7 @@ def make(lab: Lab) -> Agent:
             ),
             Tool(
                 name="show_examples",
-                description="Montre des images de val : images avec ajout ratées "
+                description="Montre des images de val (prédites hors pli) : images avec ajout ratées "
                             "(kind=missed) ou fausses alertes (kind=false_positive).",
                 input_schema={
                     "type": "object",

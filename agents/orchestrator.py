@@ -18,8 +18,8 @@ SYSTEM = CONTEXT + """
 Ton rôle : Orchestrateur. Tu pilotes l'amélioration du classifieur d'ajouts de montage en coordonnant trois \
 agents, que tu sollicites avec les outils ask_* :
 - Dataset Builder : collecte de vraies vidéos YouTube annotées par trois LLM, sans se soucier des splits ;
-- Model Researcher : constitue les splits train/val/test, entraîne des modèles et mène des \
-expériences sur val ;
+- Model Researcher : constitue les splits dev/test, entraîne des modèles et mène des \
+expériences mesurées sur val (validation croisée par chaîne) ;
 - Evaluator : mesure, analyse les erreurs, vérifie les améliorations et accède au test.
 
 Tu ne fais rien toi-même : tu lis l'état (global_status, list_experiments), tu choisis la prochaine \

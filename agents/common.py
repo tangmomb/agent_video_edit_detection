@@ -9,7 +9,7 @@ montage (habillage, texte, titre, sous-titres, photo ou image incrustée, logo, 
 graphique : tout ce qui ne vient pas de la caméra) ou si elle est brute de la caméra. Les images \
 sont échantillonnées à 1 par seconde ; une image est positive si au moins un ajout y est visible.
 
-Objectif : le meilleur rappel possible à précision fixée (95 % par défaut) sur le split val, \
+Objectif : le meilleur rappel possible à précision fixée (95 % par défaut) sur val, \
 c'est-à-dire détecter le plus d'images avec ajout en gardant au plus 5 % de fausses alertes. \
 Le temps de calcul n'est pas un critère. Le seuil de décision est choisi sur val puis appliqué tel quel sur test. AUC et AP servent de repères secondaires.
 
@@ -17,12 +17,16 @@ Données : vraies vidéos YouTube. Chaque image est annotée par trois LLM de vi
 d'étiquette que s'ils sont tous d'accord, sinon elle est écartée (ni entraînée ni mesurée). Les \
 étiquettes peuvent donc contenir quelques erreurs communes aux trois LLM, et les cas ambigus \
 manquent. Le Dataset Builder collecte les vidéos sans se soucier des splits ; le Model Researcher \
-découpe ensuite le dataset en train/val/test (make_split) : un split est nommé, figé, fait par \
+découpe ensuite le dataset en dev/test (make_split) : un split est nommé, figé, fait par \
 chaîne YouTube (une chaîne garde le même habillage d'une vidéo à l'autre), et les vidéos \
 collectées après sa création n'y entrent pas. Sans split, on ne peut ni entraîner ni tester. Chaque expérience retient son split : deux \
-expériences ne se comparent que si elles ont le même split. Les décisions se prennent sur val ; \
-test est réservé à la vérification finale d'un candidat. Le split val est petit : une différence \
-de quelques points peut être du bruit.
+expériences ne se comparent que si elles ont le même split. val est une validation croisée par \
+chaîne sur dev : chaque image de dev est prédite par un modèle qui n'a vu aucune vidéo de sa \
+chaîne, ce qui mesure le comportement sur des chaînes nouvelles. Le seuil y est choisi prudemment \
+(il doit tenir la précision visée sur la plupart des tirages de chaînes) ; le modèle gardé est \
+la moyenne des modèles de la validation croisée. Les décisions se prennent sur val ; test est réservé à la \
+vérification finale d'un candidat. Le dataset compte peu de chaînes : une différence de quelques \
+points peut être du bruit.
 
 Règles d'action, sans exception :
 - Tu n'agis sur le projet qu'à travers tes outils. Tu n'as ni terminal, ni accès aux fichiers, ni \
@@ -49,7 +53,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
     props = {}
     if agent == "model_researcher":
         props["split_id"] = {"type": "string",
-                             "description": "Ajoute la composition détaillée de train, val et test pour ce "
+                             "description": "Ajoute la composition détaillée de dev et test pour ce "
                                             "split (id renvoyé par make_split)."}
 
     def fn(split_id: str | None = None) -> dict:
@@ -63,7 +67,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
 
     contenu = (", diversité (chaînes les plus représentées), budgets restants (vidéos, "
                "annotation en $)" if agent == "dataset_builder" else
-               " ; avec split_id, la même composition pour train, val et test")
+               " ; avec split_id, la même composition pour dev et test")
     return Tool(
         name="dataset_info",
         description="État du dataset : composition globale (chaînes YouTube, vidéos, images extraites, "
@@ -80,9 +84,9 @@ def list_experiments_tool(lab: Lab) -> Tool:
     return Tool(
         name="list_experiments",
         description="Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes "
-                    "YouTube en train/val/test et chaines_shared (chaînes présentes dans plusieurs "
-                    "parties, toujours 0 : une chaîne n'appartient qu'à une partie), vidéos (clips) en "
-                    "train/val/test, images étiquetées du val et images positives du val, vidéos "
+                    "YouTube en dev/test et chaines_shared (chaînes présentes dans les deux parties, "
+                    "toujours 0 : une chaîne n'appartient qu'à une partie), vidéos (clips) en "
+                    "dev/test, images étiquetées de dev et images positives de dev, vidéos "
                     "collectées après le split, "
                     "note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, "
                     "rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), "

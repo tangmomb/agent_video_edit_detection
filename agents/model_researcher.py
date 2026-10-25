@@ -8,30 +8,30 @@ from .runner import Agent, Tool
 
 SYSTEM = CONTEXT + """
 
-Ton rôle : Model Researcher. Tu constitues les splits train/val/test (make_split) et tu mènes les \
+Ton rôle : Model Researcher. Tu constitues les splits dev/test (make_split) et tu mènes les \
 expériences demandées par l'orchestrateur : choix des embeddings figés (CLIP seul, DINOv2 seul ou \
 les deux concaténés ; image entière ou quadrants), du classifieur et de ses hyperparamètres, de \
-l'information temporelle, du rééchantillonnage de train (balance : retirer ou dupliquer des \
+l'information temporelle, du rééchantillonnage des images d'entraînement (balance : retirer ou dupliquer des \
 images d'un groupe) et de la pondération de la perte (weights : faire peser davantage un groupe \
 difficile, par exemple les images brutes que le modèle prend pour des ajouts). Le seuil est choisi par le code sur \
-val (meilleur rappel à 95 % de précision) : pondérer toutes les images positives ou négatives revient \
+val (meilleur rappel à 95 % de précision, choisi prudemment) : pondérer toutes les images positives ou négatives revient \
 surtout à le déplacer ; vise plutôt un groupe précis. Tu ne collectes pas de données et tu ne mesures jamais sur test : \
 seul l'Evaluator y accède.
 
 Splits : les splits existants sont dans list_experiments ; décide-les à partir de la composition du \
 dataset (dataset_info), jamais des erreurs d'un \
-modèle. Crée un split quand aucun n'existe, quand le dataset a nettement grossi (clips_hors_split) \
-ou quand val ne couvre pas les cas importants (orientation, vidéos sans \
-ajout, assez de chaînes) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
-raison précise. Le test est figé au premier split : les suivants ne redécoupent que train et val, \
-et seul exclude_clips retire un clip des splits. Ne refais jamais un split pour améliorer un \
-score val : un val choisi pour être facile ne mesure plus rien. \
-Vérifie la composition de val et test (dataset_info avec split_id) avant d'entraîner.
+modèle. Crée un split quand aucun n'existe ou quand le dataset a nettement grossi \
+(clips_hors_split) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
+raison précise. Le test est figé au premier split : les suivants mettent tout le reste en dev \
+(nouvelles vidéos comprises), et seul exclude_clips retire un clip des splits. Ne refais jamais \
+un split pour améliorer un score val : les plis de validation suivent la graine du split, et un \
+découpage choisi pour être facile ne mesure plus rien. \
+Vérifie la composition de dev et test (dataset_info avec split_id) avant d'entraîner.
 
 Exclusions : exclude_clips retire un clip des splits créés ensuite ; les splits existants ne \
 changent pas, il faut donc un nouveau split pour qu'elle compte. Ne l'utilise que pour un défaut du clip lui-même (vidéo cassée, doublon), jamais parce qu'un modèle \
 s'y trompe : les cas où le modèle échoue sont précisément ceux qu'il faut garder, et retirer un \
-clip difficile du val fausse la mesure. Justifie chaque exclusion dans ton rapport.
+clip difficile de dev fausse la mesure. Justifie chaque exclusion dans ton rapport.
 
 Méthode : consulte l'historique pour ne pas refaire une expérience existante. Formule une hypothèse \
 par expérience (champ note : l'hypothèse seule, en une phrase, sans recopier la config ni le split, \
@@ -56,25 +56,25 @@ def make(lab: Lab) -> Agent:
             list_experiments_tool(lab),
             Tool(
                 name="make_split",
-                description="Crée un split train/val/test figé sur toutes les vidéos actuelles (les vidéos "
+                description="Crée un split dev/test figé sur toutes les vidéos actuelles (les vidéos "
                             "collectées ensuite n'y entrent pas). Les vidéos d'une même chaîne YouTube restent "
-                            "du même côté. Le test est commun à tous les splits (figé au premier) : seuls train "
-                            "et val sont redécoupés. Renvoie l'id du split et la composition de train, val et test.",
+                            "du même côté. Le test est commun à tous les splits (figé au premier) : tout le "
+                            "reste va en dev, découpé par chaîne en plis de validation croisée. Renvoie l'id "
+                            "du split, le nombre de plis et la composition de dev et test.",
                 input_schema={
                     "type": "object",
                     "properties": {
                         "note": {"type": "string", "description": "Pourquoi ce split (ce qu'il corrige ou couvre)."},
-                        "val_ratio": {"type": "number", "minimum": 0.05, "maximum": 0.4,
-                                      "description": "Part des clips en val (défaut 0.2)."},
                         "test_ratio": {"type": "number", "minimum": 0.05, "maximum": 0.4,
                                        "description": "Part des clips en test (défaut 0.2), pour le premier "
                                                       "split seulement : ignoré ensuite (test figé)."},
                         "stratify": {"type": "array", "items": {"type": "string", "enum": list(STRATIFY_KEYS)},
                                      "description": "Caractéristiques à répartir au plus près des proportions "
-                                                    "visées dans chaque split : orientation, clip_vide (vidéo "
-                                                    "sans aucune image avec ajout). Par défaut toutes ; [] = "
-                                                    "tirage purement aléatoire."},
-                        "seed": {"type": "integer", "description": "Graine du tirage (défaut 0)."},
+                                                    "visées entre dev et test (premier split) et entre les plis "
+                                                    "de dev : orientation, clip_vide (vidéo sans aucune image "
+                                                    "avec ajout). Par défaut toutes ; [] = tirage purement "
+                                                    "aléatoire."},
+                        "seed": {"type": "integer", "description": "Graine du tirage du test et des plis (défaut 0)."},
                     },
                     "required": ["note"],
                 },
@@ -83,9 +83,10 @@ def make(lab: Lab) -> Agent:
             Tool(
                 name="train_model",
                 description="Entraîne un classifieur binaire (ajout de montage visible ou non) sur des "
-                            "embeddings figés, sur le train du split choisi avec un rééchantillonnage "
-                            "(balance) et une pondération (weights) optionnels, et l'évalue sur le val de ce "
-                            "split. Renvoie l'id d'expérience, AUC, AP, le rappel au seuil de précision 95 % "
+                            "embeddings figés, avec un rééchantillonnage (balance) et une pondération "
+                            "(weights) optionnels des images d'entraînement, et l'évalue par validation "
+                            "croisée par chaîne sur le dev du split (val) ; le modèle gardé est la moyenne des modèles de plis."
+                            "Renvoie l'id d'expérience, AUC, AP, le rappel au seuil de précision 95 % "
                             "(avec FP/FN) et l'effet du rééchantillonnage et de la pondération. Les embeddings absents du cache sont calculés à la volée (GPU).",
                 input_schema={
                     "type": "object",
@@ -96,7 +97,9 @@ def make(lab: Lab) -> Agent:
                                                     "Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = "
                                                     "embeddings concaténés, ex. ['clip_b32:full', "
                                                     "'dinov2_s:full'] pour CLIP + DINOv2."},
-                        "model": {"type": "string", "enum": list(MODELS)},
+                        "model": {"type": "string", "enum": list(MODELS),
+                                  "description": "logreg et mlp : quelques secondes ; hgb : plusieurs minutes "
+                                                 "(dix ou plus sur des embeddings concaténés ou grid2)."},
                         "temporal": {"type": "string", "enum": ["none", "diff"],
                                      "description": "diff ajoute e_t - e_(t-1) (changement depuis l'image "
                                                     "précédente)."},
@@ -104,8 +107,8 @@ def make(lab: Lab) -> Agent:
                                    "description": "logreg: C ; mlp: hidden (liste), alpha ; "
                                                   "hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int)."},
                         "balance": {"type": "object", "additionalProperties": {"type": "number"},
-                                    "description": "Rééchantillonnage de train seulement (val et test "
-                                                   "intacts) : {groupe: facteur, 0 à 10}. Sous 1, on garde "
+                                    "description": "Rééchantillonnage des images d'entraînement seulement "
+                                                   "(images mesurées et test intacts) : {groupe: facteur, 0 à 10}. Sous 1, on garde "
                                                    "cette fraction des images ; au-dessus, on les duplique "
                                                    "(3 = trois exemplaires). Groupes : "
                                                    + ", ".join(BALANCE_GROUPS) + ". positif / negatif = "
@@ -114,7 +117,7 @@ def make(lab: Lab) -> Agent:
                                                    "orientation de la vidéo. Ex. {'negatif': 2, 'paysage': 0.7}. "
                                                    "Le dataset n'est pas modifié."},
                         "weights": {"type": "object", "additionalProperties": {"type": "number"},
-                                    "description": "Poids des images de train dans la perte, sans changer "
+                                    "description": "Poids des images d'entraînement dans la perte, sans changer "
                                                    "les données : {groupe: poids, > 0 et au plus 10}, mêmes "
                                                    "groupes que balance. Une image dans plusieurs groupes prend "
                                                    "le plus grand poids, les autres gardent 1. S'ajoute à la "
@@ -123,7 +126,7 @@ def make(lab: Lab) -> Agent:
                         "note": {"type": "string",
                                  "description": "Hypothèse testée, en une phrase, sans recopier la config."},
                         "split_id": {"type": "string",
-                                     "description": "Split sur lequel entraîner (train) et mesurer (val) : "
+                                     "description": "Split dont le dev sert à entraîner et à mesurer (val) : "
                                                     "un id renvoyé par make_split (voir list_experiments)."},
                     },
                     "required": ["embeddings", "split_id"],
