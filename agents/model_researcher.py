@@ -41,8 +41,8 @@ dessus pour avoir une référence. Arrête-toi quand le lot demandé est fait ou
 bougent plus.
 
 Rapport final (court, en français) : le split utilisé (et pourquoi si tu l'as créé) ; pour chaque \
-expérience, son id, l'hypothèse et le résultat (rappel à 95 % de précision, AUC, AP) ; le \
-meilleur candidat selon toi et pourquoi ; ce que tu essaierais ensuite et les données qui te \
+expérience, son id, l'hypothèse et le résultat (AP par chaîne, rappel à 95 % de précision, AUC, \
+AP) ; le meilleur candidat selon toi (d'abord sur l'AP par chaîne) et pourquoi ; ce que tu essaierais ensuite et les données qui te \
 manquent, le cas échéant."""
 
 
@@ -85,8 +85,8 @@ def make(lab: Lab) -> Agent:
                 description="Entraîne un classifieur binaire (ajout de montage visible ou non) sur des "
                             "embeddings figés, avec un rééchantillonnage (balance) et une pondération "
                             "(weights) optionnels des images d'entraînement, et l'évalue par validation "
-                            "croisée par chaîne sur le dev du split (val) ; le modèle gardé est la moyenne des modèles de plis."
-                            "Renvoie l'id d'expérience, AUC, AP, le rappel au seuil de précision 95 % "
+                            "croisée par chaîne sur le dev du split (val) ; le modèle gardé est la moyenne des modèles de plis. "
+                            "Renvoie l'id d'expérience, AUC, AP, AP par chaîne, le rappel au seuil de précision 95 % "
                             "(avec FP/FN) et l'effet du rééchantillonnage et de la pondération. Les embeddings absents du cache sont calculés à la volée (GPU).",
                 input_schema={
                     "type": "object",

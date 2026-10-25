@@ -48,7 +48,7 @@ rapport, signalé comme tel.
 Pour conclure, quand l'objectif est atteint, que les gains plafonnent ou que le budget l'impose : \
 fais vérifier le meilleur candidat sur test par l'Evaluator. Aucun agent ne met de modèle en \
 production : à la fin du run, le code y met, sur le plus gros split (le plus de clips), \
-l'expérience de meilleur rappel val à précision 95 % parmi celles qui ont réussi leur test final ; \
+l'expérience de meilleure AP par chaîne sur val parmi celles qui ont réussi leur test final ; \
 s'il n'y en a aucune, il prend la meilleure sur val et la marque comme non vérifiée. Il l'ajoute à \
 ton rapport. Pour que ce choix soit le bon, fais entraîner les meilleures configs sur le split le \
 plus récent et fais tester le meilleur candidat de ce split. Rédige ton rapport en \
@@ -139,14 +139,15 @@ def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annota
         f"Erreur : {choice['error']}" if "error" in choice else
         f"`{choice['production']['experiment_id']}` sur `{choice['split_id']}` (le plus gros split), seuil "
         f"{choice['production']['threshold']} : "
-        + ("meilleur rappel val à précision {p} parmi les modèles qui ont réussi leur test final."
+        + ("meilleure AP par chaîne sur val parmi les modèles qui ont réussi leur test final."
            if choice["verifie_sur_test"] else
-           "**NON VÉRIFIÉ sur test** : aucun modèle de ce split n'a réussi son test final, c'est le "
-           "meilleur rappel val à précision {p} parmi les modèles "
+           "**NON VÉRIFIÉ sur test** : aucun modèle de ce split n'a réussi son test final, c'est la "
+           "meilleure AP par chaîne sur val parmi les modèles "
            + ("non testés." if choice["production"]["test"]["statut"] == "non testé"
-              else "testés, tous en échec.")).format(p=choice["production"]["precision_visee"])
+              else "testés, tous en échec."))
         + " Classement :\n\n"
-        + "\n".join(f"- {r['experiment_id']} : rappel val {r['val_recall']}, AP {r['ap']}, AUC {r['auc']}, "
+        + "\n".join(f"- {r['experiment_id']} : AP par chaîne {r['ap_par_chaine']}, rappel val "
+                    f"{r['val_recall']}, AP {r['ap']}, AUC {r['auc']}, "
                     f"test {r['test']['statut']}" for r in choice["classement"]))
     session.finish(report=report)
     (session.run_dir / "report.md").write_text(report, encoding="utf-8")

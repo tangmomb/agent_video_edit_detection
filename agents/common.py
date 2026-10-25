@@ -11,7 +11,12 @@ sont échantillonnées à 1 par seconde ; une image est positive si au moins un 
 
 Objectif : le meilleur rappel possible à précision fixée (95 % par défaut) sur val, \
 c'est-à-dire détecter le plus d'images avec ajout en gardant au plus 5 % de fausses alertes. \
-Le temps de calcul n'est pas un critère. Le seuil de décision est choisi sur val puis appliqué tel quel sur test. AUC et AP servent de repères secondaires.
+Le temps de calcul n'est pas un critère. Le seuil de décision est choisi sur val puis appliqué tel quel sur test. \
+Pour comparer des modèles, l'indicateur de référence est l'AP par chaîne sur val (moyenne des AP de \
+chaque chaîne : le modèle classe-t-il bien les images d'une chaîne qu'il n'a jamais vue ?) : c'est sur \
+elle que le code choisit le modèle de production. Le rappel val à 95 %, calculé sur toutes les chaînes \
+mélangées, favorise des modèles qui ne tiennent pas sur des chaînes nouvelles. AUC et AP globales \
+servent de repères secondaires.
 
 Données : vraies vidéos YouTube. Chaque image est annotée par trois LLM de vision ; elle n'a \
 d'étiquette que s'ils sont tous d'accord, sinon elle est écartée (ni entraînée ni mesurée). Les \
@@ -89,7 +94,7 @@ def list_experiments_tool(lab: Lab) -> Tool:
                     "dev/test, images étiquetées de dev et images positives de dev, vidéos "
                     "collectées après le split, "
                     "note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, "
-                    "rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), "
+                    "rééchantillonnage, pondération), hypothèse, val (AUC, AP, AP par chaîne, seuil et rappel à 95 % de précision, FP/FN), "
                     "erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), "
                     "test final, en_production si c'est le modèle en production. Un split sans "
                     "expérience n'apparaît que s'il est le plus récent.",

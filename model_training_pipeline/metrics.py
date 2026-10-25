@@ -8,6 +8,13 @@ un jeu de chaînes ne la tient pas sur d'autres, car chaque chaîne a son habill
 scores (banc b1 : précision de 0.53 à 1.0 sur des chaînes cachées pour 95 % visés). On tire donc
 des jeux de chaînes au hasard (bootstrap par chaîne), on calcule le seuil de chacun et on garde
 un centile haut : la précision visée tient sur la plupart des jeux, au prix d'un peu de rappel.
+
+AP par chaîne (groups donnés) : moyenne des AP de chaque chaîne qui a les deux classes. Elle
+mesure le classement des images à l'intérieur d'une chaîne, sans qu'une grosse chaîne pèse plus
+que les autres ; c'est le critère de choix du modèle de production. Banc b2 (384 expériences) :
+choisir par rappel val à 95 % gardait souvent CLIP seul (0.53 de rappel idéal moyen sur des
+chaînes cachées), choisir par AP par chaîne prend le meilleur modèle caché dans 19 runs sur 30
+au lieu de 5 (0.63), avec une précision cachée plus proche de la cible (0.94 au lieu de 0.88).
 """
 
 import numpy as np
@@ -63,10 +70,20 @@ def recall_at_precision(y: np.ndarray, probs: np.ndarray, target: float,
     return op if op["recall"] > 0 else None
 
 
+def group_ap(y: np.ndarray, probs: np.ndarray, groups: np.ndarray) -> float | None:
+    """AP moyenne des groupes (chaînes) qui ont les deux classes ; None s'il n'y en a aucun."""
+    groups = np.asarray(groups)
+    aps = [average_precision_score(y[m], probs[m]) for m in (groups == g for g in np.unique(groups))
+           if 0 < y[m].sum() < m.sum()]
+    return float(np.mean(aps)) if aps else None
+
+
 def summary(y: np.ndarray, probs: np.ndarray, groups: np.ndarray | None = None) -> dict:
     out = {"auc": roc_auc_score(y, probs) if len(set(y)) > 1 else None,
            "ap": average_precision_score(y, probs) if y.any() else None,
            "positifs": int(y.sum()), "images_extraites_des_clips": len(y)}
+    if groups is not None:
+        out["ap_par_chaine"] = group_ap(y, probs, groups)
     for p in PRECISION_TARGETS:
         out[f"rappel_a_precision_{p}"] = recall_at_precision(y, probs, p, groups) or "précision non atteinte"
     return out

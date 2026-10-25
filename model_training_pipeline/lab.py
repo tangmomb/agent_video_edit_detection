@@ -85,6 +85,8 @@ def _compact_val(val: dict) -> dict:
     """Val au point de précision par défaut (95 %) : seuil, rappel, erreurs. La précision n'est
     pas reprise (au moins 95 % par construction), les volumes du val sont ceux du split."""
     out = {"auc": val["auc"], "ap": val["ap"]}
+    if val.get("ap_par_chaine") is not None:
+        out["ap_par_chaine"] = val["ap_par_chaine"]
     op = val[f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"]
     if not isinstance(op, dict):
         return {**out, "p95": op}  # "précision non atteinte"
@@ -701,10 +703,12 @@ class Lab:
     def select_production(self, precision: float = metrics.DEFAULT_PRECISION) -> dict:
         """Choix automatique du modèle de production, fait par le code en fin de run, parmi les
         expériences du plus gros split (le plus de clips ; à égalité, le plus récent) : celle de
-        meilleur rappel sur val à la précision visée parmi celles qui ont réussi leur test final
-        (précision visée tenue sur test). À défaut, la meilleure non testée, puis la meilleure
-        tout court, marquées comme non vérifiées. Égalités départagées par AP, AUC puis temps de
-        calcul. Écrit production.json (via save_model) et renvoie le classement."""
+        meilleure AP par chaîne sur val parmi celles qui ont réussi leur test final (précision
+        visée tenue sur test). À défaut, la meilleure non testée, puis la meilleure tout court,
+        marquées comme non vérifiées. Égalités départagées par le rappel val à la précision
+        visée, l'AP, l'AUC puis le temps de calcul. L'AP par chaîne choisit bien mieux que le
+        rappel val le modèle qui tient sur des chaînes nouvelles (metrics.py). Écrit
+        production.json (via save_model) et renvoie le classement."""
         splits = self._split_summaries()
         if not splits:
             return {"error": "aucun split figé : rien à mettre en production"}
@@ -717,23 +721,35 @@ class Lab:
                 op = self._val_at(e["id"], precision)[3]
             except ValueError:  # précision jamais atteinte sur val
                 op = None
-            ranked.append({"experiment_id": e["id"], "val_recall": op["recall"] if op else 0.0,
+            ranked.append({"experiment_id": e["id"], "ap_par_chaine": self._group_ap(e),
+                           "val_recall": op["recall"] if op else 0.0,
                            "ap": e["val"]["ap"] or 0.0, "auc": e["val"]["auc"] or 0.0,
                            "ms_par_frame": e["ms_par_frame"], "test": self._test_status(e["id"], precision)})
         if not ranked:
             return {"error": f"aucune expérience sur le plus gros split ({big})"}
-        ranked.sort(key=lambda r: (-r["val_recall"], -r["ap"], -r["auc"], r["ms_par_frame"]))
+        ranked.sort(key=lambda r: (-(r["ap_par_chaine"] or 0.0), -r["val_recall"], -r["ap"], -r["auc"],
+                                   r["ms_par_frame"]))
         order = {"réussi": 0, "non testé": 1, "échoué": 2}
         best = min(ranked, key=lambda r: order[r["test"]["statut"]])  # min garde l'ordre val à égalité
         verifie = best["test"]["statut"] == "réussi"
         prod = self.save_model(best["experiment_id"], precision,
                                f"choix automatique de fin de run sur {big} (le plus gros split) : "
-                               + ("meilleur rappel val parmi les modèles qui ont réussi leur test final"
-                                  if verifie else "NON VÉRIFIÉ sur test (aucun modèle n'a réussi son test "
-                                  f"final), meilleur rappel val ({best['test']['statut']})"),
+                               + ("meilleure AP par chaîne sur val parmi les modèles qui ont réussi leur "
+                                  "test final" if verifie else "NON VÉRIFIÉ sur test (aucun modèle n'a réussi "
+                                  f"son test final), meilleure AP par chaîne sur val ({best['test']['statut']})"),
                                test=best["test"])
         return _jsonable({"split_id": big, "production": prod, "verifie_sur_test": verifie,
                           "classement": ranked})
+
+    def _group_ap(self, e: dict) -> float | None:
+        """AP par chaîne sur val d'une expérience ; recalculée depuis val_preds.json pour celles
+        entraînées avant qu'elle soit enregistrée (None sans chaînes connues)."""
+        if "ap_par_chaine" in e["val"]:
+            return e["val"]["ap_par_chaine"]
+        preds = json.loads((EXP_DIR / e["id"] / "val_preds.json").read_text(encoding="utf-8"))
+        if not preds.get("groups"):
+            return None
+        return metrics.group_ap(np.array(preds["y"]), np.array(preds["probs"]), preds["groups"])
 
     def _test_status(self, experiment_id: str, precision: float) -> dict:
         """Résultat du test final d'une expérience pour une précision visée : réussi si la
