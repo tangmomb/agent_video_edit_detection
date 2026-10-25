@@ -13,7 +13,7 @@ def main() -> None:
     p.add_argument("--final-tests", type=int, default=2, help="appels à final_test autorisés")
     p.add_argument("--agent-model",
                    help="même modèle pour les 4 agents, au format LiteLLM « fournisseur/identifiant » "
-                        "(ex. openai/gpt-5.6-luna, anthropic/claude-haiku-5-5) ; défaut : openai/gpt-6-luna")
+                        "(ex. openai/gpt-5.6-luna, anthropic/claude-haiku-5-5) ; défaut : mistral/mistral-large-4-0")
     a = p.parse_args()
     run(a.goal, a.budget_usd, a.data_budget, a.final_tests, a.annotation_usd, model=a.agent_model)
 

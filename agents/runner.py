@@ -42,9 +42,11 @@ RUNS_DIR = LAB_DIR / "runs"
 
 # Modèles au format LiteLLM « fournisseur/identifiant », épinglés (pas d'alias -latest) pour qu'un
 # changement de modèle côté fournisseur ne modifie pas le comportement en silence.
-# GPT-6 Luna : meilleure AP cachée du banc b1 (25/10/2026) à égalité avec GPT-5.6 Luna, pour un
-# tiers du coût ; Mistral Large 4, l'ancien défaut, était moins bon et dix fois plus cher.
-DEFAULT_MODEL = "openai/gpt-6-luna"
+# Mistral Large 4 : meilleur du banc b2 (26/10/2026, labo en validation croisée) en AP et rappel
+# cachés, et de loin le plus régulier (trouve et règle CLIP + DINOv2 presque à chaque run) ;
+# ~0,40 $ par run contre 0,02 à 0,05 $ pour les suivants, plus lent. GPT-6 Luna, en tête de b1
+# avec l'ancien labo, y finit dernier (garde CLIP seul).
+DEFAULT_MODEL = "mistral/mistral-large-4-0"
 # $/million de tokens : tarifs relevés à la main (table des modèles du banc des annotateurs,
 # octobre 2026), prioritaires sur ceux de LiteLLM, parfois en retard. cached_input : tokens
 # d'entrée servis depuis le cache, quand l'API les signale et que le fournisseur publie un prix.
