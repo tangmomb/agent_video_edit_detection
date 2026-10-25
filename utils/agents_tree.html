@@ -58,29 +58,29 @@ details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding
 <div class="legend"><span><span class="badge agent">agent</span> agent LLM (via LiteLLM)</span>
 <span><span class="badge tool">outil</span> appel au labo</span>
 <span><span class="badge delegate">délègue</span> lance un sous-agent</span></div>
-<ul class="tree"><li class="node agent"><details open><summary><span class="badge agent">agent</span><span class="aname">orchestrator</span><span class="meta">openai/gpt-6-luna · 30 tours max · 5 outils</span></summary><div class="body"><p class="desc">Orchestrateur : décide de la prochaine expérience et délègue aux trois autres agents.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">global_status</code></summary><div class="body"><p class="desc">État global : volumes du dataset (chaînes YouTube distinctes dont proviennent les vidéos, vidéos, moyenne de vidéos par chaîne, images extraites, images étiquetées et sans étiquette faute d&#x27;accord des annotateurs, vidéos sans ajout, pourcentage d&#x27;images avec ajout), budgets restants (vidéos, annotation en $, tests finaux), budget de session. Les splits sont dans list_experiments ; le détail de composition (orientation, chaînes) n&#x27;est visible que des sous-agents.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator).</p><div class="exlabel">Réponse</div><pre>{
+<ul class="tree"><li class="node agent"><details open><summary><span class="badge agent">agent</span><span class="aname">orchestrator</span><span class="meta">openai/gpt-6-luna · 30 tours max · 5 outils</span></summary><div class="body"><p class="desc">Orchestrateur : décide de la prochaine expérience et délègue aux trois autres agents.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">global_status</code></summary><div class="body"><p class="desc">État global : volumes du dataset (chaînes YouTube distinctes dont proviennent les vidéos, vidéos, moyenne de vidéos par chaîne, images extraites, images étiquetées et sans étiquette faute d&#x27;accord des annotateurs, vidéos sans ajout, pourcentage d&#x27;images avec ajout), budgets restants (vidéos, annotation en $, tests finaux), budget de session. Les splits sont dans list_experiments ; le détail de composition (orientation, chaînes) n&#x27;est visible que des sous-agents.</p><div class="noparam">aucun paramètre</div><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent orchestrator).</p><div class="exlabel">Réponse</div><pre>{
   &quot;dataset&quot;: {
-    &quot;chaines_distinctes&quot;: 6,
-    &quot;videos&quot;: 6,
+    &quot;chaines_distinctes&quot;: 44,
+    &quot;videos&quot;: 44,
     &quot;moyenne_videos_par_chaine&quot;: 1.0,
-    &quot;images_extraites&quot;: 646,
-    &quot;images_etiquetees&quot;: 623,
-    &quot;images_sans_etiquette&quot;: 23,
-    &quot;videos_sans_ajout&quot;: 2,
-    &quot;pourcentage_images_avec_ajout&quot;: 46.5,
+    &quot;images_extraites&quot;: 5282,
+    &quot;images_etiquetees&quot;: 4759,
+    &quot;images_sans_etiquette&quot;: 523,
+    &quot;videos_sans_ajout&quot;: 6,
+    &quot;pourcentage_images_avec_ajout&quot;: 67.8,
     &quot;budgets&quot;: {
-      &quot;videos_collectables_restantes&quot;: 1,
-      &quot;budget_annotation_restant_usd&quot;: 0.2,
+      &quot;videos_collectables_restantes&quot;: 0,
+      &quot;budget_annotation_restant_usd&quot;: 0.0,
       &quot;final_tests_restants&quot;: 1
     }
   },
   &quot;budget_session_usd&quot;: {
     &quot;depense&quot;: 0.0,
-    &quot;total&quot;: 0.3,
-    &quot;reserve_rapport_usd&quot;: 0.05,
-    &quot;disponible_pour_deleguer&quot;: 0.25
+    &quot;total&quot;: 1.0,
+    &quot;reserve_rapport_usd&quot;: 0.15,
+    &quot;disponible_pour_deleguer&quot;: 0.85
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en dev/test et chaines_shared (chaînes présentes dans les deux parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en dev/test, images étiquetées de dev et images positives de dev, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator).</p><div class="exlabel">Réponse</div><pre>{
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en dev/test et chaines_shared (chaînes présentes dans les deux parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en dev/test, images étiquetées de dev et images positives de dev, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent orchestrator).</p><div class="exlabel">Réponse</div><pre>{
   &quot;splits&quot;: []
 }</pre></details></div></details></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_dataset_builder</code></summary><div class="body"><p class="desc">Délègue une collecte de données au Dataset Builder ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator).</p><div class="exlabel">Appel</div><pre>{
   &quot;task&quot;: &quot;Objectif : maximiser la collecte de données pour le classifieur d&#x27;ajouts de montage (habillages, textes, logos, incrustations, cadres, effets graphiques) avant qu&#x27;un split ne soit créé.\n\nContexte : le dataset actuel contient 6 vidéos YouTube (6 chaînes distinctes, 623 images étiquetées, ~46,5 % d&#x27;images avec ajout). Selon l&#x27;état global, il ne reste que 1 vidéo collectable et environ 0,20 $ de budget d&#x27;annotation. Aucun split n&#x27;existe encore : toute vidéo collectée maintenant pourra entrer dans le futur split.\n\nConsigne :\n1. Appelle dataset_info pour connaître l&#x27;état exact du dataset et des budgets.\n2. Appelle generate_data pour collecter le maximum de vidéos/annotations possible avec le budget restant (au moins la 1 vidéo restante, plus si le budget le permet). Privilégie la diversité : des chaînes YouTube variées, avec des styles d&#x27;habillage différents (vlogs, tutos, chaînes d&#x27;info, gaming, sport, etc.) et des vidéos contenant beaucoup d&#x27;ajouts de montage (logos, lower-thirds, génériques, incrustations, textes), mais aussi quelques vidéos \&quot;brutes\&quot; sans ajout. Ne te soucie pas des splits (aucun n&#x27;existe encore).\n3. Si le budget d&#x27;annotation est insuffisant pour annoter toutes les images collectées, concentre-toi sur l&#x27;annotation des images déjà extraites en priorité.\n4. Ne demande aucune collecte au-delà de ce que les budgets permettent ; si generate_data refuse ou échoue, rapporte l&#x27;erreur exacte.\n\nRapport attendu : nombre de vidéos collectées, nombre d&#x27;images extraites et étiquetées au total (nouveau dataset_info à la fin), budgets restants, et la liste des chaînes/vidéos ajoutées. Termine par la \&quot;Vérification automatique\&quot; produite par le code.&quot;
@@ -174,181 +174,89 @@ Outils réellement appelés par dataset_builder :
   &quot;images_total&quot;: 646,
   &quot;videos_collectables_restantes&quot;: 1,
   &quot;budget_annotation_restant_usd&quot;: 0.2
-}</pre></details></div></details></li></ul></details></li></ul></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_model_researcher</code></summary><div class="body"><p class="desc">Délègue un lot d&#x27;expériences au Model Researcher ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator).</p><div class="exlabel">Appel</div><pre>{
-  &quot;task&quot;: &quot;Objectif : créer le premier split train/val/test du projet, puis entraîner et évaluer plusieurs configurations de classifieur d&#x27;ajouts de montage, pour maximiser le rappel sur le split val à précision fixée à 95 %.\n\nContexte : le dataset est figé (7 vidéos YouTube, 7 chaînes distinctes, 803 images étiquetées, ~58,5 % d&#x27;images avec ajout, 24 images sans étiquette). Le budget de collecte de vidéos est épuisé : aucune donnée ne sera ajoutée. Il n&#x27;existe encore aucun split ni aucune expérience. Le split doit être fait par chaîne YouTube (une chaîne n&#x27;appartient qu&#x27;à une partie) et doit être nommé, figé. Les décisions se prennent sur val ; le seuil de décision est choisi sur val à 95 % de précision.\n\nConsigne :\n1. Appelle dataset_info pour voir la composition exacte du dataset (chaînes, orientations, vidéos).\n2. Appelle make_split pour créer UN split nommé (par ex. « split_v1 »). Comme il n&#x27;y a que 7 chaînes, choisis une répartition par chaîne qui maximise la taille du val tout en gardant un test non vide et un train suffisant — par exemple 4 chaînes en train / 2 en val / 1 en test, ou 3/2/2 selon ce que tu juges le plus robuste. Justifie brièvement ton choix dans le rapport. Ne crée qu&#x27;un seul split.\n3. Appelle train_model pour entraîner AU PLUS 3 configurations différentes (le budget de session est limité : ne lance pas plus de 3 entraînements). Propose des configs complémentaires, par exemple : (a) embeddings CLIP ViT-B/32 + classifieur linéaire, (b) embeddings CLIP ViT-L/14 (ou autre backbone plus fort) + classifieur linéaire, (c) une config avec modèle finetuné ou pondération/rééchantillonnage si l&#x27;outil le permet. Pour chaque expérience, définis clairement la config, l&#x27;hypothèse, et assure-toi que l&#x27;évaluation sur val soit faite (AUC, AP, seuil et rappel à 95 % de précision, FP/FN à ce seuil).\n4. Pour chaque expérience, rapporte : id d&#x27;expérience, config, hypothèse, AUC val, AP val, précision visée (95 %), seuil choisi, rappel val à ce seuil, nombre de FP/FN, et les clips concernés par les erreurs à ce seuil.\n5. Ne touche pas au test : aucune évaluation sur test n&#x27;est demandée à ce stade.\n6. Si un entraînement échoue, rapporte l&#x27;erreur exacte et poursuis avec les autres.\n\nRapport attendu : id du split créé, sa composition (chaînes/clips/images par partie), le tableau comparatif des expériences sur val, l&#x27;expérience recommandée (meilleur rappel val à précision 95 %), et les limites (petitesse du val notamment). Termine par la \&quot;Vérification automatique\&quot; produite par le code.&quot;
-}</pre><div class="exlabel">Réponse</div><pre># Rapport — split_v1 et premières expériences
+}</pre></details></div></details></li></ul></details></li></ul></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_model_researcher</code></summary><div class="body"><p class="desc">Délègue un lot d&#x27;expériences au Model Researcher ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent orchestrator).</p><div class="exlabel">Appel</div><pre>{
+  &quot;task&quot;: &quot;Session d&#x27;amélioration du classifieur. État connu : dataset existant de 44 chaînes/44 vidéos, 5 282 images extraites dont 4 759 étiquetées ; aucune expérience ni aucun split (list_experiments vide). Aucun budget de collecte/annotation restant ; il reste un seul test final et le budget de session de délégation est limité, dont 0,15 $ réservé au rapport final. Crée un split dev/test figé par chaîne à partir du dataset existant (pas de collecte), puis entraîne sur ce split des configurations pertinentes et suffisamment diversifiées, en privilégiant le meilleur rappel à précision 95 % sur val par validation croisée par chaîne. Le split doit être créé une seule fois ; ne demande pas de données. Donne un rapport autonome avec l&#x27;ID du split, toutes les expériences effectivement entraînées, leurs configurations et résultats val (rappel au seuil de 95 % précision, AUC/AP si disponibles, seuil, erreurs), la meilleure candidate et les limites liées aux données/budget. Ne lance pas de test final : le dernier test doit rester disponible pour l&#x27;Evaluator. Termine selon les exigences par « Vérification automatique » listant les outils réellement appelés et leurs erreurs.&quot;
+}</pre><div class="exlabel">Réponse</div><pre>## Split et données
 
-## Split créé : `split_001`
+Split **`split_001`**, créé une seule fois à partir des vidéos existantes, stratifié par orientation et présence de clips sans ajout. Il sépare les chaînes : **35 en dev**, **9 en test**, aucune chaîne partagée, avec **5 plis** de validation croisée par chaîne. Le test reste intact pour l’Evaluator.
 
-Premier split du projet, figé, découpé par chaîne YouTube (1 vidéo par chaîne, 7 chaînes) :
+- **Dev :** 35 vidéos, 4 176 images extraites, 3 799 étiquetées, 377 sans étiquette, 4 vidéos sans ajout; 26 paysages et 9 portraits. Parmi les images étiquetées, 69,2 % sont positives.
+- **Test :** 9 vidéos, 1 106 images extraites, 960 étiquetées, 146 sans étiquette, 2 vidéos sans ajout; 7 paysages et 2 portraits.
 
-| Partie | Chaînes | Vidéos | Images étiquetées | % avec ajout | Sans ajout | Orientation |
-|---|---|---|---|---|---|---|
-| train | 4 | 4 | 656 | 68,3 % | 0 | 3 paysage / 1 portrait |
-| val | 2 | 2 | 132 | 16,7 % (22 positives) | 1 | 1 paysage / 1 portrait |
-| test | 1 | 1 | 15 | — | 1 | 1 portrait |
+## Expériences et résultats sur val
 
-**Justification** : avec 7 chaînes, 4/2/1 maximise le train (4 chaînes) tout en gardant un val de 2 chaînes (le plus grand possible avec un test non vide) et un test d&#x27;une chaîne. Stratification par défaut (orientation, clip_vide). Le test est désormais figé. **Limites constatées** : le val est très petit (132 images, 22 positives) et le train ne contient aucune vidéo sans ajout (les 2 vidéos « clip_vide » sont en val et test) — le modèle n&#x27;a donc jamais vu de vidéo 100 % brute en entraînement.
+Les paramètres non indiqués sont ceux par défaut. Le seuil est celui renvoyé pour la précision cible de 95 %. Les erreurs indiquent les nombres de faux positifs (FP) et faux négatifs (FN).
 
-## Expériences (3 entraînements, budget respecté)
+| ID | Configuration | Rappel | AUC | AP | Seuil | FP / FN |
+|---|---|---:|---:|---:|---:|---:|
+| `exp_001` | CLIP-B/32, full; logreg; sans information temporelle | **0,8346** | 0,9191 | 0,9686 | 0,9316 | 86 / 435 |
+| `exp_002` | DINOv2-S, full; logreg; sans information temporelle | 0,5529 | 0,7819 | 0,9103 | 0,9977 | 55 / 1 176 |
+| `exp_003` | CLIP-B/32 + DINOv2-S, full; logreg; sans information temporelle | 0,8266 | **0,9320** | **0,9728** | 0,9510 | 82 / 456 |
+| `exp_004` | CLIP-B/32, grid2; logreg; sans information temporelle | 0,7639 | 0,8861 | 0,9558 | 0,9678 | 80 / 621 |
+| `exp_005` | CLIP-B/32, full; logreg; temporal `diff` | 0,7407 | 0,8881 | 0,9555 | 0,9869 | 74 / 682 |
+| `exp_006` | CLIP-B/32, full; MLP; sans information temporelle | 0,7129 | 0,8682 | 0,9467 | 0,9752 | 71 / 755 |
+| `exp_007` | CLIP-B/32, full; logreg; poids `clip_vide: 3` | 0,8259 | 0,9138 | 0,9666 | 0,9412 | 85 / 458 |
 
-| Expérience | Config | Hypothèse | AUC val | AP val | Seuil (P=95 %) | Rappel val | FP / FN | Clips en erreur |
-|---|---|---|---|---|---|---|---|---|
-| **exp_001** | clip_b32:full + logreg | Un classifieur linéaire sur CLIP ViT-B/32 image entière suffit-il comme référence ? | **1,000** | **1,000** | 0,5903 | **1,000** | 1 / 0 | FP : `yt_ieiOR5l3lqU` (1) |
-| **exp_002** | clip_l14:full + logreg | Un backbone CLIP plus puissant (ViT-L/14) améliore-t-il la séparation ? | **1,000** | **1,000** | 0,8302 | **1,000** | 1 / 0 | FP : `yt_ieiOR5l3lqU` (1) |
-| **exp_003** | clip_b32:full + dinov2_s:full (concat) + hgb | CLIP + DINOv2 avec gradient boosting améliore-t-il le rappel à précision fixée ? | 0,9992 | 0,9962 | 0,9997 | 0,9545 | 1 / 1 | FN : `yt_0U6_cPT95a0` (1) ; FP : `yt_ieiOR5l3lqU` (1) |
+Hypothèses enregistrées : `exp_001`, référence linéaire CLIP; `exp_002`, tester DINOv2 seul; `exp_003`, compléter CLIP par DINOv2; `exp_004`, préserver les indices localisés avec grid2; `exp_005`, exploiter les changements entre secondes; `exp_006`, tester une frontière non linéaire; `exp_007`, réduire les fausses alertes en pondérant les vidéos entièrement sans ajout.
 
-Aucune évaluation sur test n&#x27;a été faite (réservée à l&#x27;Evaluator).
+Les détails d’erreurs ci-dessous sont les cinq clips ayant le plus de FN et les cinq ayant le plus de FP, tels que renvoyés par l’outil; ce ne sont pas les listes exhaustives.
 
-## Recommandation
+| ID | Principaux clips en FN (nombre) | Principaux clips en FP (nombre) |
+|---|---|---|
+| `exp_001` | `yt_UGsvfsrP2fo` 107; `yt_tyrQ45Robbk` 78; `yt__LpzkLDdR6U` 53; `yt_YAbWeTXeO40` 23; `yt_CZI3akKLEug` 22 | `yt_SzmcGzB5UxU` 27; `yt_cGP6tL_EdV0` 21; `yt_FGwvWbaLVw4` 9; `yt_1-vw66aYPo0` 5; `yt_eKGdRR0VZpc` 5 |
+| `exp_002` | `yt_CZI3akKLEug` 208; `yt_tyrQ45Robbk` 175; `yt_UGsvfsrP2fo` 173; `yt__LpzkLDdR6U` 116; `yt_T5WlW2SbRvM` 77 | `yt_SzmcGzB5UxU` 18; `yt_cGP6tL_EdV0` 12; `yt_yqYoMFVNcss` 9; `yt_NcKmALfFaMA` 5; `yt_eosDvec0i1A` 4 |
+| `exp_003` | `yt_UGsvfsrP2fo` 101; `yt_tyrQ45Robbk` 100; `yt__LpzkLDdR6U` 60; `yt_CZI3akKLEug` 50; `yt_YAbWeTXeO40` 16 | `yt_SzmcGzB5UxU` 34; `yt_cGP6tL_EdV0` 24; `yt_FGwvWbaLVw4` 8; `yt_yqYoMFVNcss` 5; `yt_1-vw66aYPo0` 4 |
+| `exp_004` | `yt_UGsvfsrP2fo` 138; `yt_tyrQ45Robbk` 101; `yt__LpzkLDdR6U` 60; `yt_CZI3akKLEug` 56; `yt_f32ODwPj2is` 56 | `yt_yqYoMFVNcss` 26; `yt_1-vw66aYPo0` 13; `yt_cGP6tL_EdV0` 12; `yt_n3ZtWr4KV7Y` 6; `yt_SzmcGzB5UxU` 6 |
+| `exp_005` | `yt_UGsvfsrP2fo` 151; `yt_tyrQ45Robbk` 106; `yt__LpzkLDdR6U` 64; `yt_mRQQFfW56pY` 58; `yt_CZI3akKLEug` 47 | `yt_yqYoMFVNcss` 42; `yt_SzmcGzB5UxU` 12; `yt_cGP6tL_EdV0` 11; `yt_JTt0EStEne4` 5; `yt_1-vw66aYPo0` 2 |
+| `exp_006` | `yt_UGsvfsrP2fo` 168; `yt_tyrQ45Robbk` 114; `yt_f32ODwPj2is` 56; `yt__LpzkLDdR6U` 55; `yt_CZI3akKLEug` 53 | `yt_SzmcGzB5UxU` 20; `yt_cGP6tL_EdV0` 17; `yt_yqYoMFVNcss` 15; `yt_1-vw66aYPo0` 9; `yt_JTt0EStEne4` 6 |
+| `exp_007` | `yt_UGsvfsrP2fo` 125; `yt_tyrQ45Robbk` 80; `yt__LpzkLDdR6U` 53; `yt_CZI3akKLEug` 24; `yt_YAbWeTXeO40` 23 | `yt_SzmcGzB5UxU` 25; `yt_cGP6tL_EdV0` 19; `yt_FGwvWbaLVw4` 9; `yt_yqYoMFVNcss` 7; `yt_eKGdRR0VZpc` 5 |
 
-**Candidat recommandé : exp_001** (CLIP ViT-B/32 + régression logistique). Elle atteint le maximum possible sur val (rappel 1,000 à précision 95 %, AUC = AP = 1,000) avec la config la plus simple et la moins coûteuse ; exp_002 fait jeu égal mais pour un coût de calcul bien supérieur, et exp_003 (concat CLIP+DINOv2 + HGB) est légèrement en retrait (1 FN). La seule fausse alerte des deux meilleurs modèles est la même image du clip `yt_ieiOR5l3lqU`.
+## Conclusion et limites
 
-## Limites et suite
+**Meilleure candidate selon l’objectif principal : `exp_001`**, qui obtient le rappel val le plus élevé à la précision cible (0,8346). `exp_003` est une alternative intéressante pour son AUC et son AP supérieures, mais son rappel est légèrement inférieur. L’écart de rappel est faible et peut être du bruit avec seulement 35 chaînes en dev.
 
-- **Val minuscule** : 22 positives ; 1 FN = −4,5 points de rappel, 1 FP fait tenir la précision 95 % à un fil (1 FP sur ~110 négatifs val). Les scores parfaits sont probablement du sur-ajustement au val ; un écart d&#x27;une image est du bruit.
-- **Train sans vidéo sans ajout** : le modèle n&#x27;a pas vu de vidéo purement brute ; c&#x27;est un biais structurel de ce split qu&#x27;on ne peut plus corriger (un seul split autorisé, budget de collecte épuisé).
-- **À essayer ensuite** (si l&#x27;orchestrateur poursuit) : vues `grid2` (quadrants) pour les petits logos/texte en coin, information temporelle (`diff`), MLP, PCA sur les embeddings concaténés, et pondération `negatif`/`clip_vide` — même si l&#x27;absence de `clip_vide` en train limite leur effet. À ce stade, les gains mesurables sur val sont quasiment nuls ; la prochaine étape pertinente est la **vérification finale sur test par l&#x27;Evaluator** avec exp_001 comme candidat.
+Aucun test final n’a été lancé : le test reste réservé à l’Evaluator. Les données sont limitées à 44 chaînes/vidéos, et 523 images n’ont pas d’étiquette faute d’accord entre annotateurs; les étiquettes conservées peuvent aussi comporter des erreurs communes aux trois LLM. Sans collecte ni annotation supplémentaire, ces résultats val ne permettent pas d’évaluer la fiabilité sur une population plus large.
+
+À essayer ensuite : comparer quelques variantes d’hyperparamètres ou de rééchantillonnage sur **le même split**, puis laisser l’Evaluator mesurer le candidat retenu sur le test unique.
 
 ## Vérification automatique
 
-Je ne dispose d&#x27;aucun outil produisant une « Vérification automatique » distincte ; je ne peux donc pas en inventer une. Les seules sorties de code réelles de cette session sont les métriques val renvoyées par `train_model` et confirmées par `list_experiments` : exp_001 (AUC 1,0 ; AP 1,0 ; seuil 0,5903 ; rappel 1,0 ; FP 1 / FN 0), exp_002 (AUC 1,0 ; AP 1,0 ; seuil 0,8302 ; rappel 1,0 ; FP 1 / FN 0), exp_003 (AUC 0,9992 ; AP 0,9962 ; seuil 0,9997 ; rappel 0,9545 ; FP 1 / FN 1). Test non touché.
+- `dataset_info` : appelé 2 fois; aucune erreur.
+- `list_experiments` : appelé 2 fois; aucune erreur.
+- `make_split` : appelé 1 fois; aucune erreur.
+- `train_model` : appelé 7 fois; aucune erreur.
+- `multi_tool_use.parallel` : appelé 2 fois pour des appels parallèles; aucune erreur.
 
 --- Vérification automatique (produite par le code, pas par l&#x27;agent) ---
 Outils réellement appelés par model_researcher :
 - dataset_info : 2 réussi(s), 0 échec(s)
+- list_experiments : 2 réussi(s), 0 échec(s)
 - make_split : 1 réussi(s), 0 échec(s)
-- train_model : 3 réussi(s), 0 échec(s)
-- list_experiments : 1 réussi(s), 0 échec(s)</pre></details></div></details><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">openai/gpt-6-luna · 20 tours max · 5 outils</span></summary><div class="body"><p class="desc">Model Researcher : constitue les splits, choisit les représentations et les modèles, entraîne, mène les expériences sur val.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (chaînes YouTube, vidéos, images extraites, images étiquetées et sans étiquette faute d&#x27;accord des annotateurs, pourcentage d&#x27;images avec ajout, vidéos sans aucun ajout, répartition des vidéos par orientation) ; avec split_id, la même composition pour dev et test.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de dev et test pour ce split (id renvoyé par make_split).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent model_researcher).</p><div class="exlabel">Réponse</div><pre>{
+- train_model : 7 réussi(s), 0 échec(s)</pre></details></div></details><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">model_researcher</span><span class="meta">openai/gpt-6-luna · 20 tours max · 5 outils</span></summary><div class="body"><p class="desc">Model Researcher : constitue les splits, choisit les représentations et les modèles, entraîne, mène les expériences sur val.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">dataset_info</code></summary><div class="body"><p class="desc">État du dataset : composition globale (chaînes YouTube, vidéos, images extraites, images étiquetées et sans étiquette faute d&#x27;accord des annotateurs, pourcentage d&#x27;images avec ajout, vidéos sans aucun ajout, répartition des vidéos par orientation) ; avec split_id, la même composition pour dev et test.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ajoute la composition détaillée de dev et test pour ce split (id renvoyé par make_split).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent model_researcher).</p><div class="exlabel">Réponse</div><pre>{
   &quot;fps&quot;: 1.0,
   &quot;dataset&quot;: {
-    &quot;chaines_distinctes&quot;: 7,
-    &quot;videos&quot;: 7,
+    &quot;chaines_distinctes&quot;: 44,
+    &quot;videos&quot;: 44,
     &quot;moyenne_videos_par_chaine&quot;: 1.0,
-    &quot;images_extraites&quot;: 827,
-    &quot;images_etiquetees&quot;: 803,
-    &quot;images_sans_etiquette&quot;: 24,
-    &quot;videos_sans_ajout&quot;: 2,
+    &quot;images_extraites&quot;: 5282,
+    &quot;images_etiquetees&quot;: 4759,
+    &quot;images_sans_etiquette&quot;: 523,
+    &quot;videos_sans_ajout&quot;: 6,
     &quot;videos_par_orientation&quot;: {
-      &quot;portrait&quot;: 3,
-      &quot;paysage&quot;: 4
+      &quot;paysage&quot;: 33,
+      &quot;portrait&quot;: 11
     },
-    &quot;pourcentage_images_avec_ajout&quot;: 58.5
+    &quot;pourcentage_images_avec_ajout&quot;: 67.8
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en dev/test et chaines_shared (chaînes présentes dans les deux parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en dev/test, images étiquetées de dev et images positives de dev, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent model_researcher).</p><div class="exlabel">Appel</div><pre>{
-  &quot;split_id&quot;: &quot;split_001&quot;
-}</pre><div class="exlabel">Réponse</div><pre>{
-  &quot;splits&quot;: [
-    {
-      &quot;split_id&quot;: &quot;split_001&quot;,
-      &quot;chaines_train&quot;: 4,
-      &quot;chaines_val&quot;: 2,
-      &quot;chaines_test&quot;: 1,
-      &quot;chaines_shared&quot;: 0,
-      &quot;clips_train&quot;: 4,
-      &quot;clips_val&quot;: 2,
-      &quot;clips_test&quot;: 1,
-      &quot;val_images&quot;: 132,
-      &quot;val_images_positives&quot;: 22,
-      &quot;clips_hors_split&quot;: 0,
-      &quot;note&quot;: &quot;split_v1 : premier split du projet. 7 chaînes = 7 vidéos (1 vidéo/chaîne). Répartition 4 chaînes train / 2 val / 1 test…&quot;,
-      &quot;experiences&quot;: [
-        {
-          &quot;id&quot;: &quot;exp_001&quot;,
-          &quot;embeddings&quot;: [
-            &quot;clip_b32:full&quot;
-          ],
-          &quot;model&quot;: &quot;logreg&quot;,
-          &quot;temporal&quot;: &quot;none&quot;,
-          &quot;params&quot;: {},
-          &quot;hypothese&quot;: &quot;Référence de base : un classifieur linéaire sur les embeddings CLIP ViT-B/32 de l&#x27;image entière suffit-il à séparer ajouts de montage et images brutes ?&quot;,
-          &quot;val&quot;: {
-            &quot;auc&quot;: 1.0,
-            &quot;ap&quot;: 1.0,
-            &quot;seuil_p95&quot;: 0.5903,
-            &quot;recall&quot;: 1.0,
-            &quot;fp&quot;: 1,
-            &quot;fn&quot;: 0
-          },
-          &quot;erreurs_val&quot;: {
-            &quot;fn_par_clip&quot;: {},
-            &quot;fp_par_clip&quot;: {
-              &quot;yt_ieiOR5l3lqU&quot;: 1
-            }
-          }
-        },
-        {
-          &quot;id&quot;: &quot;exp_002&quot;,
-          &quot;embeddings&quot;: [
-            &quot;clip_l14:full&quot;
-          ],
-          &quot;model&quot;: &quot;logreg&quot;,
-          &quot;temporal&quot;: &quot;none&quot;,
-          &quot;params&quot;: {},
-          &quot;hypothese&quot;: &quot;Un backbone CLIP plus puissant (ViT-L/14) améliore-t-il la séparation des ajouts de montage par rapport au ViT-B/32 ?&quot;,
-          &quot;val&quot;: {
-            &quot;auc&quot;: 1.0,
-            &quot;ap&quot;: 1.0,
-            &quot;seuil_p95&quot;: 0.8302,
-            &quot;recall&quot;: 1.0,
-            &quot;fp&quot;: 1,
-            &quot;fn&quot;: 0
-          },
-          &quot;erreurs_val&quot;: {
-            &quot;fn_par_clip&quot;: {},
-            &quot;fp_par_clip&quot;: {
-              &quot;yt_ieiOR5l3lqU&quot;: 1
-            }
-          }
-        },
-        {
-          &quot;id&quot;: &quot;exp_003&quot;,
-          &quot;embeddings&quot;: [
-            &quot;clip_b32:full&quot;,
-            &quot;dinov2_s:full&quot;
-          ],
-          &quot;model&quot;: &quot;hgb&quot;,
-          &quot;temporal&quot;: &quot;none&quot;,
-          &quot;params&quot;: {
-            &quot;lr&quot;: 0.1,
-            &quot;max_iter&quot;: 300,
-            &quot;max_leaf_nodes&quot;: 31
-          },
-          &quot;hypothese&quot;: &quot;La concaténation CLIP + DINOv2 (sémantique + traits visuels fins) avec un classifieur gradient boosting améliore-t-elle le rappel à précision fixée ?&quot;,
-          &quot;val&quot;: {
-            &quot;auc&quot;: 0.9992,
-            &quot;ap&quot;: 0.9962,
-            &quot;seuil_p95&quot;: 0.9997,
-            &quot;recall&quot;: 0.9545,
-            &quot;fp&quot;: 1,
-            &quot;fn&quot;: 1
-          },
-          &quot;erreurs_val&quot;: {
-            &quot;fn_par_clip&quot;: {
-              &quot;yt_0U6_cPT95a0&quot;: 1
-            },
-            &quot;fp_par_clip&quot;: {
-              &quot;yt_ieiOR5l3lqU&quot;: 1
-            }
-          }
-        }
-      ]
-    }
-  ]
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><p class="desc">Crée un split dev/test figé sur toutes les vidéos actuelles (les vidéos collectées ensuite n&#x27;y entrent pas). Les vidéos d&#x27;une même chaîne YouTube restent du même côté. Le test est commun à tous les splits (figé au premier) : tout le reste va en dev, découpé par chaîne en plis de validation croisée. Renvoie l&#x27;id du split, le nombre de plis et la composition de dev et test.</p><ul class="params"><li><code class="pname">note</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ce split (ce qu&#x27;il corrige ou couvre).</div></li><li><code class="pname">test_ratio</code> <span class="ptype">number</span><span class="penum"> · 0.05…0.4</span><div class=pdesc>Part des clips en test (défaut 0.2), pour le premier split seulement : ignoré ensuite (test figé).</div></li><li><code class="pname">stratify</code> <span class="ptype">array de string</span><span class="penum"> · orientation | clip_vide</span><div class=pdesc>Caractéristiques à répartir au plus près des proportions visées entre dev et test (premier split) et entre les plis de dev : orientation, clip_vide (vidéo sans aucune image avec ajout). Par défaut toutes ; [] = tirage purement aléatoire.</div></li><li><code class="pname">seed</code> <span class="ptype">integer</span><div class=pdesc>Graine du tirage du test et des plis (défaut 0).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent model_researcher).</p><div class="exlabel">Appel</div><pre>{
-  &quot;note&quot;: &quot;split_v1 : premier split du projet. 7 chaînes = 7 vidéos (1 vidéo/chaîne). Répartition 4 chaînes train / 2 val / 1 test : val aussi grand que possible (2 chaînes) tout en gardant un test non vide (1 chaîne) et un train suffisant (4 chaînes). Stratification par défaut (orientation, clip_vide) pour répartir les 3 vidéos portrait / 4 paysage et les 2 vidéos sans ajout.&quot;,
-  &quot;seed&quot;: 0,
-  &quot;stratify&quot;: [
-    &quot;orientation&quot;,
-    &quot;clip_vide&quot;
-  ],
-  &quot;test_ratio&quot;: 0.14,
-  &quot;val_ratio&quot;: 0.29
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en dev/test et chaines_shared (chaînes présentes dans les deux parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en dev/test, images étiquetées de dev et images positives de dev, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent model_researcher).</p><div class="exlabel">Réponse</div><pre>{
+  &quot;splits&quot;: []
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><p class="desc">Crée un split dev/test figé sur toutes les vidéos actuelles (les vidéos collectées ensuite n&#x27;y entrent pas). Les vidéos d&#x27;une même chaîne YouTube restent du même côté. Le test est commun à tous les splits (figé au premier) : tout le reste va en dev, découpé par chaîne en plis de validation croisée. Renvoie l&#x27;id du split, le nombre de plis et la composition de dev et test.</p><ul class="params"><li><code class="pname">note</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Pourquoi ce split (ce qu&#x27;il corrige ou couvre).</div></li><li><code class="pname">test_ratio</code> <span class="ptype">number</span><span class="penum"> · 0.05…0.4</span><div class=pdesc>Part des clips en test (défaut 0.2), pour le premier split seulement : ignoré ensuite (test figé).</div></li><li><code class="pname">stratify</code> <span class="ptype">array de string</span><span class="penum"> · orientation | clip_vide</span><div class=pdesc>Caractéristiques à répartir au plus près des proportions visées entre dev et test (premier split) et entre les plis de dev : orientation, clip_vide (vidéo sans aucune image avec ajout). Par défaut toutes ; [] = tirage purement aléatoire.</div></li><li><code class="pname">seed</code> <span class="ptype">integer</span><div class=pdesc>Graine du tirage du test et des plis (défaut 0).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent model_researcher).</p><div class="exlabel">Appel</div><pre>{
+  &quot;note&quot;: &quot;Établir la première séparation figée dev/test par chaîne sur le dataset existant, stratifiée par orientation et clips sans ajout, pour évaluer la généralisation à des chaînes nouvelles.&quot;,
+  &quot;seed&quot;: 0
 }</pre><div class="exlabel">Réponse</div><pre>{
   &quot;split_id&quot;: &quot;split_001&quot;,
   &quot;params&quot;: {
-    &quot;val_ratio&quot;: 0.29,
-    &quot;test_ratio&quot;: 0.14,
+    &quot;test_ratio&quot;: 0.2,
     &quot;test_fige&quot;: false,
     &quot;stratify&quot;: [
       &quot;orientation&quot;,
@@ -357,154 +265,105 @@ Outils réellement appelés par model_researcher :
     &quot;seed&quot;: 0
   },
   &quot;clips_exclus&quot;: 0,
-  &quot;train&quot;: {
-    &quot;chaines_distinctes&quot;: 4,
-    &quot;videos&quot;: 4,
+  &quot;plis_de_validation&quot;: 5,
+  &quot;dev&quot;: {
+    &quot;chaines_distinctes&quot;: 35,
+    &quot;videos&quot;: 35,
     &quot;moyenne_videos_par_chaine&quot;: 1.0,
-    &quot;images_extraites&quot;: 678,
-    &quot;images_etiquetees&quot;: 656,
-    &quot;images_sans_etiquette&quot;: 22,
-    &quot;videos_sans_ajout&quot;: 0,
+    &quot;images_extraites&quot;: 4176,
+    &quot;images_etiquetees&quot;: 3799,
+    &quot;images_sans_etiquette&quot;: 377,
+    &quot;videos_sans_ajout&quot;: 4,
     &quot;videos_par_orientation&quot;: {
-      &quot;paysage&quot;: 3,
-      &quot;portrait&quot;: 1
+      &quot;paysage&quot;: 26,
+      &quot;portrait&quot;: 9
     },
-    &quot;pourcentage_images_avec_ajout&quot;: 68.3
-  },
-  &quot;val&quot;: {
-    &quot;chaines_distinctes&quot;: 2,
-    &quot;videos&quot;: 2,
-    &quot;moyenne_videos_par_chaine&quot;: 1.0,
-    &quot;images_extraites&quot;: 134,
-    &quot;images_etiquetees&quot;: 132,
-    &quot;images_sans_etiquette&quot;: 2,
-    &quot;videos_sans_ajout&quot;: 1,
-    &quot;videos_par_orientation&quot;: {
-      &quot;portrait&quot;: 1,
-      &quot;paysage&quot;: 1
-    },
-    &quot;pourcentage_images_avec_ajout&quot;: 16.7
+    &quot;pourcentage_images_avec_ajout&quot;: 69.2
   },
   &quot;test&quot;: {
-    &quot;chaines_distinctes&quot;: 1,
-    &quot;videos&quot;: 1,
+    &quot;chaines_distinctes&quot;: 9,
+    &quot;videos&quot;: 9,
     &quot;moyenne_videos_par_chaine&quot;: 1.0,
-    &quot;images_extraites&quot;: 15,
-    &quot;images_etiquetees&quot;: 15,
-    &quot;images_sans_etiquette&quot;: 0,
-    &quot;videos_sans_ajout&quot;: 1,
+    &quot;images_extraites&quot;: 1106,
+    &quot;images_etiquetees&quot;: 960,
+    &quot;images_sans_etiquette&quot;: 146,
+    &quot;videos_sans_ajout&quot;: 2,
     &quot;videos_par_orientation&quot;: {
-      &quot;portrait&quot;: 1
+      &quot;portrait&quot;: 2,
+      &quot;paysage&quot;: 7
     }
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">train_model</code></summary><div class="body"><p class="desc">Entraîne un classifieur binaire (ajout de montage visible ou non) sur des embeddings figés, avec un rééchantillonnage (balance) et une pondération (weights) optionnels des images d&#x27;entraînement, et l&#x27;évalue par validation croisée par chaîne sur le dev du split (val) ; le modèle gardé est la moyenne des modèles de plis.Renvoie l&#x27;id d&#x27;expérience, AUC, AP, le rappel au seuil de précision 95 % (avec FP/FN) et l&#x27;effet du rééchantillonnage et de la pondération. Les embeddings absents du cache sont calculés à la volée (GPU).</p><ul class="params"><li><code class="pname">embeddings</code><span class=req>requis</span> <span class="ptype">array de string</span><div class=pdesc>Liste &#x27;extracteur:vue&#x27;, extracteurs clip_b32, clip_b16, clip_l14, dinov2_s, dinov2_b ; vues full (image entière) ou grid2 (image + 4 quadrants). Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = embeddings concaténés, ex. [&#x27;clip_b32:full&#x27;, &#x27;dinov2_s:full&#x27;] pour CLIP + DINOv2.</div></li><li><code class="pname">model</code> <span class="ptype">string</span><span class="penum"> · logreg | mlp | hgb</span><div class=pdesc>logreg et mlp : quelques secondes ; hgb : plusieurs minutes (dix ou plus sur des embeddings concaténés ou grid2).</div></li><li><code class="pname">temporal</code> <span class="ptype">string</span><span class="penum"> · none | diff</span><div class=pdesc>diff ajoute e_t - e_(t-1) (changement depuis l&#x27;image précédente).</div></li><li><code class="pname">params</code> <span class="ptype">object</span><div class=pdesc>logreg: C ; mlp: hidden (liste), alpha ; hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int).</div></li><li><code class="pname">balance</code> <span class="ptype">object</span><div class=pdesc>Rééchantillonnage des images d&#x27;entraînement seulement (images mesurées et test intacts) : {groupe: facteur, 0 à 10}. Sous 1, on garde cette fraction des images ; au-dessus, on les duplique (3 = trois exemplaires). Groupes : positif, negatif, clip_vide, portrait, paysage. positif / negatif = images avec / sans ajout ; clip_vide = images des vidéos sans aucune image avec ajout ; portrait / paysage = orientation de la vidéo. Ex. {&#x27;negatif&#x27;: 2, &#x27;paysage&#x27;: 0.7}. Le dataset n&#x27;est pas modifié.</div></li><li><code class="pname">weights</code> <span class="ptype">object</span><div class=pdesc>Poids des images d&#x27;entraînement dans la perte, sans changer les données : {groupe: poids, &gt; 0 et au plus 10}, mêmes groupes que balance. Une image dans plusieurs groupes prend le plus grand poids, les autres gardent 1. S&#x27;ajoute à la pondération équilibrée des classes déjà appliquée (logreg, hgb). Ex. {&#x27;clip_vide&#x27;: 3}.</div></li><li><code class="pname">note</code> <span class="ptype">string</span><div class=pdesc>Hypothèse testée, en une phrase, sans recopier la config.</div></li><li><code class="pname">split_id</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Split dont le dev sert à entraîner et à mesurer (val) : un id renvoyé par make_split (voir list_experiments).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent model_researcher).</p><div class="exlabel">Appel</div><pre>{
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">train_model</code></summary><div class="body"><p class="desc">Entraîne un classifieur binaire (ajout de montage visible ou non) sur des embeddings figés, avec un rééchantillonnage (balance) et une pondération (weights) optionnels des images d&#x27;entraînement, et l&#x27;évalue par validation croisée par chaîne sur le dev du split (val) ; le modèle gardé est la moyenne des modèles de plis.Renvoie l&#x27;id d&#x27;expérience, AUC, AP, le rappel au seuil de précision 95 % (avec FP/FN) et l&#x27;effet du rééchantillonnage et de la pondération. Les embeddings absents du cache sont calculés à la volée (GPU).</p><ul class="params"><li><code class="pname">embeddings</code><span class=req>requis</span> <span class="ptype">array de string</span><div class=pdesc>Liste &#x27;extracteur:vue&#x27;, extracteurs clip_b32, clip_b16, clip_l14, dinov2_s, dinov2_b ; vues full (image entière) ou grid2 (image + 4 quadrants). Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = embeddings concaténés, ex. [&#x27;clip_b32:full&#x27;, &#x27;dinov2_s:full&#x27;] pour CLIP + DINOv2.</div></li><li><code class="pname">model</code> <span class="ptype">string</span><span class="penum"> · logreg | mlp | hgb</span><div class=pdesc>logreg et mlp : quelques secondes ; hgb : plusieurs minutes (dix ou plus sur des embeddings concaténés ou grid2).</div></li><li><code class="pname">temporal</code> <span class="ptype">string</span><span class="penum"> · none | diff</span><div class=pdesc>diff ajoute e_t - e_(t-1) (changement depuis l&#x27;image précédente).</div></li><li><code class="pname">params</code> <span class="ptype">object</span><div class=pdesc>logreg: C ; mlp: hidden (liste), alpha ; hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int).</div></li><li><code class="pname">balance</code> <span class="ptype">object</span><div class=pdesc>Rééchantillonnage des images d&#x27;entraînement seulement (images mesurées et test intacts) : {groupe: facteur, 0 à 10}. Sous 1, on garde cette fraction des images ; au-dessus, on les duplique (3 = trois exemplaires). Groupes : positif, negatif, clip_vide, portrait, paysage. positif / negatif = images avec / sans ajout ; clip_vide = images des vidéos sans aucune image avec ajout ; portrait / paysage = orientation de la vidéo. Ex. {&#x27;negatif&#x27;: 2, &#x27;paysage&#x27;: 0.7}. Le dataset n&#x27;est pas modifié.</div></li><li><code class="pname">weights</code> <span class="ptype">object</span><div class=pdesc>Poids des images d&#x27;entraînement dans la perte, sans changer les données : {groupe: poids, &gt; 0 et au plus 10}, mêmes groupes que balance. Une image dans plusieurs groupes prend le plus grand poids, les autres gardent 1. S&#x27;ajoute à la pondération équilibrée des classes déjà appliquée (logreg, hgb). Ex. {&#x27;clip_vide&#x27;: 3}.</div></li><li><code class="pname">note</code> <span class="ptype">string</span><div class=pdesc>Hypothèse testée, en une phrase, sans recopier la config.</div></li><li><code class="pname">split_id</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Split dont le dev sert à entraîner et à mesurer (val) : un id renvoyé par make_split (voir list_experiments).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent model_researcher).</p><div class="exlabel">Appel</div><pre>{
+  &quot;split_id&quot;: &quot;split_001&quot;,
   &quot;embeddings&quot;: [
     &quot;clip_b32:full&quot;
   ],
   &quot;model&quot;: &quot;logreg&quot;,
-  &quot;note&quot;: &quot;Référence de base : un classifieur linéaire sur les embeddings CLIP ViT-B/32 de l&#x27;image entière suffit-il à séparer ajouts de montage et images brutes ?&quot;,
-  &quot;split_id&quot;: &quot;split_001&quot;
+  &quot;note&quot;: &quot;Un modèle linéaire sur CLIP entier fournit une référence pour comparer les changements de représentation, de classifieur et d’information temporelle.&quot;
 }</pre><div class="exlabel">Réponse</div><pre>{
   &quot;experiment_id&quot;: &quot;exp_001&quot;,
   &quot;val&quot;: {
-    &quot;auc&quot;: 1.0,
-    &quot;ap&quot;: 1.0,
-    &quot;seuil_p95&quot;: 0.5903,
-    &quot;recall&quot;: 1.0,
-    &quot;fp&quot;: 1,
-    &quot;fn&quot;: 0
+    &quot;auc&quot;: 0.9191,
+    &quot;ap&quot;: 0.9686,
+    &quot;seuil_p95&quot;: 0.9316,
+    &quot;recall&quot;: 0.8346,
+    &quot;fp&quot;: 86,
+    &quot;fn&quot;: 435
   }
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">exclude_clips</code></summary><div class="body"><p class="desc">Retire des clips des splits créés ensuite (make_split), sans supprimer de fichier ; les splits existants ne changent pas. Réservé aux vidéos défectueuses ou dupliquées.</p><ul class="params"><li><code class="pname">clips</code><span class=req>requis</span> <span class="ptype">object</span><div class=pdesc>{sample_id: raison du défaut}</div></li></ul><p class="exnote">Pas d&#x27;exemple : outil non appelé pendant le run 001.</p></div></details></li></ul></details></li></ul></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_evaluator</code></summary><div class="body"><p class="desc">Délègue une évaluation, une analyse d&#x27;erreurs ou un test final à l&#x27;Evaluator ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator).</p><div class="exlabel">Appel</div><pre>{
-  &quot;task&quot;: &quot;Objectif : analyser les erreurs des meilleurs candidats sur val, puis réaliser le TEST FINAL (unique restant) du candidat retenu, pour le classifieur d&#x27;ajouts de montage.\n\nContexte : split figé « split_001 » (4 chaînes train / 2 val / 1 test ; val = 132 images étiquetées dont 22 positives ; test = 1 clip de 15 images, vidéo sans ajout). Trois expériences existent :\n- exp_001 : clip_b32:full + logreg — AUC val 1,000, AP val 1,000, seuil P95 = 0,5903, rappel val 1,000 (1 FP sur le clip yt_ieiOR5l3lqU, 0 FN)\n- exp_002 : clip_l14:full + logreg — AUC val 1,000, AP val 1,000, seuil P95 = 0,8302, rappel val 1,000 (1 FP sur le même clip, 0 FN)\n- exp_003 : clip_b32 + dinov2_s concat + hgb — AUC val 0,9992, AP val 0,9962, seuil P95 = 0,9997, rappel val 0,9545 (1 FP, 1 FN sur yt_0U6_cPT95a0)\n\nLe candidat retenu pour le test final est **exp_001** (meilleur rappel val à précision 95 %, config la plus simple ; égalité avec exp_002 sur val). Son seuil de décision est celui choisi sur val (0,5903), appliqué tel quel sur test.\n\nConsigne :\n1. Appelle list_experiments pour confirmer l&#x27;état des expériences.\n2. Appelle analyze_errors sur exp_001 (et exp_002 si utile pour comparaison) sur le split split_001, au seuil de précision 95 % : détaille les FP/FN par clip, la marge des scores autour du seuil, et ce que révèlent ces erreurs (type d&#x27;ajout manqué, type de plan pris pour un ajout).\n3. Appelle show_examples pour visualiser les images en erreur de val (le FP du clip yt_ieiOR5l3lqU, et le FN de exp_003 sur yt_0U6_cPT95a0 si disponible) afin de caractériser les cas limites.\n4. Appelle final_test pour évaluer exp_001 sur le test du split split_001 avec le seuil val 0,5903 appliqué tel quel. C&#x27;est le seul et unique test final autorisé : ne le lance qu&#x27;une seule fois et uniquement sur exp_001.\n5. Interprète le résultat du test final (précision, rappel, FP/FN sur test) en gardant à l&#x27;esprit que le test ne contient qu&#x27;un seul clip (15 images, vidéo sans ajout) : commente la robustesse de la conclusion.\n\nRapport attendu : synthèse de l&#x27;analyse d&#x27;erreurs sur val, caractérisation des cas limites vus en val, résultat complet du test final (métriques, seuil appliqué, FP/FN), verdict sur exp_001 comme modèle recommandé, et limites fortes (val minuscule, test d&#x27;un seul clip sans ajout, train sans vidéo 100 % brute). Termine par la \&quot;Vérification automatique\&quot; produite par le code.&quot;
-}</pre><div class="exlabel">Réponse</div><pre># Rapport d&#x27;évaluation — split_001, candidat exp_001
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">exclude_clips</code></summary><div class="body"><p class="desc">Retire des clips des splits créés ensuite (make_split), sans supprimer de fichier ; les splits existants ne changent pas. Réservé aux vidéos défectueuses ou dupliquées.</p><ul class="params"><li><code class="pname">clips</code><span class=req>requis</span> <span class="ptype">object</span><div class=pdesc>{sample_id: raison du défaut}</div></li></ul><p class="exnote">Pas d&#x27;exemple : outil non appelé pendant le run 001.</p></div></details></li></ul></details></li></ul></li><li class="node delegate"><details open><summary><span class="badge delegate">délègue</span><code class="tname">ask_evaluator</code></summary><div class="body"><p class="desc">Délègue une évaluation, une analyse d&#x27;erreurs ou un test final à l&#x27;Evaluator ; renvoie son rapport.</p><ul class="params"><li><code class="pname">task</code><span class=req>requis</span> <span class="ptype">string</span><div class=pdesc>Consigne autonome pour l&#x27;agent.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent orchestrator).</p><div class="exlabel">Appel</div><pre>{
+  &quot;task&quot;: &quot;Analyse les erreurs de validation (pas de test final) sur le split split_001 pour comparer exp_001 (meilleur rappel val à précision 95 %) et exp_003 (meilleure AUC/AP). Utilise uniquement les outils evaluator autorisés, notamment l&#x27;analyse d&#x27;erreurs et éventuellement des exemples si cela aide. Identifie, sur les erreurs observées, les types de faux négatifs/faux positifs récurrents et si une piste concrète justifie une expérience supplémentaire. Ne collecte pas de données et ne lance surtout pas de test final : le seul test final doit être conservé pour le candidat final. Donne les constats appuyés par les outils et leurs limites, et termine par « Vérification automatique » listant les outils réellement appelés et leurs erreurs.&quot;
+}</pre><div class="exlabel">Réponse</div><pre>## Analyse de validation — `split_001`
 
-## 1. État confirmé des expériences (list_experiments)
+Les deux expériences sont comparables : même split, même objectif de précision 95 %. Je n’ai lancé aucun test final.
 
-Split **split_001** figé : 4 chaînes train / 2 val / 1 test, val = 132 images étiquetées (22 positives), test = 1 clip de 15 images (vidéo sans ajout), 0 vidéo hors split. Trois expériences :
+| Expérience | Représentation | Seuil val | Précision | Rappel | TP / FP / FN | AUC / AP |
+|---|---|---:|---:|---:|---:|---:|
+| `exp_001` | CLIP full + régression logistique | 0,9316 | 0,9623 | **0,8346** | 2195 / 86 / **435** | 0,9191 / 0,9686 |
+| `exp_003` | CLIP full + DINOv2-S full + régression logistique | 0,9510 | 0,9637 | 0,8266 | 2174 / 82 / 456 | **0,9320 / 0,9728** |
 
-| Expérience | Config | AUC val | AP val | Seuil P95 | Rappel val | FP | FN |
-|---|---|---|---|---|---|---|---|
-| exp_001 | clip_b32:full + logreg | 1,000 | 1,000 | 0,5903 | **1,000** | 1 | 0 |
-| exp_002 | clip_l14:full + logreg | 1,000 | 1,000 | 0,8302 | **1,000** | 1 | 0 |
-| exp_003 | clip_b32 + dinov2_s concat + hgb | 0,9992 | 0,9962 | 0,9997 | 0,9545 | 1 | 1 |
+`exp_001` détecte 21 positifs de plus et a 21 faux négatifs de moins, avec 4 fausses alertes supplémentaires. `exp_003` a de meilleures AUC et AP, mais pas un meilleur rappel au seuil choisi : l’écart de rappel est de 0,8 point. Les deux précisions observées dépassent 95 % sur val ; cela ne démontre pas que la précision tiendra hors de val.
 
-## 2. Analyse d&#x27;erreurs sur val (seuil précision 95 %)
+### Erreurs observées
 
-**exp_001** (seuil 0,5903) : TP 22, FP 1, FN 0, TN 109 → précision 0,9565, rappel 1,000. 0 positive ratée (portrait 0/22, chaîne « Ezequiel - Juicio Bíblico » 0/22). **Un seul FP**, sur le clip `yt_ieiOR5l3lqU`, en paysage.
+- **Faux négatifs :** dans les exemples des deux modèles, les ajouts ratés sont notamment des sous-titres/captions en bas d’images de reportage, conférence ou séquences de coupe. Certaines images de la même vidéo sont ratées à plusieurs secondes d’intervalle. Les exemples d’`exp_003` comprennent aussi des scores très bas pour des images sous-titrées. Cela motive une expérience ciblant mieux le texte localisé — par exemple une branche OCR ou des caractéristiques sur des régions/crops — sans garantir qu’elle améliorera le rappel à précision contrainte.
+- **Orientation :** `exp_001` rate 396/2506 positifs paysage et 39/124 portrait ; `exp_003`, 415/2506 et 41/124. La part de positifs ratés est donc plus forte en portrait dans les deux cas. Les faux positifs comptés par orientation sont 76 paysage et 10 portrait pour `exp_001`, contre 81 et 1 pour `exp_003`.
+- **Concentration par chaîne :** les ratés sont particulièrement nombreux pour *Les Pépites de Cloé* (107/187 pour `exp_001`, 101/187 pour `exp_003`) et *WEP Belgique* (78/213 et 100/213). `exp_003` régresse aussi notamment sur *Cuisine Marocaine* (50/224 contre 22/224). Les comptes varient selon les chaînes : avec peu de chaînes, cela ne suffit pas à conclure à une différence robuste.
+- **Faux positifs :** les clips `yt_SzmcGzB5UxU` et `yt_cGP6tL_EdV0` dominent pour les deux expériences : 27 et 21 pour `exp_001`, 34 et 24 pour `exp_003`. Dans les exemples inspectés, on voit notamment des plans de cuisine et une personne filmée, sans ajout de montage évident. Ce sont des scènes brutes visuellement plausibles comme négatifs ; l’abondance d’erreurs dans quelques clips suggère de vérifier ces styles de vidéos dans les données.
 
-**exp_002** : profil identique (mêmes TP/FP/FN, même FP sur le même clip) — égalité parfaite avec exp_001 sur ce val minuscule, aucune base de comparaison réelle.
+Je n’ai pas repéré de faux négatif clairement mal étiqueté : les exemples concernés montrent bien du texte ajouté visible. Les faux positifs inspectés ne montrent pas non plus d’ajout évident ; un logo imprimé sur un objet, s’il est dans la scène filmée, ne constitue pas à lui seul un ajout de montage. Cette inspection porte sur quelques exemples seulement, pas sur toutes les erreurs.
 
-**exp_003** (seuil 0,9997) : TP 21, FP 1, FN 1, TN 109 → précision 0,9545, rappel 0,9545. Le FN est sur `yt_0U6_cPT95a0` (t=5,0 s).
+### Verdict et suite concrète
 
-## 3. Inspection visuelle des cas limites (show_examples)
+Le choix dépend du critère : **`exp_001` reste le meilleur des deux au rappel val à précision visée** ; `exp_003` améliore AUC/AP mais n’améliore pas ce critère principal. L’écart de rappel est faible et, compte tenu du nombre limité de chaînes, ne prouve pas à lui seul une supériorité générale.
 
-- **FP de exp_001** — `yt_ieiOR5l3lqU`, t=72,0 s, **p = 0,59 pour un seuil de 0,5903** : plan très serré d&#x27;une main sur une poignée de porte (personnage en pantalon écossais rouge), image **brute de caméra sans aucun habillage visible**. Le score est quasiment égal au seuil : FP **marginal**, la frontière de décision est fragile. Le modèle a probablement confondu ce cadrage rapproché/cinématographique avec un contenu « monté ».
-- **FN de exp_003** — `yt_0U6_cPT95a0`, t=5,0 s, **p ≈ 1,00 pour un seuil de 0,9997** : vidéo portrait d&#x27;un berger avec ses moutons, portant **deux ajouts évidents** : logo « @rocknrollner » en haut (miroité) et texte « MOUTONS » en bas. Le modèle était en réalité **très confiant** (score ~1,0) ; le FN est un **artefact de seuil** : la distribution des scores HGB étant compressée près de 1, le seuil P95 a été poussé à 0,9997 et ce positif juste en dessous est tombé du mauvais côté. Ce n&#x27;est pas un vrai raté de détection. exp_001, lui, détecte cette image (0 FN).
+Une expérience supplémentaire est justifiée pour tester une détection plus sensible aux sous-titres et au texte incrusté. En parallèle, les clips à fausses alertes et les chaînes avec beaucoup de ratés sont des cibles concrètes pour la collecte future : styles de vidéos culinaires/personnelles brutes d’un côté, et vidéos de reportage/conférence sous-titrées de l’autre, en couvrant aussi le portrait. Les résultats présents ne permettent pas de prédire le gain de ces pistes.
 
-## 4. Test final — exp_001 (appel unique, seuil val 0,5903 appliqué tel quel)
+### Vérification automatique
 
-| | Seuil | TP | FP | FN | TN | Précision | Rappel |
-|---|---|---|---|---|---|---|---|
-| **Test** | 0,5903 | **0** | **12** | 0 | 3 | **0,000** | 0,0 (0 positif) |
-
-AUC/AP test : non calculables (le clip de test ne contient aucun positif). **Appels de test final restants : 0.**
-
-## 5. Interprétation
-
-- Le test est constitué d&#x27;**un seul clip de 15 images, vidéo annoncée sans ajout** : il n&#x27;y a donc aucun positif à détecter (rappel 0,0 est attendu et non informatif), et toute alerte est un faux positif.
-- Le modèle a levé **12 alertes sur 15 images (80 %)** d&#x27;une vidéo pourtant 100 % brute. Ce n&#x27;est pas du bruit ponctuel (1 FP comme sur val) : c&#x27;est une **fausse alarme systématique** sur le style de cette chaîne de test, totalement inédite (split par chaîne). Le footage brut de cette chaîne (cadrage, étalonnage, grain, rythme) est hors distribution par rapport aux 4 chaînes d&#x27;entraînement.
-- **La précision visée de 95 % n&#x27;est absolument pas tenue sur test** (0 % de précision, 80 % de taux de fausse alarme). Le score val (AUC 1,000, rappel 1,000) était un artefact de surapprentissage/surévaluation : val ne compte que 132 images, 22 positives, 2 clips, 2 chaînes — et même le seul FP val était à la marge exacte du seuil.
-
-## 6. Verdict
-
-**exp_001 échoue son test final.** Il ne peut pas être recommandé pour la production : son apparente perfection sur val ne se généralise pas à une chaîne inédite, où il confond massivement du brut avec du monté. Le même vaut très probablement pour exp_002 (profil val identique) ; exp_003, pénalisé sur val par un artefact de seuil, n&#x27;a pas non plus de raison de se comporter différemment sur ce test (même famille d&#x27;embeddings). **Aucun des trois modèles n&#x27;est validé.** Le code de fin de run devra constater qu&#x27;aucun candidat n&#x27;a réussi son test final.
-
-## 7. Limites fortes
-
-- **Val minuscule** : 132 images / 22 positives / 2 clips / 2 chaînes — un écart de quelques points y est du bruit ; AUC 1,000 n&#x27;y est pas une preuve.
-- **Test d&#x27;un seul clip sans ajout** : il ne mesure que le taux de fausse alarme sur un style de chaîne, pas le rappel en généralisation.
-- **Train sans vidéo 100 % brute** : si aucune vidéo d&#x27;entraînement n&#x27;est purement brute, le modèle n&#x27;a jamais vu de « nég courbe » représentatif, ce qui explique la dérive sur la chaîne test.
-- Étiquettes issues de l&#x27;accord de 3 LLM : quelques erreurs d&#x27;annotation communes restent possibles (aucune image inspectée ici ne m&#x27;a semblé mal étiquetée).
-
-## 8. Recommandations concrètes
-
-1. **Ne rien mettre en production.** Relancer une collecte de données avant tout nouveau candidat.
-2. **Collecter des vidéos 100 % brutes** de chaînes variées (styles, cadrages, étalonnages, portrait/paysage) pour équilibrer les négatifs « difficiles » — c&#x27;est la cause la plus probable des 12 FP.
-3. **Collecter plus de chaînes avec montage** (logos permanents, génériques, texte en incrustation, habillages récurrents) pour élargir val et test ; viser plusieurs clips par split, portrait et paysage.
-4. **Exploiter la temporalité** : les ajouts persistent sur des images consécutives (échantillonnage 1 fps) — un lissage temporel (vote majoritaire sur fenêtre glissante) aurait supprimé le FP marginal de val et très probablement réduit les alertes sporadiques ; les 12 FP consécutifs du test indiquent hélas un biais systématique, que seule plus de données brutes pourra corriger.
-5. **Recalibrer le seuil sur un val élargi** et surveiller la marge au seuil (le FP val était à 0,0003 du seuil) ; éviter les seuils poussés à l&#x27;extrême (artefact exp_003).
-6. **Pistes de modèle** à tester sur un split refondu : agrégation temporelle des embeddings CLIP, détecteur d&#x27;overlay dédié (texte/logo par OCR/segmentation) en complément, et calibration par chaîne.
-
-## Vérification automatique
-
-- Split confirmé : `split_001` (4/2/1 chaînes, val 132 images dont 22 positives, test 1 clip de 15 images, 0 hors split).
-- Analyses d&#x27;erreurs exécutées sur exp_001, exp_002, exp_003 au seuil précision 95 % (résultats ci-dessus, issus de l&#x27;outil).
-- Test final exécuté **une seule fois**, sur **exp_001** uniquement, seuil val 0,5903 appliqué tel quel → test : TP 0, FP 12, FN 0, TN 3, précision 0,000, AUC/AP test non calculables (aucun positif dans le clip de test).
-- **Appels de test final restants : 0** (budget épuisé, conformément à la règle d&#x27;unicité).
-- Conclusion machine : le candidat retenu sur val **ne tient pas la précision visée sur test** → non éligible en production.
+- `list_experiments` — appelé une fois sur `split_001` ; aucune erreur.
+- `analyze_errors` — appelé pour `exp_001` et `exp_003` à précision visée 0,95 ; aucune erreur.
+- `show_examples` — appelé pour les ratés et fausses alertes de chaque expérience (4 appels) ; aucune erreur.
+- `final_test` — non appelé, conformément à la demande.
 
 --- Vérification automatique (produite par le code, pas par l&#x27;agent) ---
 Outils réellement appelés par evaluator :
 - list_experiments : 1 réussi(s), 0 échec(s)
-- analyze_errors : 3 réussi(s), 0 échec(s)
-- show_examples : 2 réussi(s), 0 échec(s)
-- final_test : 1 réussi(s), 0 échec(s)</pre></details></div></details><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">evaluator</span><span class="meta">openai/gpt-6-luna · 15 tours max · 4 outils</span></summary><div class="body"><p class="desc">Evaluator : mesure, analyse les erreurs, vérifie les améliorations, seul accès au test.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en dev/test et chaines_shared (chaînes présentes dans les deux parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en dev/test, images étiquetées de dev et images positives de dev, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent evaluator).</p><div class="exlabel">Appel</div><pre>{
+- analyze_errors : 2 réussi(s), 0 échec(s)
+- show_examples : 4 réussi(s), 0 échec(s)</pre></details></div></details><ul class="tree"><li class="node agent"><details><summary><span class="badge agent">agent</span><span class="aname">evaluator</span><span class="meta">openai/gpt-6-luna · 15 tours max · 4 outils</span></summary><div class="body"><p class="desc">Evaluator : mesure, analyse les erreurs, vérifie les améliorations, seul accès au test.</p></div><ul class="tree"><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">list_experiments</code></summary><div class="body"><p class="desc">Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes YouTube en dev/test et chaines_shared (chaînes présentes dans les deux parties, toujours 0 : une chaîne n&#x27;appartient qu&#x27;à une partie), vidéos (clips) en dev/test, images étiquetées de dev et images positives de dev, vidéos collectées après le split, note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AUC, AP, seuil et rappel à 95 % de précision, FP/FN), erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), test final, en_production si c&#x27;est le modèle en production. Un split sans expérience n&#x27;apparaît que s&#x27;il est le plus récent.</p><ul class="params"><li><code class="pname">split_id</code> <span class="ptype">string</span><div class=pdesc>Ne renvoyer que ce split et ses expériences.</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent evaluator).</p><div class="exlabel">Appel</div><pre>{
   &quot;split_id&quot;: &quot;split_001&quot;
 }</pre><div class="exlabel">Réponse</div><pre>{
   &quot;splits&quot;: [
     {
       &quot;split_id&quot;: &quot;split_001&quot;,
-      &quot;chaines_train&quot;: 4,
-      &quot;chaines_val&quot;: 2,
-      &quot;chaines_test&quot;: 1,
+      &quot;chaines_dev&quot;: 35,
+      &quot;chaines_test&quot;: 9,
       &quot;chaines_shared&quot;: 0,
-      &quot;clips_train&quot;: 4,
-      &quot;clips_val&quot;: 2,
-      &quot;clips_test&quot;: 1,
-      &quot;val_images&quot;: 132,
-      &quot;val_images_positives&quot;: 22,
+      &quot;clips_dev&quot;: 35,
+      &quot;clips_test&quot;: 9,
+      &quot;images_dev&quot;: 3799,
+      &quot;images_dev_positives&quot;: 2630,
       &quot;clips_hors_split&quot;: 0,
-      &quot;note&quot;: &quot;split_v1 : premier split du projet. 7 chaînes = 7 vidéos (1 vidéo/chaîne). Répartition 4 chaînes train / 2 val / 1 test…&quot;,
+      &quot;note&quot;: &quot;Établir la première séparation figée dev/test par chaîne sur le dataset existant, stratifiée par orientation et clips sa…&quot;,
       &quot;experiences&quot;: [
         {
           &quot;id&quot;: &quot;exp_001&quot;,
@@ -514,43 +373,63 @@ Outils réellement appelés par evaluator :
           &quot;model&quot;: &quot;logreg&quot;,
           &quot;temporal&quot;: &quot;none&quot;,
           &quot;params&quot;: {},
-          &quot;hypothese&quot;: &quot;Référence de base : un classifieur linéaire sur les embeddings CLIP ViT-B/32 de l&#x27;image entière suffit-il à séparer ajouts de montage et images brutes ?&quot;,
+          &quot;hypothese&quot;: &quot;Un modèle linéaire sur CLIP entier fournit une référence pour comparer les changements de représentation, de classifieur et d’information temporelle.&quot;,
           &quot;val&quot;: {
-            &quot;auc&quot;: 1.0,
-            &quot;ap&quot;: 1.0,
-            &quot;seuil_p95&quot;: 0.5903,
-            &quot;recall&quot;: 1.0,
-            &quot;fp&quot;: 1,
-            &quot;fn&quot;: 0
+            &quot;auc&quot;: 0.9191,
+            &quot;ap&quot;: 0.9686,
+            &quot;seuil_p95&quot;: 0.9316,
+            &quot;recall&quot;: 0.8346,
+            &quot;fp&quot;: 86,
+            &quot;fn&quot;: 435
           },
           &quot;erreurs_val&quot;: {
-            &quot;fn_par_clip&quot;: {},
+            &quot;fn_par_clip&quot;: {
+              &quot;yt_UGsvfsrP2fo&quot;: 107,
+              &quot;yt_tyrQ45Robbk&quot;: 78,
+              &quot;yt__LpzkLDdR6U&quot;: 53,
+              &quot;yt_YAbWeTXeO40&quot;: 23,
+              &quot;yt_CZI3akKLEug&quot;: 22
+            },
             &quot;fp_par_clip&quot;: {
-              &quot;yt_ieiOR5l3lqU&quot;: 1
+              &quot;yt_SzmcGzB5UxU&quot;: 27,
+              &quot;yt_cGP6tL_EdV0&quot;: 21,
+              &quot;yt_FGwvWbaLVw4&quot;: 9,
+              &quot;yt_1-vw66aYPo0&quot;: 5,
+              &quot;yt_eKGdRR0VZpc&quot;: 5
             }
           }
         },
         {
           &quot;id&quot;: &quot;exp_002&quot;,
           &quot;embeddings&quot;: [
-            &quot;clip_l14:full&quot;
+            &quot;dinov2_s:full&quot;
           ],
           &quot;model&quot;: &quot;logreg&quot;,
           &quot;temporal&quot;: &quot;none&quot;,
           &quot;params&quot;: {},
-          &quot;hypothese&quot;: &quot;Un backbone CLIP plus puissant (ViT-L/14) améliore-t-il la séparation des ajouts de montage par rapport au ViT-B/32 ?&quot;,
+          &quot;hypothese&quot;: &quot;DINOv2-S peut mieux séparer les ajouts graphiques des scènes brutes que la représentation CLIP de référence.&quot;,
           &quot;val&quot;: {
-            &quot;auc&quot;: 1.0,
-            &quot;ap&quot;: 1.0,
-            &quot;seuil_p95&quot;: 0.8302,
-            &quot;recall&quot;: 1.0,
-            &quot;fp&quot;: 1,
-            &quot;fn&quot;: 0
+            &quot;auc&quot;: 0.7819,
+            &quot;ap&quot;: 0.9103,
+            &quot;seuil_p95&quot;: 0.9977,
+            &quot;recall&quot;: 0.5529,
+            &quot;fp&quot;: 55,
+            &quot;fn&quot;: 1176
           },
           &quot;erreurs_val&quot;: {
-            &quot;fn_par_clip&quot;: {},
+            &quot;fn_par_clip&quot;: {
+              &quot;yt_CZI3akKLEug&quot;: 208,
+              &quot;yt_tyrQ45Robbk&quot;: 175,
+              &quot;yt_UGsvfsrP2fo&quot;: 173,
+              &quot;yt__LpzkLDdR6U&quot;: 116,
+              &quot;yt_T5WlW2SbRvM&quot;: 77
+            },
             &quot;fp_par_clip&quot;: {
-              &quot;yt_ieiOR5l3lqU&quot;: 1
+              &quot;yt_SzmcGzB5UxU&quot;: 18,
+              &quot;yt_cGP6tL_EdV0&quot;: 12,
+              &quot;yt_yqYoMFVNcss&quot;: 9,
+              &quot;yt_NcKmALfFaMA&quot;: 5,
+              &quot;yt_eosDvec0i1A&quot;: 4
             }
           }
         },
@@ -560,98 +439,341 @@ Outils réellement appelés par evaluator :
             &quot;clip_b32:full&quot;,
             &quot;dinov2_s:full&quot;
           ],
-          &quot;model&quot;: &quot;hgb&quot;,
+          &quot;model&quot;: &quot;logreg&quot;,
           &quot;temporal&quot;: &quot;none&quot;,
-          &quot;params&quot;: {
-            &quot;lr&quot;: 0.1,
-            &quot;max_iter&quot;: 300,
-            &quot;max_leaf_nodes&quot;: 31
-          },
-          &quot;hypothese&quot;: &quot;La concaténation CLIP + DINOv2 (sémantique + traits visuels fins) avec un classifieur gradient boosting améliore-t-elle le rappel à précision fixée ?&quot;,
+          &quot;params&quot;: {},
+          &quot;hypothese&quot;: &quot;La concaténation CLIP et DINOv2-S peut compléter leurs indices visuels pour augmenter le rappel à précision contrainte.&quot;,
           &quot;val&quot;: {
-            &quot;auc&quot;: 0.9992,
-            &quot;ap&quot;: 0.9962,
-            &quot;seuil_p95&quot;: 0.9997,
-            &quot;recall&quot;: 0.9545,
-            &quot;fp&quot;: 1,
-            &quot;fn&quot;: 1
+            &quot;auc&quot;: 0.932,
+            &quot;ap&quot;: 0.9728,
+            &quot;seuil_p95&quot;: 0.951,
+            &quot;recall&quot;: 0.8266,
+            &quot;fp&quot;: 82,
+            &quot;fn&quot;: 456
           },
           &quot;erreurs_val&quot;: {
             &quot;fn_par_clip&quot;: {
-              &quot;yt_0U6_cPT95a0&quot;: 1
+              &quot;yt_UGsvfsrP2fo&quot;: 101,
+              &quot;yt_tyrQ45Robbk&quot;: 100,
+              &quot;yt__LpzkLDdR6U&quot;: 60,
+              &quot;yt_CZI3akKLEug&quot;: 50,
+              &quot;yt_YAbWeTXeO40&quot;: 16
             },
             &quot;fp_par_clip&quot;: {
-              &quot;yt_ieiOR5l3lqU&quot;: 1
+              &quot;yt_SzmcGzB5UxU&quot;: 34,
+              &quot;yt_cGP6tL_EdV0&quot;: 24,
+              &quot;yt_FGwvWbaLVw4&quot;: 8,
+              &quot;yt_yqYoMFVNcss&quot;: 5,
+              &quot;yt_1-vw66aYPo0&quot;: 4
+            }
+          }
+        },
+        {
+          &quot;id&quot;: &quot;exp_004&quot;,
+          &quot;embeddings&quot;: [
+            &quot;clip_b32:grid2&quot;
+          ],
+          &quot;model&quot;: &quot;logreg&quot;,
+          &quot;temporal&quot;: &quot;none&quot;,
+          &quot;params&quot;: {},
+          &quot;hypothese&quot;: &quot;La vue en quadrants peut préserver les indices localisés comme les titres et logos que l&#x27;image entière dilue.&quot;,
+          &quot;val&quot;: {
+            &quot;auc&quot;: 0.8861,
+            &quot;ap&quot;: 0.9558,
+            &quot;seuil_p95&quot;: 0.9678,
+            &quot;recall&quot;: 0.7639,
+            &quot;fp&quot;: 80,
+            &quot;fn&quot;: 621
+          },
+          &quot;erreurs_val&quot;: {
+            &quot;fn_par_clip&quot;: {
+              &quot;yt_UGsvfsrP2fo&quot;: 138,
+              &quot;yt_tyrQ45Robbk&quot;: 101,
+              &quot;yt__LpzkLDdR6U&quot;: 60,
+              &quot;yt_CZI3akKLEug&quot;: 56,
+              &quot;yt_f32ODwPj2is&quot;: 56
+            },
+            &quot;fp_par_clip&quot;: {
+              &quot;yt_yqYoMFVNcss&quot;: 26,
+              &quot;yt_1-vw66aYPo0&quot;: 13,
+              &quot;yt_cGP6tL_EdV0&quot;: 12,
+              &quot;yt_n3ZtWr4KV7Y&quot;: 6,
+              &quot;yt_SzmcGzB5UxU&quot;: 6
+            }
+          }
+        },
+        {
+          &quot;id&quot;: &quot;exp_005&quot;,
+          &quot;embeddings&quot;: [
+            &quot;clip_b32:full&quot;
+          ],
+          &quot;model&quot;: &quot;logreg&quot;,
+          &quot;temporal&quot;: &quot;diff&quot;,
+          &quot;params&quot;: {},
+          &quot;hypothese&quot;: &quot;Le changement d&#x27;embedding entre secondes consécutives peut révéler des ajouts transitoires invisibles dans l&#x27;image isolée.&quot;,
+          &quot;val&quot;: {
+            &quot;auc&quot;: 0.8881,
+            &quot;ap&quot;: 0.9555,
+            &quot;seuil_p95&quot;: 0.9869,
+            &quot;recall&quot;: 0.7407,
+            &quot;fp&quot;: 74,
+            &quot;fn&quot;: 682
+          },
+          &quot;erreurs_val&quot;: {
+            &quot;fn_par_clip&quot;: {
+              &quot;yt_UGsvfsrP2fo&quot;: 151,
+              &quot;yt_tyrQ45Robbk&quot;: 106,
+              &quot;yt__LpzkLDdR6U&quot;: 64,
+              &quot;yt_mRQQFfW56pY&quot;: 58,
+              &quot;yt_CZI3akKLEug&quot;: 47
+            },
+            &quot;fp_par_clip&quot;: {
+              &quot;yt_yqYoMFVNcss&quot;: 42,
+              &quot;yt_SzmcGzB5UxU&quot;: 12,
+              &quot;yt_cGP6tL_EdV0&quot;: 11,
+              &quot;yt_JTt0EStEne4&quot;: 5,
+              &quot;yt_1-vw66aYPo0&quot;: 2
+            }
+          }
+        },
+        {
+          &quot;id&quot;: &quot;exp_006&quot;,
+          &quot;embeddings&quot;: [
+            &quot;clip_b32:full&quot;
+          ],
+          &quot;model&quot;: &quot;mlp&quot;,
+          &quot;temporal&quot;: &quot;none&quot;,
+          &quot;params&quot;: {},
+          &quot;hypothese&quot;: &quot;Un classifieur non linéaire peut exploiter des frontières entre scènes brutes et ajouts que la régression logistique ne sépare pas.&quot;,
+          &quot;val&quot;: {
+            &quot;auc&quot;: 0.8682,
+            &quot;ap&quot;: 0.9467,
+            &quot;seuil_p95&quot;: 0.9752,
+            &quot;recall&quot;: 0.7129,
+            &quot;fp&quot;: 71,
+            &quot;fn&quot;: 755
+          },
+          &quot;erreurs_val&quot;: {
+            &quot;fn_par_clip&quot;: {
+              &quot;yt_UGsvfsrP2fo&quot;: 168,
+              &quot;yt_tyrQ45Robbk&quot;: 114,
+              &quot;yt_f32ODwPj2is&quot;: 56,
+              &quot;yt__LpzkLDdR6U&quot;: 55,
+              &quot;yt_CZI3akKLEug&quot;: 53
+            },
+            &quot;fp_par_clip&quot;: {
+              &quot;yt_SzmcGzB5UxU&quot;: 20,
+              &quot;yt_cGP6tL_EdV0&quot;: 17,
+              &quot;yt_yqYoMFVNcss&quot;: 15,
+              &quot;yt_1-vw66aYPo0&quot;: 9,
+              &quot;yt_JTt0EStEne4&quot;: 6
+            }
+          }
+        },
+        {
+          &quot;id&quot;: &quot;exp_007&quot;,
+          &quot;embeddings&quot;: [
+            &quot;clip_b32:full&quot;
+          ],
+          &quot;model&quot;: &quot;logreg&quot;,
+          &quot;temporal&quot;: &quot;none&quot;,
+          &quot;params&quot;: {},
+          &quot;weights&quot;: {
+            &quot;clip_vide&quot;: 3
+          },
+          &quot;hypothese&quot;: &quot;Donner plus de poids aux images de vidéos entièrement sans ajout peut limiter les fausses alertes sur les scènes brutes les plus cohérentes.&quot;,
+          &quot;val&quot;: {
+            &quot;auc&quot;: 0.9138,
+            &quot;ap&quot;: 0.9666,
+            &quot;seuil_p95&quot;: 0.9412,
+            &quot;recall&quot;: 0.8259,
+            &quot;fp&quot;: 85,
+            &quot;fn&quot;: 458
+          },
+          &quot;erreurs_val&quot;: {
+            &quot;fn_par_clip&quot;: {
+              &quot;yt_UGsvfsrP2fo&quot;: 125,
+              &quot;yt_tyrQ45Robbk&quot;: 80,
+              &quot;yt__LpzkLDdR6U&quot;: 53,
+              &quot;yt_CZI3akKLEug&quot;: 24,
+              &quot;yt_YAbWeTXeO40&quot;: 23
+            },
+            &quot;fp_par_clip&quot;: {
+              &quot;yt_SzmcGzB5UxU&quot;: 25,
+              &quot;yt_cGP6tL_EdV0&quot;: 19,
+              &quot;yt_FGwvWbaLVw4&quot;: 9,
+              &quot;yt_yqYoMFVNcss&quot;: 7,
+              &quot;yt_1-vw66aYPo0&quot;: 5
             }
           }
         }
       ]
     }
   ]
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">analyze_errors</code></summary><div class="body"><p class="desc">Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux d&#x27;images positives ratées par orientation et par chaîne ; répartition des fausses alertes ; exemples d&#x27;images ratées.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent evaluator).</p><div class="exlabel">Appel</div><pre>{
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">analyze_errors</code></summary><div class="body"><p class="desc">Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux d&#x27;images positives ratées par orientation et par chaîne ; répartition des fausses alertes ; exemples d&#x27;images ratées.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent evaluator).</p><div class="exlabel">Appel</div><pre>{
   &quot;experiment_id&quot;: &quot;exp_001&quot;,
   &quot;precision&quot;: 0.95
 }</pre><div class="exlabel">Réponse</div><pre>{
   &quot;experiment_id&quot;: &quot;exp_001&quot;,
   &quot;precision_visee&quot;: 0.95,
-  &quot;threshold&quot;: 0.5903,
-  &quot;recall&quot;: 1.0,
-  &quot;precision&quot;: 0.9565,
-  &quot;tp&quot;: 22,
-  &quot;fp&quot;: 1,
-  &quot;fn&quot;: 0,
-  &quot;tn&quot;: 109,
+  &quot;threshold&quot;: 0.9316,
+  &quot;recall&quot;: 0.8346,
+  &quot;precision&quot;: 0.9623,
+  &quot;tp&quot;: 2195,
+  &quot;fp&quot;: 86,
+  &quot;fn&quot;: 435,
+  &quot;tn&quot;: 1083,
   &quot;positifs_rates_par_orientation&quot;: {
-    &quot;portrait&quot;: &quot;0/22 ratées&quot;
+    &quot;paysage&quot;: &quot;396/2506 ratées&quot;,
+    &quot;portrait&quot;: &quot;39/124 ratées&quot;
   },
   &quot;positifs_rates_par_chaine&quot;: {
-    &quot;Ezequiel - Juicio Bíblico&quot;: &quot;0/22 ratées&quot;
+    &quot;Amelie Maelyza&quot;: &quot;0/8 ratées&quot;,
+    &quot;Atelier du Délice&quot;: &quot;0/27 ratées&quot;,
+    &quot;Brico Com&#x27;Antoine &quot;: &quot;6/23 ratées&quot;,
+    &quot;Cuisine Marocaine&quot;: &quot;22/224 ratées&quot;,
+    &quot;Diivine -&quot;: &quot;2/48 ratées&quot;,
+    &quot;EasyFix&quot;: &quot;22/198 ratées&quot;,
+    &quot;FC Barcelona&quot;: &quot;53/240 ratées&quot;,
+    &quot;G.HUSSAIN&quot;: &quot;13/26 ratées&quot;,
+    &quot;Gio San Pedro&quot;: &quot;1/60 ratées&quot;,
+    &quot;Histoires Incroyables&quot;: &quot;2/18 ratées&quot;,
+    &quot;Immobilier Parisien&quot;: &quot;0/3 ratées&quot;,
+    &quot;La Guitare avec Alexandre&quot;: &quot;13/156 ratées&quot;,
+    &quot;Les Pépites de Cloé&quot;: &quot;107/187 ratées&quot;,
+    &quot;Les Tutos&quot;: &quot;2/21 ratées&quot;,
+    &quot;MSF South Asia&quot;: &quot;12/155 ratées&quot;,
+    &quot;Magali Laville&quot;: &quot;3/28 ratées&quot;,
+    &quot;Météo Bretagne&quot;: &quot;9/151 ratées&quot;,
+    &quot;Nat Geo France&quot;: &quot;0/130 ratées&quot;,
+    &quot;Odelia &quot;: &quot;19/152 ratées&quot;,
+    &quot;Oh So Fact&quot;: &quot;12/23 ratées&quot;,
+    &quot;Radio Nova&quot;: &quot;5/56 ratées&quot;,
+    &quot;Real Madrid&quot;: &quot;0/69 ratées&quot;,
+    &quot;STUDIOCANAL France&quot;: &quot;14/21 ratées&quot;,
+    &quot;Slate.fr&quot;: &quot;0/174 ratées&quot;,
+    &quot;Tobby&#x27;s Journal&quot;: &quot;0/21 ratées&quot;,
+    &quot;Université d&#x27;Angers&quot;: &quot;4/35 ratées&quot;,
+    &quot;VikChaos&quot;: &quot;12/15 ratées&quot;,
+    &quot;WEP Belgique&quot;: &quot;78/213 ratées&quot;,
+    &quot;Xplore&quot;: &quot;23/25 ratées&quot;,
+    &quot;franceinfo&quot;: &quot;1/110 ratées&quot;,
+    &quot;만약에말이야&quot;: &quot;0/13 ratées&quot;
   },
   &quot;faux_positifs_par_orientation&quot;: {
-    &quot;paysage&quot;: 1
+    &quot;paysage&quot;: 76,
+    &quot;portrait&quot;: 10
   },
   &quot;faux_positifs_par_clip&quot;: {
-    &quot;yt_ieiOR5l3lqU&quot;: 1
+    &quot;yt_SzmcGzB5UxU&quot;: 27,
+    &quot;yt_cGP6tL_EdV0&quot;: 21,
+    &quot;yt_FGwvWbaLVw4&quot;: 9,
+    &quot;yt_1-vw66aYPo0&quot;: 5,
+    &quot;yt_eKGdRR0VZpc&quot;: 5,
+    &quot;yt_JTt0EStEne4&quot;: 5,
+    &quot;yt_n3ZtWr4KV7Y&quot;: 5,
+    &quot;yt_yqYoMFVNcss&quot;: 5
   },
-  &quot;exemples_rates&quot;: []
-}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">show_examples</code></summary><div class="body"><p class="desc">Montre des images de val (prédites hors pli) : images avec ajout ratées (kind=missed) ou fausses alertes (kind=false_positive).</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">kind</code> <span class="ptype">string</span><span class="penum"> · missed | false_positive</span></li><li><code class="pname">n</code> <span class="ptype">integer</span><span class="penum"> · 1…6</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent evaluator).</p><div class="exlabel">Appel</div><pre>{
+  &quot;exemples_rates&quot;: [
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00005.jpg&quot;,
+      &quot;t&quot;: 4.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00065.jpg&quot;,
+      &quot;t&quot;: 64.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00069.jpg&quot;,
+      &quot;t&quot;: 68.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00070.jpg&quot;,
+      &quot;t&quot;: 69.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00089.jpg&quot;,
+      &quot;t&quot;: 88.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00090.jpg&quot;,
+      &quot;t&quot;: 89.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00094.jpg&quot;,
+      &quot;t&quot;: 93.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00098.jpg&quot;,
+      &quot;t&quot;: 97.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00121.jpg&quot;,
+      &quot;t&quot;: 120.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    },
+    {
+      &quot;image&quot;: &quot;img/yt_0Ff0tqtzmKU/00122.jpg&quot;,
+      &quot;t&quot;: 121.0,
+      &quot;video&quot;: &quot;MSF Asia Scientific Days &amp; International Conference on Medical Sciences (ICM) 2022&quot;
+    }
+  ]
+}</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">show_examples</code></summary><div class="body"><p class="desc">Montre des images de val (prédites hors pli) : images avec ajout ratées (kind=missed) ou fausses alertes (kind=false_positive).</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">kind</code> <span class="ptype">string</span><span class="penum"> · missed | false_positive</span></li><li><code class="pname">n</code> <span class="ptype">integer</span><span class="penum"> · 1…6</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent evaluator).</p><div class="exlabel">Appel</div><pre>{
   &quot;experiment_id&quot;: &quot;exp_001&quot;,
-  &quot;kind&quot;: &quot;false_positive&quot;,
-  &quot;n&quot;: 3,
+  &quot;kind&quot;: &quot;missed&quot;,
+  &quot;n&quot;: 6,
   &quot;precision&quot;: 0.95
-}</pre><div class="exlabel">Réponse</div><pre>faux positif yt_ieiOR5l3lqU t=72.0 p=0.59 (seuil 0.59)
-&lt;image images/call004_turn02_01.jpg&gt;</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">final_test</code></summary><div class="body"><p class="desc">Évalue une expérience sur le test de son split avec le seuil choisi sur val : rappel, précision, TP/FP/FN, AUC, AP. Nombre d&#x27;appels limité par session : à réserver au candidat final.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 24/10/2026, agent evaluator).</p><div class="exlabel">Appel</div><pre>{
+}</pre><div class="exlabel">Réponse</div><pre>ajout raté yt_0Ff0tqtzmKU t=4.0 p=0.89 (seuil 0.93)
+&lt;image images/call003_turn03_01.jpg&gt;
+ajout raté yt_0Ff0tqtzmKU t=64.0 p=0.92 (seuil 0.93)
+&lt;image images/call003_turn03_02.jpg&gt;
+ajout raté yt_0Ff0tqtzmKU t=68.0 p=0.84 (seuil 0.93)
+&lt;image images/call003_turn03_03.jpg&gt;
+ajout raté yt_0Ff0tqtzmKU t=69.0 p=0.86 (seuil 0.93)
+&lt;image images/call003_turn03_04.jpg&gt;
+ajout raté yt_0Ff0tqtzmKU t=88.0 p=0.89 (seuil 0.93)
+&lt;image images/call003_turn03_05.jpg&gt;
+ajout raté yt_0Ff0tqtzmKU t=89.0 p=0.69 (seuil 0.93)
+&lt;image images/call003_turn03_06.jpg&gt;</pre></details></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">final_test</code></summary><div class="body"><p class="desc">Évalue une expérience sur le test de son split avec le seuil choisi sur val : rappel, précision, TP/FP/FN, AUC, AP. Nombre d&#x27;appels limité par session : à réserver au candidat final.</p><ul class="params"><li><code class="pname">experiment_id</code><span class=req>requis</span> <span class="ptype">string</span></li><li><code class="pname">precision</code> <span class="ptype">number</span><div class=pdesc>Précision visée sur val, qui fixe le seuil (défaut 0.95).</div></li></ul><details class="ex"><summary>Exemple</summary><p class="exnote">Appel et réponse réels (run 001 du 25/10/2026, agent evaluator).</p><div class="exlabel">Appel</div><pre>{
   &quot;experiment_id&quot;: &quot;exp_001&quot;,
   &quot;precision&quot;: 0.95
 }</pre><div class="exlabel">Réponse</div><pre>{
   &quot;experiment_id&quot;: &quot;exp_001&quot;,
   &quot;split_id&quot;: &quot;split_001&quot;,
   &quot;precision_visee&quot;: 0.95,
-  &quot;seuil_choisi_sur_val&quot;: 0.5903,
+  &quot;seuil_choisi_sur_val&quot;: 0.9316,
   &quot;val&quot;: {
-    &quot;threshold&quot;: 0.5903,
-    &quot;recall&quot;: 1.0,
-    &quot;precision&quot;: 0.9565,
-    &quot;tp&quot;: 22,
-    &quot;fp&quot;: 1,
-    &quot;fn&quot;: 0,
-    &quot;tn&quot;: 109
+    &quot;threshold&quot;: 0.9316,
+    &quot;recall&quot;: 0.8346,
+    &quot;precision&quot;: 0.9623,
+    &quot;tp&quot;: 2195,
+    &quot;fp&quot;: 86,
+    &quot;fn&quot;: 435,
+    &quot;tn&quot;: 1083
   },
   &quot;test&quot;: {
-    &quot;threshold&quot;: 0.5903,
-    &quot;recall&quot;: 0.0,
-    &quot;precision&quot;: 0.0,
-    &quot;tp&quot;: 0,
-    &quot;fp&quot;: 12,
-    &quot;fn&quot;: 0,
-    &quot;tn&quot;: 3
+    &quot;threshold&quot;: 0.9316,
+    &quot;recall&quot;: 0.866,
+    &quot;precision&quot;: 0.7833,
+    &quot;tp&quot;: 517,
+    &quot;fp&quot;: 143,
+    &quot;fn&quot;: 80,
+    &quot;tn&quot;: 220
   },
-  &quot;test_auc&quot;: null,
-  &quot;test_ap&quot;: null,
+  &quot;test_auc&quot;: 0.8668,
+  &quot;test_ap&quot;: 0.9208,
   &quot;final_tests_restants&quot;: 0
 }</pre></details></div></details></li></ul></details></li></ul></li></ul></details></li></ul>
 </main><script>
 document.getElementById('open').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=true);
 document.getElementById('close').onclick=()=>document.querySelectorAll('details').forEach(d=>d.open=false);
 </script>
-<script type="application/json" id="examples">{"orchestrator.global_status": {"call": null, "response": {"dataset": {"chaines_distinctes": 6, "videos": 6, "moyenne_videos_par_chaine": 1.0, "images_extraites": 646, "images_etiquetees": 623, "images_sans_etiquette": 23, "videos_sans_ajout": 2, "pourcentage_images_avec_ajout": 46.5, "budgets": {"videos_collectables_restantes": 1, "budget_annotation_restant_usd": 0.2, "final_tests_restants": 1}}, "budget_session_usd": {"depense": 0.0, "total": 0.3, "reserve_rapport_usd": 0.05, "disponible_pour_deleguer": 0.25}}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator)."}, "orchestrator.list_experiments": {"call": null, "response": {"splits": []}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator)."}, "dataset_builder.dataset_info": {"call": null, "response": {"dataset": {"chaines_distinctes": 6, "videos": 6, "moyenne_videos_par_chaine": 1.0, "images_extraites": 646, "images_etiquetees": 623, "images_sans_etiquette": 23, "videos_sans_ajout": 2, "videos_par_orientation": {"portrait": 3, "paysage": 3}, "pourcentage_images_avec_ajout": 46.5}, "diversite": {"chaines_distinctes": 6, "videos": 6, "moyenne_videos_par_chaine": 1.0, "videos_par_chaine_la_plus_representee": {"youtube:UCFWvBpxTD8JCaiA2ZUf11sg": 1, "youtube:UCALSne37rMHgcN7wLZnVu_A": 1, "youtube:UCGZGahQLPpHpLOmc50XSUPA": 1, "youtube:UC14UlmYlSNiQCBe9Eookf_A": 1, "youtube:UCPbo6JtmBIuix4IcoxsgGYQ": 1}}, "budgets": {"videos_collectables_restantes": 1, "budget_annotation_restant_usd": 0.2}}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent dataset_builder)."}, "dataset_builder.data_requested_history": {"call": null, "response": {}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent dataset_builder)."}, "dataset_builder.generate_data": {"call": {"n": 1, "orientation": "landscape", "query": "top 10 humour compilation", "reason": "Dernier budget vidéo disponible avant la création du split : collecter la dernière vidéo possible pour maximiser le dataset. Requête orientée vers un style très habillé (compilation avec textes, incrustations, génériques, logos) pour enrichir les exemples positifs, tout en gardant une chaîne inédite pour la diversité."}, "response": {"videos_collectees": 0, "echecs": 1, "exemples_erreurs": ["aucune nouvelle vidéo YouTube pour « top 10 humour compilation » (landscape) : change de requête"], "arret": null, "images_envoyees_en_annotation": 0, "images_avec_accord": 0, "requetes_en_echec": 0, "cout_annotation_usd": 0.0, "images_total": 646, "videos_collectables_restantes": 1, "budget_annotation_restant_usd": 0.2}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent dataset_builder)."}, "orchestrator.ask_dataset_builder": {"call": {"task": "Objectif : maximiser la collecte de données pour le classifieur d'ajouts de montage (habillages, textes, logos, incrustations, cadres, effets graphiques) avant qu'un split ne soit créé.\n\nContexte : le dataset actuel contient 6 vidéos YouTube (6 chaînes distinctes, 623 images étiquetées, ~46,5 % d'images avec ajout). Selon l'état global, il ne reste que 1 vidéo collectable et environ 0,20 $ de budget d'annotation. Aucun split n'existe encore : toute vidéo collectée maintenant pourra entrer dans le futur split.\n\nConsigne :\n1. Appelle dataset_info pour connaître l'état exact du dataset et des budgets.\n2. Appelle generate_data pour collecter le maximum de vidéos/annotations possible avec le budget restant (au moins la 1 vidéo restante, plus si le budget le permet). Privilégie la diversité : des chaînes YouTube variées, avec des styles d'habillage différents (vlogs, tutos, chaînes d'info, gaming, sport, etc.) et des vidéos contenant beaucoup d'ajouts de montage (logos, lower-thirds, génériques, incrustations, textes), mais aussi quelques vidéos \"brutes\" sans ajout. Ne te soucie pas des splits (aucun n'existe encore).\n3. Si le budget d'annotation est insuffisant pour annoter toutes les images collectées, concentre-toi sur l'annotation des images déjà extraites en priorité.\n4. Ne demande aucune collecte au-delà de ce que les budgets permettent ; si generate_data refuse ou échoue, rapporte l'erreur exacte.\n\nRapport attendu : nombre de vidéos collectées, nombre d'images extraites et étiquetées au total (nouveau dataset_info à la fin), budgets restants, et la liste des chaînes/vidéos ajoutées. Termine par la \"Vérification automatique\" produite par le code."}, "response": "## Rapport de collecte (Dataset Builder)\n\n**Ce qui a été collecté et pourquoi**\n\nObjectif : épuiser le budget de collecte avant la création du split. Le budget ne permettait qu'**une seule vidéo supplémentaire** (1 vidéo collectable restante, 0,20 $ d'annotation).\n\n- 3 requêtes ont échoué avec l'erreur exacte : *« aucune nouvelle vidéo YouTube pour « … » : change de requête »* — pour « top 10 humour compilation », « journal télévisé extrait actualité » et « vlog voyage japon » (toutes en paysage).\n- La 4ᵉ requête, « **recette pâtes rapide** » (paysage, mots-clés simples et courants), a réussi : **1 vidéo collectée**, chaîne inédite, 181 images extraites (1 image/seconde) et envoyées en annotation, **180 images étiquetées** (accord des trois LLM), 1 image sans étiquette. Coût d'annotation : 0,0265 $.\n\n**Composition du dataset après collecte**\n\n| Indicateur | Avant | Après |\n|---|---|---|\n| Chaînes distinctes | 6 | **7** (toutes à 1 vidéo) |\n| Vidéos | 6 | **7** |\n| Images extraites | 646 | **827** |\n| Images étiquetées | 623 | **803** |\n| Images sans étiquette (pas d'accord) | 23 | **24** (~2,9 %) |\n| Part d'images avec ajout | 46,5 % | **58,5 %** |\n| Vidéos sans aucun ajout | 2 | 2 |\n| Orientation | 3 portrait / 3 paysage | 3 portrait / **4 paysage** |\n\n**Chaîne/vidéo ajoutée** : 1 nouvelle chaîne YouTube (tutoriel cuisine, paysage) — l'identifiant de chaîne n'est pas exposé par mes outils au-delà du décompte.\n\n**Budgets restants**\n- Vidéos collectables : **0** → aucune collecte supplémentaire possible, même avec le budget d'annotation restant.\n- Budget d'annotation : **0,174 $** (non utilisable faute de vidéos collectables).\n\n**Cas encore rares / orientation future**\n- Le dataset reste très petit (7 vidéos, 7 chaînes) ; la part d'images avec ajout a fortement augmenté (58,5 %), donc les futures collectes devraient viser un équilibre avec davantage de vidéos « brutes » de caméra.\n- Le budget vidéo étant épuisé, tout enrichissement futur dépendra d'un rechargement de budget.\n\n**Échecs** : 3 requêtes épuisées sans résultat (voir ci-dessus) ; aucune collecte n'a dépassé les budgets.\n\n**Vérification automatique** : je ne dispose d'aucun outil d'exécution de code, donc je ne peux pas produire la « Vérification automatique » demandée — je ne peux rien inventer à sa place. Tous les chiffres ci-dessus proviennent exclusivement des retours de `dataset_info` et `generate_data`.\n\n--- Vérification automatique (produite par le code, pas par l'agent) ---\nOutils réellement appelés par dataset_builder :\n- dataset_info : 2 réussi(s), 0 échec(s)\n- data_requested_history : 1 réussi(s), 0 échec(s)\n- generate_data : 4 réussi(s), 0 échec(s)", "note": "Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator)."}, "model_researcher.dataset_info": {"call": null, "response": {"fps": 1.0, "dataset": {"chaines_distinctes": 7, "videos": 7, "moyenne_videos_par_chaine": 1.0, "images_extraites": 827, "images_etiquetees": 803, "images_sans_etiquette": 24, "videos_sans_ajout": 2, "videos_par_orientation": {"portrait": 3, "paysage": 4}, "pourcentage_images_avec_ajout": 58.5}}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent model_researcher)."}, "model_researcher.make_split": {"call": {"note": "split_v1 : premier split du projet. 7 chaînes = 7 vidéos (1 vidéo/chaîne). Répartition 4 chaînes train / 2 val / 1 test : val aussi grand que possible (2 chaînes) tout en gardant un test non vide (1 chaîne) et un train suffisant (4 chaînes). Stratification par défaut (orientation, clip_vide) pour répartir les 3 vidéos portrait / 4 paysage et les 2 vidéos sans ajout.", "seed": 0, "stratify": ["orientation", "clip_vide"], "test_ratio": 0.14, "val_ratio": 0.29}, "response": {"split_id": "split_001", "params": {"val_ratio": 0.29, "test_ratio": 0.14, "test_fige": false, "stratify": ["orientation", "clip_vide"], "seed": 0}, "clips_exclus": 0, "train": {"chaines_distinctes": 4, "videos": 4, "moyenne_videos_par_chaine": 1.0, "images_extraites": 678, "images_etiquetees": 656, "images_sans_etiquette": 22, "videos_sans_ajout": 0, "videos_par_orientation": {"paysage": 3, "portrait": 1}, "pourcentage_images_avec_ajout": 68.3}, "val": {"chaines_distinctes": 2, "videos": 2, "moyenne_videos_par_chaine": 1.0, "images_extraites": 134, "images_etiquetees": 132, "images_sans_etiquette": 2, "videos_sans_ajout": 1, "videos_par_orientation": {"portrait": 1, "paysage": 1}, "pourcentage_images_avec_ajout": 16.7}, "test": {"chaines_distinctes": 1, "videos": 1, "moyenne_videos_par_chaine": 1.0, "images_extraites": 15, "images_etiquetees": 15, "images_sans_etiquette": 0, "videos_sans_ajout": 1, "videos_par_orientation": {"portrait": 1}}}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent model_researcher)."}, "model_researcher.train_model": {"call": {"embeddings": ["clip_b32:full"], "model": "logreg", "note": "Référence de base : un classifieur linéaire sur les embeddings CLIP ViT-B/32 de l'image entière suffit-il à séparer ajouts de montage et images brutes ?", "split_id": "split_001"}, "response": {"experiment_id": "exp_001", "val": {"auc": 1.0, "ap": 1.0, "seuil_p95": 0.5903, "recall": 1.0, "fp": 1, "fn": 0}}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent model_researcher)."}, "model_researcher.list_experiments": {"call": {"split_id": "split_001"}, "response": {"splits": [{"split_id": "split_001", "chaines_train": 4, "chaines_val": 2, "chaines_test": 1, "chaines_shared": 0, "clips_train": 4, "clips_val": 2, "clips_test": 1, "val_images": 132, "val_images_positives": 22, "clips_hors_split": 0, "note": "split_v1 : premier split du projet. 7 chaînes = 7 vidéos (1 vidéo/chaîne). Répartition 4 chaînes train / 2 val / 1 test…", "experiences": [{"id": "exp_001", "embeddings": ["clip_b32:full"], "model": "logreg", "temporal": "none", "params": {}, "hypothese": "Référence de base : un classifieur linéaire sur les embeddings CLIP ViT-B/32 de l'image entière suffit-il à séparer ajouts de montage et images brutes ?", "val": {"auc": 1.0, "ap": 1.0, "seuil_p95": 0.5903, "recall": 1.0, "fp": 1, "fn": 0}, "erreurs_val": {"fn_par_clip": {}, "fp_par_clip": {"yt_ieiOR5l3lqU": 1}}}, {"id": "exp_002", "embeddings": ["clip_l14:full"], "model": "logreg", "temporal": "none", "params": {}, "hypothese": "Un backbone CLIP plus puissant (ViT-L/14) améliore-t-il la séparation des ajouts de montage par rapport au ViT-B/32 ?", "val": {"auc": 1.0, "ap": 1.0, "seuil_p95": 0.8302, "recall": 1.0, "fp": 1, "fn": 0}, "erreurs_val": {"fn_par_clip": {}, "fp_par_clip": {"yt_ieiOR5l3lqU": 1}}}, {"id": "exp_003", "embeddings": ["clip_b32:full", "dinov2_s:full"], "model": "hgb", "temporal": "none", "params": {"lr": 0.1, "max_iter": 300, "max_leaf_nodes": 31}, "hypothese": "La concaténation CLIP + DINOv2 (sémantique + traits visuels fins) avec un classifieur gradient boosting améliore-t-elle le rappel à précision fixée ?", "val": {"auc": 0.9992, "ap": 0.9962, "seuil_p95": 0.9997, "recall": 0.9545, "fp": 1, "fn": 1}, "erreurs_val": {"fn_par_clip": {"yt_0U6_cPT95a0": 1}, "fp_par_clip": {"yt_ieiOR5l3lqU": 1}}}]}]}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent model_researcher)."}, "orchestrator.ask_model_researcher": {"call": {"task": "Objectif : créer le premier split train/val/test du projet, puis entraîner et évaluer plusieurs configurations de classifieur d'ajouts de montage, pour maximiser le rappel sur le split val à précision fixée à 95 %.\n\nContexte : le dataset est figé (7 vidéos YouTube, 7 chaînes distinctes, 803 images étiquetées, ~58,5 % d'images avec ajout, 24 images sans étiquette). Le budget de collecte de vidéos est épuisé : aucune donnée ne sera ajoutée. Il n'existe encore aucun split ni aucune expérience. Le split doit être fait par chaîne YouTube (une chaîne n'appartient qu'à une partie) et doit être nommé, figé. Les décisions se prennent sur val ; le seuil de décision est choisi sur val à 95 % de précision.\n\nConsigne :\n1. Appelle dataset_info pour voir la composition exacte du dataset (chaînes, orientations, vidéos).\n2. Appelle make_split pour créer UN split nommé (par ex. « split_v1 »). Comme il n'y a que 7 chaînes, choisis une répartition par chaîne qui maximise la taille du val tout en gardant un test non vide et un train suffisant — par exemple 4 chaînes en train / 2 en val / 1 en test, ou 3/2/2 selon ce que tu juges le plus robuste. Justifie brièvement ton choix dans le rapport. Ne crée qu'un seul split.\n3. Appelle train_model pour entraîner AU PLUS 3 configurations différentes (le budget de session est limité : ne lance pas plus de 3 entraînements). Propose des configs complémentaires, par exemple : (a) embeddings CLIP ViT-B/32 + classifieur linéaire, (b) embeddings CLIP ViT-L/14 (ou autre backbone plus fort) + classifieur linéaire, (c) une config avec modèle finetuné ou pondération/rééchantillonnage si l'outil le permet. Pour chaque expérience, définis clairement la config, l'hypothèse, et assure-toi que l'évaluation sur val soit faite (AUC, AP, seuil et rappel à 95 % de précision, FP/FN à ce seuil).\n4. Pour chaque expérience, rapporte : id d'expérience, config, hypothèse, AUC val, AP val, précision visée (95 %), seuil choisi, rappel val à ce seuil, nombre de FP/FN, et les clips concernés par les erreurs à ce seuil.\n5. Ne touche pas au test : aucune évaluation sur test n'est demandée à ce stade.\n6. Si un entraînement échoue, rapporte l'erreur exacte et poursuis avec les autres.\n\nRapport attendu : id du split créé, sa composition (chaînes/clips/images par partie), le tableau comparatif des expériences sur val, l'expérience recommandée (meilleur rappel val à précision 95 %), et les limites (petitesse du val notamment). Termine par la \"Vérification automatique\" produite par le code."}, "response": "# Rapport — split_v1 et premières expériences\n\n## Split créé : `split_001`\n\nPremier split du projet, figé, découpé par chaîne YouTube (1 vidéo par chaîne, 7 chaînes) :\n\n| Partie | Chaînes | Vidéos | Images étiquetées | % avec ajout | Sans ajout | Orientation |\n|---|---|---|---|---|---|---|\n| train | 4 | 4 | 656 | 68,3 % | 0 | 3 paysage / 1 portrait |\n| val | 2 | 2 | 132 | 16,7 % (22 positives) | 1 | 1 paysage / 1 portrait |\n| test | 1 | 1 | 15 | — | 1 | 1 portrait |\n\n**Justification** : avec 7 chaînes, 4/2/1 maximise le train (4 chaînes) tout en gardant un val de 2 chaînes (le plus grand possible avec un test non vide) et un test d'une chaîne. Stratification par défaut (orientation, clip_vide). Le test est désormais figé. **Limites constatées** : le val est très petit (132 images, 22 positives) et le train ne contient aucune vidéo sans ajout (les 2 vidéos « clip_vide » sont en val et test) — le modèle n'a donc jamais vu de vidéo 100 % brute en entraînement.\n\n## Expériences (3 entraînements, budget respecté)\n\n| Expérience | Config | Hypothèse | AUC val | AP val | Seuil (P=95 %) | Rappel val | FP / FN | Clips en erreur |\n|---|---|---|---|---|---|---|---|---|\n| **exp_001** | clip_b32:full + logreg | Un classifieur linéaire sur CLIP ViT-B/32 image entière suffit-il comme référence ? | **1,000** | **1,000** | 0,5903 | **1,000** | 1 / 0 | FP : `yt_ieiOR5l3lqU` (1) |\n| **exp_002** | clip_l14:full + logreg | Un backbone CLIP plus puissant (ViT-L/14) améliore-t-il la séparation ? | **1,000** | **1,000** | 0,8302 | **1,000** | 1 / 0 | FP : `yt_ieiOR5l3lqU` (1) |\n| **exp_003** | clip_b32:full + dinov2_s:full (concat) + hgb | CLIP + DINOv2 avec gradient boosting améliore-t-il le rappel à précision fixée ? | 0,9992 | 0,9962 | 0,9997 | 0,9545 | 1 / 1 | FN : `yt_0U6_cPT95a0` (1) ; FP : `yt_ieiOR5l3lqU` (1) |\n\nAucune évaluation sur test n'a été faite (réservée à l'Evaluator).\n\n## Recommandation\n\n**Candidat recommandé : exp_001** (CLIP ViT-B/32 + régression logistique). Elle atteint le maximum possible sur val (rappel 1,000 à précision 95 %, AUC = AP = 1,000) avec la config la plus simple et la moins coûteuse ; exp_002 fait jeu égal mais pour un coût de calcul bien supérieur, et exp_003 (concat CLIP+DINOv2 + HGB) est légèrement en retrait (1 FN). La seule fausse alerte des deux meilleurs modèles est la même image du clip `yt_ieiOR5l3lqU`.\n\n## Limites et suite\n\n- **Val minuscule** : 22 positives ; 1 FN = −4,5 points de rappel, 1 FP fait tenir la précision 95 % à un fil (1 FP sur ~110 négatifs val). Les scores parfaits sont probablement du sur-ajustement au val ; un écart d'une image est du bruit.\n- **Train sans vidéo sans ajout** : le modèle n'a pas vu de vidéo purement brute ; c'est un biais structurel de ce split qu'on ne peut plus corriger (un seul split autorisé, budget de collecte épuisé).\n- **À essayer ensuite** (si l'orchestrateur poursuit) : vues `grid2` (quadrants) pour les petits logos/texte en coin, information temporelle (`diff`), MLP, PCA sur les embeddings concaténés, et pondération `negatif`/`clip_vide` — même si l'absence de `clip_vide` en train limite leur effet. À ce stade, les gains mesurables sur val sont quasiment nuls ; la prochaine étape pertinente est la **vérification finale sur test par l'Evaluator** avec exp_001 comme candidat.\n\n## Vérification automatique\n\nJe ne dispose d'aucun outil produisant une « Vérification automatique » distincte ; je ne peux donc pas en inventer une. Les seules sorties de code réelles de cette session sont les métriques val renvoyées par `train_model` et confirmées par `list_experiments` : exp_001 (AUC 1,0 ; AP 1,0 ; seuil 0,5903 ; rappel 1,0 ; FP 1 / FN 0), exp_002 (AUC 1,0 ; AP 1,0 ; seuil 0,8302 ; rappel 1,0 ; FP 1 / FN 0), exp_003 (AUC 0,9992 ; AP 0,9962 ; seuil 0,9997 ; rappel 0,9545 ; FP 1 / FN 1). Test non touché.\n\n--- Vérification automatique (produite par le code, pas par l'agent) ---\nOutils réellement appelés par model_researcher :\n- dataset_info : 2 réussi(s), 0 échec(s)\n- make_split : 1 réussi(s), 0 échec(s)\n- train_model : 3 réussi(s), 0 échec(s)\n- list_experiments : 1 réussi(s), 0 échec(s)", "note": "Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator)."}, "evaluator.list_experiments": {"call": {"split_id": "split_001"}, "response": {"splits": [{"split_id": "split_001", "chaines_train": 4, "chaines_val": 2, "chaines_test": 1, "chaines_shared": 0, "clips_train": 4, "clips_val": 2, "clips_test": 1, "val_images": 132, "val_images_positives": 22, "clips_hors_split": 0, "note": "split_v1 : premier split du projet. 7 chaînes = 7 vidéos (1 vidéo/chaîne). Répartition 4 chaînes train / 2 val / 1 test…", "experiences": [{"id": "exp_001", "embeddings": ["clip_b32:full"], "model": "logreg", "temporal": "none", "params": {}, "hypothese": "Référence de base : un classifieur linéaire sur les embeddings CLIP ViT-B/32 de l'image entière suffit-il à séparer ajouts de montage et images brutes ?", "val": {"auc": 1.0, "ap": 1.0, "seuil_p95": 0.5903, "recall": 1.0, "fp": 1, "fn": 0}, "erreurs_val": {"fn_par_clip": {}, "fp_par_clip": {"yt_ieiOR5l3lqU": 1}}}, {"id": "exp_002", "embeddings": ["clip_l14:full"], "model": "logreg", "temporal": "none", "params": {}, "hypothese": "Un backbone CLIP plus puissant (ViT-L/14) améliore-t-il la séparation des ajouts de montage par rapport au ViT-B/32 ?", "val": {"auc": 1.0, "ap": 1.0, "seuil_p95": 0.8302, "recall": 1.0, "fp": 1, "fn": 0}, "erreurs_val": {"fn_par_clip": {}, "fp_par_clip": {"yt_ieiOR5l3lqU": 1}}}, {"id": "exp_003", "embeddings": ["clip_b32:full", "dinov2_s:full"], "model": "hgb", "temporal": "none", "params": {"lr": 0.1, "max_iter": 300, "max_leaf_nodes": 31}, "hypothese": "La concaténation CLIP + DINOv2 (sémantique + traits visuels fins) avec un classifieur gradient boosting améliore-t-elle le rappel à précision fixée ?", "val": {"auc": 0.9992, "ap": 0.9962, "seuil_p95": 0.9997, "recall": 0.9545, "fp": 1, "fn": 1}, "erreurs_val": {"fn_par_clip": {"yt_0U6_cPT95a0": 1}, "fp_par_clip": {"yt_ieiOR5l3lqU": 1}}}]}]}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent evaluator)."}, "evaluator.analyze_errors": {"call": {"experiment_id": "exp_001", "precision": 0.95}, "response": {"experiment_id": "exp_001", "precision_visee": 0.95, "threshold": 0.5903, "recall": 1.0, "precision": 0.9565, "tp": 22, "fp": 1, "fn": 0, "tn": 109, "positifs_rates_par_orientation": {"portrait": "0/22 ratées"}, "positifs_rates_par_chaine": {"Ezequiel - Juicio Bíblico": "0/22 ratées"}, "faux_positifs_par_orientation": {"paysage": 1}, "faux_positifs_par_clip": {"yt_ieiOR5l3lqU": 1}, "exemples_rates": []}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent evaluator)."}, "evaluator.show_examples": {"call": {"experiment_id": "exp_001", "kind": "false_positive", "n": 3, "precision": 0.95}, "response": "faux positif yt_ieiOR5l3lqU t=72.0 p=0.59 (seuil 0.59)\n<image images/call004_turn02_01.jpg>", "note": "Appel et réponse réels (run 001 du 24/10/2026, agent evaluator)."}, "evaluator.final_test": {"call": {"experiment_id": "exp_001", "precision": 0.95}, "response": {"experiment_id": "exp_001", "split_id": "split_001", "precision_visee": 0.95, "seuil_choisi_sur_val": 0.5903, "val": {"threshold": 0.5903, "recall": 1.0, "precision": 0.9565, "tp": 22, "fp": 1, "fn": 0, "tn": 109}, "test": {"threshold": 0.5903, "recall": 0.0, "precision": 0.0, "tp": 0, "fp": 12, "fn": 0, "tn": 3}, "test_auc": null, "test_ap": null, "final_tests_restants": 0}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent evaluator)."}, "orchestrator.ask_evaluator": {"call": {"task": "Objectif : analyser les erreurs des meilleurs candidats sur val, puis réaliser le TEST FINAL (unique restant) du candidat retenu, pour le classifieur d'ajouts de montage.\n\nContexte : split figé « split_001 » (4 chaînes train / 2 val / 1 test ; val = 132 images étiquetées dont 22 positives ; test = 1 clip de 15 images, vidéo sans ajout). Trois expériences existent :\n- exp_001 : clip_b32:full + logreg — AUC val 1,000, AP val 1,000, seuil P95 = 0,5903, rappel val 1,000 (1 FP sur le clip yt_ieiOR5l3lqU, 0 FN)\n- exp_002 : clip_l14:full + logreg — AUC val 1,000, AP val 1,000, seuil P95 = 0,8302, rappel val 1,000 (1 FP sur le même clip, 0 FN)\n- exp_003 : clip_b32 + dinov2_s concat + hgb — AUC val 0,9992, AP val 0,9962, seuil P95 = 0,9997, rappel val 0,9545 (1 FP, 1 FN sur yt_0U6_cPT95a0)\n\nLe candidat retenu pour le test final est **exp_001** (meilleur rappel val à précision 95 %, config la plus simple ; égalité avec exp_002 sur val). Son seuil de décision est celui choisi sur val (0,5903), appliqué tel quel sur test.\n\nConsigne :\n1. Appelle list_experiments pour confirmer l'état des expériences.\n2. Appelle analyze_errors sur exp_001 (et exp_002 si utile pour comparaison) sur le split split_001, au seuil de précision 95 % : détaille les FP/FN par clip, la marge des scores autour du seuil, et ce que révèlent ces erreurs (type d'ajout manqué, type de plan pris pour un ajout).\n3. Appelle show_examples pour visualiser les images en erreur de val (le FP du clip yt_ieiOR5l3lqU, et le FN de exp_003 sur yt_0U6_cPT95a0 si disponible) afin de caractériser les cas limites.\n4. Appelle final_test pour évaluer exp_001 sur le test du split split_001 avec le seuil val 0,5903 appliqué tel quel. C'est le seul et unique test final autorisé : ne le lance qu'une seule fois et uniquement sur exp_001.\n5. Interprète le résultat du test final (précision, rappel, FP/FN sur test) en gardant à l'esprit que le test ne contient qu'un seul clip (15 images, vidéo sans ajout) : commente la robustesse de la conclusion.\n\nRapport attendu : synthèse de l'analyse d'erreurs sur val, caractérisation des cas limites vus en val, résultat complet du test final (métriques, seuil appliqué, FP/FN), verdict sur exp_001 comme modèle recommandé, et limites fortes (val minuscule, test d'un seul clip sans ajout, train sans vidéo 100 % brute). Termine par la \"Vérification automatique\" produite par le code."}, "response": "# Rapport d'évaluation — split_001, candidat exp_001\n\n## 1. État confirmé des expériences (list_experiments)\n\nSplit **split_001** figé : 4 chaînes train / 2 val / 1 test, val = 132 images étiquetées (22 positives), test = 1 clip de 15 images (vidéo sans ajout), 0 vidéo hors split. Trois expériences :\n\n| Expérience | Config | AUC val | AP val | Seuil P95 | Rappel val | FP | FN |\n|---|---|---|---|---|---|---|---|\n| exp_001 | clip_b32:full + logreg | 1,000 | 1,000 | 0,5903 | **1,000** | 1 | 0 |\n| exp_002 | clip_l14:full + logreg | 1,000 | 1,000 | 0,8302 | **1,000** | 1 | 0 |\n| exp_003 | clip_b32 + dinov2_s concat + hgb | 0,9992 | 0,9962 | 0,9997 | 0,9545 | 1 | 1 |\n\n## 2. Analyse d'erreurs sur val (seuil précision 95 %)\n\n**exp_001** (seuil 0,5903) : TP 22, FP 1, FN 0, TN 109 → précision 0,9565, rappel 1,000. 0 positive ratée (portrait 0/22, chaîne « Ezequiel - Juicio Bíblico » 0/22). **Un seul FP**, sur le clip `yt_ieiOR5l3lqU`, en paysage.\n\n**exp_002** : profil identique (mêmes TP/FP/FN, même FP sur le même clip) — égalité parfaite avec exp_001 sur ce val minuscule, aucune base de comparaison réelle.\n\n**exp_003** (seuil 0,9997) : TP 21, FP 1, FN 1, TN 109 → précision 0,9545, rappel 0,9545. Le FN est sur `yt_0U6_cPT95a0` (t=5,0 s).\n\n## 3. Inspection visuelle des cas limites (show_examples)\n\n- **FP de exp_001** — `yt_ieiOR5l3lqU`, t=72,0 s, **p = 0,59 pour un seuil de 0,5903** : plan très serré d'une main sur une poignée de porte (personnage en pantalon écossais rouge), image **brute de caméra sans aucun habillage visible**. Le score est quasiment égal au seuil : FP **marginal**, la frontière de décision est fragile. Le modèle a probablement confondu ce cadrage rapproché/cinématographique avec un contenu « monté ».\n- **FN de exp_003** — `yt_0U6_cPT95a0`, t=5,0 s, **p ≈ 1,00 pour un seuil de 0,9997** : vidéo portrait d'un berger avec ses moutons, portant **deux ajouts évidents** : logo « @rocknrollner » en haut (miroité) et texte « MOUTONS » en bas. Le modèle était en réalité **très confiant** (score ~1,0) ; le FN est un **artefact de seuil** : la distribution des scores HGB étant compressée près de 1, le seuil P95 a été poussé à 0,9997 et ce positif juste en dessous est tombé du mauvais côté. Ce n'est pas un vrai raté de détection. exp_001, lui, détecte cette image (0 FN).\n\n## 4. Test final — exp_001 (appel unique, seuil val 0,5903 appliqué tel quel)\n\n| | Seuil | TP | FP | FN | TN | Précision | Rappel |\n|---|---|---|---|---|---|---|---|\n| **Test** | 0,5903 | **0** | **12** | 0 | 3 | **0,000** | 0,0 (0 positif) |\n\nAUC/AP test : non calculables (le clip de test ne contient aucun positif). **Appels de test final restants : 0.**\n\n## 5. Interprétation\n\n- Le test est constitué d'**un seul clip de 15 images, vidéo annoncée sans ajout** : il n'y a donc aucun positif à détecter (rappel 0,0 est attendu et non informatif), et toute alerte est un faux positif.\n- Le modèle a levé **12 alertes sur 15 images (80 %)** d'une vidéo pourtant 100 % brute. Ce n'est pas du bruit ponctuel (1 FP comme sur val) : c'est une **fausse alarme systématique** sur le style de cette chaîne de test, totalement inédite (split par chaîne). Le footage brut de cette chaîne (cadrage, étalonnage, grain, rythme) est hors distribution par rapport aux 4 chaînes d'entraînement.\n- **La précision visée de 95 % n'est absolument pas tenue sur test** (0 % de précision, 80 % de taux de fausse alarme). Le score val (AUC 1,000, rappel 1,000) était un artefact de surapprentissage/surévaluation : val ne compte que 132 images, 22 positives, 2 clips, 2 chaînes — et même le seul FP val était à la marge exacte du seuil.\n\n## 6. Verdict\n\n**exp_001 échoue son test final.** Il ne peut pas être recommandé pour la production : son apparente perfection sur val ne se généralise pas à une chaîne inédite, où il confond massivement du brut avec du monté. Le même vaut très probablement pour exp_002 (profil val identique) ; exp_003, pénalisé sur val par un artefact de seuil, n'a pas non plus de raison de se comporter différemment sur ce test (même famille d'embeddings). **Aucun des trois modèles n'est validé.** Le code de fin de run devra constater qu'aucun candidat n'a réussi son test final.\n\n## 7. Limites fortes\n\n- **Val minuscule** : 132 images / 22 positives / 2 clips / 2 chaînes — un écart de quelques points y est du bruit ; AUC 1,000 n'y est pas une preuve.\n- **Test d'un seul clip sans ajout** : il ne mesure que le taux de fausse alarme sur un style de chaîne, pas le rappel en généralisation.\n- **Train sans vidéo 100 % brute** : si aucune vidéo d'entraînement n'est purement brute, le modèle n'a jamais vu de « nég courbe » représentatif, ce qui explique la dérive sur la chaîne test.\n- Étiquettes issues de l'accord de 3 LLM : quelques erreurs d'annotation communes restent possibles (aucune image inspectée ici ne m'a semblé mal étiquetée).\n\n## 8. Recommandations concrètes\n\n1. **Ne rien mettre en production.** Relancer une collecte de données avant tout nouveau candidat.\n2. **Collecter des vidéos 100 % brutes** de chaînes variées (styles, cadrages, étalonnages, portrait/paysage) pour équilibrer les négatifs « difficiles » — c'est la cause la plus probable des 12 FP.\n3. **Collecter plus de chaînes avec montage** (logos permanents, génériques, texte en incrustation, habillages récurrents) pour élargir val et test ; viser plusieurs clips par split, portrait et paysage.\n4. **Exploiter la temporalité** : les ajouts persistent sur des images consécutives (échantillonnage 1 fps) — un lissage temporel (vote majoritaire sur fenêtre glissante) aurait supprimé le FP marginal de val et très probablement réduit les alertes sporadiques ; les 12 FP consécutifs du test indiquent hélas un biais systématique, que seule plus de données brutes pourra corriger.\n5. **Recalibrer le seuil sur un val élargi** et surveiller la marge au seuil (le FP val était à 0,0003 du seuil) ; éviter les seuils poussés à l'extrême (artefact exp_003).\n6. **Pistes de modèle** à tester sur un split refondu : agrégation temporelle des embeddings CLIP, détecteur d'overlay dédié (texte/logo par OCR/segmentation) en complément, et calibration par chaîne.\n\n## Vérification automatique\n\n- Split confirmé : `split_001` (4/2/1 chaînes, val 132 images dont 22 positives, test 1 clip de 15 images, 0 hors split).\n- Analyses d'erreurs exécutées sur exp_001, exp_002, exp_003 au seuil précision 95 % (résultats ci-dessus, issus de l'outil).\n- Test final exécuté **une seule fois**, sur **exp_001** uniquement, seuil val 0,5903 appliqué tel quel → test : TP 0, FP 12, FN 0, TN 3, précision 0,000, AUC/AP test non calculables (aucun positif dans le clip de test).\n- **Appels de test final restants : 0** (budget épuisé, conformément à la règle d'unicité).\n- Conclusion machine : le candidat retenu sur val **ne tient pas la précision visée sur test** → non éligible en production.\n\n--- Vérification automatique (produite par le code, pas par l'agent) ---\nOutils réellement appelés par evaluator :\n- list_experiments : 1 réussi(s), 0 échec(s)\n- analyze_errors : 3 réussi(s), 0 échec(s)\n- show_examples : 2 réussi(s), 0 échec(s)\n- final_test : 1 réussi(s), 0 échec(s)", "note": "Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator)."}, "model_researcher.exclude_clips": {"missing": "Pas d'exemple : outil non appelé pendant le run 001."}}</script></body></html>
+<script type="application/json" id="examples">{"dataset_builder.dataset_info": {"call": null, "response": {"dataset": {"chaines_distinctes": 6, "videos": 6, "moyenne_videos_par_chaine": 1.0, "images_extraites": 646, "images_etiquetees": 623, "images_sans_etiquette": 23, "videos_sans_ajout": 2, "videos_par_orientation": {"portrait": 3, "paysage": 3}, "pourcentage_images_avec_ajout": 46.5}, "diversite": {"chaines_distinctes": 6, "videos": 6, "moyenne_videos_par_chaine": 1.0, "videos_par_chaine_la_plus_representee": {"youtube:UCFWvBpxTD8JCaiA2ZUf11sg": 1, "youtube:UCALSne37rMHgcN7wLZnVu_A": 1, "youtube:UCGZGahQLPpHpLOmc50XSUPA": 1, "youtube:UC14UlmYlSNiQCBe9Eookf_A": 1, "youtube:UCPbo6JtmBIuix4IcoxsgGYQ": 1}}, "budgets": {"videos_collectables_restantes": 1, "budget_annotation_restant_usd": 0.2}}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent dataset_builder)."}, "dataset_builder.data_requested_history": {"call": null, "response": {}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent dataset_builder)."}, "dataset_builder.generate_data": {"call": {"n": 1, "orientation": "landscape", "query": "top 10 humour compilation", "reason": "Dernier budget vidéo disponible avant la création du split : collecter la dernière vidéo possible pour maximiser le dataset. Requête orientée vers un style très habillé (compilation avec textes, incrustations, génériques, logos) pour enrichir les exemples positifs, tout en gardant une chaîne inédite pour la diversité."}, "response": {"videos_collectees": 0, "echecs": 1, "exemples_erreurs": ["aucune nouvelle vidéo YouTube pour « top 10 humour compilation » (landscape) : change de requête"], "arret": null, "images_envoyees_en_annotation": 0, "images_avec_accord": 0, "requetes_en_echec": 0, "cout_annotation_usd": 0.0, "images_total": 646, "videos_collectables_restantes": 1, "budget_annotation_restant_usd": 0.2}, "note": "Appel et réponse réels (run 001 du 24/10/2026, agent dataset_builder)."}, "orchestrator.ask_dataset_builder": {"call": {"task": "Objectif : maximiser la collecte de données pour le classifieur d'ajouts de montage (habillages, textes, logos, incrustations, cadres, effets graphiques) avant qu'un split ne soit créé.\n\nContexte : le dataset actuel contient 6 vidéos YouTube (6 chaînes distinctes, 623 images étiquetées, ~46,5 % d'images avec ajout). Selon l'état global, il ne reste que 1 vidéo collectable et environ 0,20 $ de budget d'annotation. Aucun split n'existe encore : toute vidéo collectée maintenant pourra entrer dans le futur split.\n\nConsigne :\n1. Appelle dataset_info pour connaître l'état exact du dataset et des budgets.\n2. Appelle generate_data pour collecter le maximum de vidéos/annotations possible avec le budget restant (au moins la 1 vidéo restante, plus si le budget le permet). Privilégie la diversité : des chaînes YouTube variées, avec des styles d'habillage différents (vlogs, tutos, chaînes d'info, gaming, sport, etc.) et des vidéos contenant beaucoup d'ajouts de montage (logos, lower-thirds, génériques, incrustations, textes), mais aussi quelques vidéos \"brutes\" sans ajout. Ne te soucie pas des splits (aucun n'existe encore).\n3. Si le budget d'annotation est insuffisant pour annoter toutes les images collectées, concentre-toi sur l'annotation des images déjà extraites en priorité.\n4. Ne demande aucune collecte au-delà de ce que les budgets permettent ; si generate_data refuse ou échoue, rapporte l'erreur exacte.\n\nRapport attendu : nombre de vidéos collectées, nombre d'images extraites et étiquetées au total (nouveau dataset_info à la fin), budgets restants, et la liste des chaînes/vidéos ajoutées. Termine par la \"Vérification automatique\" produite par le code."}, "response": "## Rapport de collecte (Dataset Builder)\n\n**Ce qui a été collecté et pourquoi**\n\nObjectif : épuiser le budget de collecte avant la création du split. Le budget ne permettait qu'**une seule vidéo supplémentaire** (1 vidéo collectable restante, 0,20 $ d'annotation).\n\n- 3 requêtes ont échoué avec l'erreur exacte : *« aucune nouvelle vidéo YouTube pour « … » : change de requête »* — pour « top 10 humour compilation », « journal télévisé extrait actualité » et « vlog voyage japon » (toutes en paysage).\n- La 4ᵉ requête, « **recette pâtes rapide** » (paysage, mots-clés simples et courants), a réussi : **1 vidéo collectée**, chaîne inédite, 181 images extraites (1 image/seconde) et envoyées en annotation, **180 images étiquetées** (accord des trois LLM), 1 image sans étiquette. Coût d'annotation : 0,0265 $.\n\n**Composition du dataset après collecte**\n\n| Indicateur | Avant | Après |\n|---|---|---|\n| Chaînes distinctes | 6 | **7** (toutes à 1 vidéo) |\n| Vidéos | 6 | **7** |\n| Images extraites | 646 | **827** |\n| Images étiquetées | 623 | **803** |\n| Images sans étiquette (pas d'accord) | 23 | **24** (~2,9 %) |\n| Part d'images avec ajout | 46,5 % | **58,5 %** |\n| Vidéos sans aucun ajout | 2 | 2 |\n| Orientation | 3 portrait / 3 paysage | 3 portrait / **4 paysage** |\n\n**Chaîne/vidéo ajoutée** : 1 nouvelle chaîne YouTube (tutoriel cuisine, paysage) — l'identifiant de chaîne n'est pas exposé par mes outils au-delà du décompte.\n\n**Budgets restants**\n- Vidéos collectables : **0** → aucune collecte supplémentaire possible, même avec le budget d'annotation restant.\n- Budget d'annotation : **0,174 $** (non utilisable faute de vidéos collectables).\n\n**Cas encore rares / orientation future**\n- Le dataset reste très petit (7 vidéos, 7 chaînes) ; la part d'images avec ajout a fortement augmenté (58,5 %), donc les futures collectes devraient viser un équilibre avec davantage de vidéos « brutes » de caméra.\n- Le budget vidéo étant épuisé, tout enrichissement futur dépendra d'un rechargement de budget.\n\n**Échecs** : 3 requêtes épuisées sans résultat (voir ci-dessus) ; aucune collecte n'a dépassé les budgets.\n\n**Vérification automatique** : je ne dispose d'aucun outil d'exécution de code, donc je ne peux pas produire la « Vérification automatique » demandée — je ne peux rien inventer à sa place. Tous les chiffres ci-dessus proviennent exclusivement des retours de `dataset_info` et `generate_data`.\n\n--- Vérification automatique (produite par le code, pas par l'agent) ---\nOutils réellement appelés par dataset_builder :\n- dataset_info : 2 réussi(s), 0 échec(s)\n- data_requested_history : 1 réussi(s), 0 échec(s)\n- generate_data : 4 réussi(s), 0 échec(s)", "note": "Appel et réponse réels (run 001 du 24/10/2026, agent orchestrator)."}, "orchestrator.global_status": {"call": null, "response": {"dataset": {"chaines_distinctes": 44, "videos": 44, "moyenne_videos_par_chaine": 1.0, "images_extraites": 5282, "images_etiquetees": 4759, "images_sans_etiquette": 523, "videos_sans_ajout": 6, "pourcentage_images_avec_ajout": 67.8, "budgets": {"videos_collectables_restantes": 0, "budget_annotation_restant_usd": 0.0, "final_tests_restants": 1}}, "budget_session_usd": {"depense": 0.0, "total": 1.0, "reserve_rapport_usd": 0.15, "disponible_pour_deleguer": 0.85}}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent orchestrator)."}, "orchestrator.list_experiments": {"call": null, "response": {"splits": []}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent orchestrator)."}, "model_researcher.dataset_info": {"call": null, "response": {"fps": 1.0, "dataset": {"chaines_distinctes": 44, "videos": 44, "moyenne_videos_par_chaine": 1.0, "images_extraites": 5282, "images_etiquetees": 4759, "images_sans_etiquette": 523, "videos_sans_ajout": 6, "videos_par_orientation": {"paysage": 33, "portrait": 11}, "pourcentage_images_avec_ajout": 67.8}}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent model_researcher)."}, "model_researcher.list_experiments": {"call": null, "response": {"splits": []}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent model_researcher)."}, "model_researcher.make_split": {"call": {"note": "Établir la première séparation figée dev/test par chaîne sur le dataset existant, stratifiée par orientation et clips sans ajout, pour évaluer la généralisation à des chaînes nouvelles.", "seed": 0}, "response": {"split_id": "split_001", "params": {"test_ratio": 0.2, "test_fige": false, "stratify": ["orientation", "clip_vide"], "seed": 0}, "clips_exclus": 0, "plis_de_validation": 5, "dev": {"chaines_distinctes": 35, "videos": 35, "moyenne_videos_par_chaine": 1.0, "images_extraites": 4176, "images_etiquetees": 3799, "images_sans_etiquette": 377, "videos_sans_ajout": 4, "videos_par_orientation": {"paysage": 26, "portrait": 9}, "pourcentage_images_avec_ajout": 69.2}, "test": {"chaines_distinctes": 9, "videos": 9, "moyenne_videos_par_chaine": 1.0, "images_extraites": 1106, "images_etiquetees": 960, "images_sans_etiquette": 146, "videos_sans_ajout": 2, "videos_par_orientation": {"portrait": 2, "paysage": 7}}}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent model_researcher)."}, "model_researcher.train_model": {"call": {"split_id": "split_001", "embeddings": ["clip_b32:full"], "model": "logreg", "note": "Un modèle linéaire sur CLIP entier fournit une référence pour comparer les changements de représentation, de classifieur et d’information temporelle."}, "response": {"experiment_id": "exp_001", "val": {"auc": 0.9191, "ap": 0.9686, "seuil_p95": 0.9316, "recall": 0.8346, "fp": 86, "fn": 435}}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent model_researcher)."}, "orchestrator.ask_model_researcher": {"call": {"task": "Session d'amélioration du classifieur. État connu : dataset existant de 44 chaînes/44 vidéos, 5 282 images extraites dont 4 759 étiquetées ; aucune expérience ni aucun split (list_experiments vide). Aucun budget de collecte/annotation restant ; il reste un seul test final et le budget de session de délégation est limité, dont 0,15 $ réservé au rapport final. Crée un split dev/test figé par chaîne à partir du dataset existant (pas de collecte), puis entraîne sur ce split des configurations pertinentes et suffisamment diversifiées, en privilégiant le meilleur rappel à précision 95 % sur val par validation croisée par chaîne. Le split doit être créé une seule fois ; ne demande pas de données. Donne un rapport autonome avec l'ID du split, toutes les expériences effectivement entraînées, leurs configurations et résultats val (rappel au seuil de 95 % précision, AUC/AP si disponibles, seuil, erreurs), la meilleure candidate et les limites liées aux données/budget. Ne lance pas de test final : le dernier test doit rester disponible pour l'Evaluator. Termine selon les exigences par « Vérification automatique » listant les outils réellement appelés et leurs erreurs."}, "response": "## Split et données\n\nSplit **`split_001`**, créé une seule fois à partir des vidéos existantes, stratifié par orientation et présence de clips sans ajout. Il sépare les chaînes : **35 en dev**, **9 en test**, aucune chaîne partagée, avec **5 plis** de validation croisée par chaîne. Le test reste intact pour l’Evaluator.\n\n- **Dev :** 35 vidéos, 4 176 images extraites, 3 799 étiquetées, 377 sans étiquette, 4 vidéos sans ajout; 26 paysages et 9 portraits. Parmi les images étiquetées, 69,2 % sont positives.\n- **Test :** 9 vidéos, 1 106 images extraites, 960 étiquetées, 146 sans étiquette, 2 vidéos sans ajout; 7 paysages et 2 portraits.\n\n## Expériences et résultats sur val\n\nLes paramètres non indiqués sont ceux par défaut. Le seuil est celui renvoyé pour la précision cible de 95 %. Les erreurs indiquent les nombres de faux positifs (FP) et faux négatifs (FN).\n\n| ID | Configuration | Rappel | AUC | AP | Seuil | FP / FN |\n|---|---|---:|---:|---:|---:|---:|\n| `exp_001` | CLIP-B/32, full; logreg; sans information temporelle | **0,8346** | 0,9191 | 0,9686 | 0,9316 | 86 / 435 |\n| `exp_002` | DINOv2-S, full; logreg; sans information temporelle | 0,5529 | 0,7819 | 0,9103 | 0,9977 | 55 / 1 176 |\n| `exp_003` | CLIP-B/32 + DINOv2-S, full; logreg; sans information temporelle | 0,8266 | **0,9320** | **0,9728** | 0,9510 | 82 / 456 |\n| `exp_004` | CLIP-B/32, grid2; logreg; sans information temporelle | 0,7639 | 0,8861 | 0,9558 | 0,9678 | 80 / 621 |\n| `exp_005` | CLIP-B/32, full; logreg; temporal `diff` | 0,7407 | 0,8881 | 0,9555 | 0,9869 | 74 / 682 |\n| `exp_006` | CLIP-B/32, full; MLP; sans information temporelle | 0,7129 | 0,8682 | 0,9467 | 0,9752 | 71 / 755 |\n| `exp_007` | CLIP-B/32, full; logreg; poids `clip_vide: 3` | 0,8259 | 0,9138 | 0,9666 | 0,9412 | 85 / 458 |\n\nHypothèses enregistrées : `exp_001`, référence linéaire CLIP; `exp_002`, tester DINOv2 seul; `exp_003`, compléter CLIP par DINOv2; `exp_004`, préserver les indices localisés avec grid2; `exp_005`, exploiter les changements entre secondes; `exp_006`, tester une frontière non linéaire; `exp_007`, réduire les fausses alertes en pondérant les vidéos entièrement sans ajout.\n\nLes détails d’erreurs ci-dessous sont les cinq clips ayant le plus de FN et les cinq ayant le plus de FP, tels que renvoyés par l’outil; ce ne sont pas les listes exhaustives.\n\n| ID | Principaux clips en FN (nombre) | Principaux clips en FP (nombre) |\n|---|---|---|\n| `exp_001` | `yt_UGsvfsrP2fo` 107; `yt_tyrQ45Robbk` 78; `yt__LpzkLDdR6U` 53; `yt_YAbWeTXeO40` 23; `yt_CZI3akKLEug` 22 | `yt_SzmcGzB5UxU` 27; `yt_cGP6tL_EdV0` 21; `yt_FGwvWbaLVw4` 9; `yt_1-vw66aYPo0` 5; `yt_eKGdRR0VZpc` 5 |\n| `exp_002` | `yt_CZI3akKLEug` 208; `yt_tyrQ45Robbk` 175; `yt_UGsvfsrP2fo` 173; `yt__LpzkLDdR6U` 116; `yt_T5WlW2SbRvM` 77 | `yt_SzmcGzB5UxU` 18; `yt_cGP6tL_EdV0` 12; `yt_yqYoMFVNcss` 9; `yt_NcKmALfFaMA` 5; `yt_eosDvec0i1A` 4 |\n| `exp_003` | `yt_UGsvfsrP2fo` 101; `yt_tyrQ45Robbk` 100; `yt__LpzkLDdR6U` 60; `yt_CZI3akKLEug` 50; `yt_YAbWeTXeO40` 16 | `yt_SzmcGzB5UxU` 34; `yt_cGP6tL_EdV0` 24; `yt_FGwvWbaLVw4` 8; `yt_yqYoMFVNcss` 5; `yt_1-vw66aYPo0` 4 |\n| `exp_004` | `yt_UGsvfsrP2fo` 138; `yt_tyrQ45Robbk` 101; `yt__LpzkLDdR6U` 60; `yt_CZI3akKLEug` 56; `yt_f32ODwPj2is` 56 | `yt_yqYoMFVNcss` 26; `yt_1-vw66aYPo0` 13; `yt_cGP6tL_EdV0` 12; `yt_n3ZtWr4KV7Y` 6; `yt_SzmcGzB5UxU` 6 |\n| `exp_005` | `yt_UGsvfsrP2fo` 151; `yt_tyrQ45Robbk` 106; `yt__LpzkLDdR6U` 64; `yt_mRQQFfW56pY` 58; `yt_CZI3akKLEug` 47 | `yt_yqYoMFVNcss` 42; `yt_SzmcGzB5UxU` 12; `yt_cGP6tL_EdV0` 11; `yt_JTt0EStEne4` 5; `yt_1-vw66aYPo0` 2 |\n| `exp_006` | `yt_UGsvfsrP2fo` 168; `yt_tyrQ45Robbk` 114; `yt_f32ODwPj2is` 56; `yt__LpzkLDdR6U` 55; `yt_CZI3akKLEug` 53 | `yt_SzmcGzB5UxU` 20; `yt_cGP6tL_EdV0` 17; `yt_yqYoMFVNcss` 15; `yt_1-vw66aYPo0` 9; `yt_JTt0EStEne4` 6 |\n| `exp_007` | `yt_UGsvfsrP2fo` 125; `yt_tyrQ45Robbk` 80; `yt__LpzkLDdR6U` 53; `yt_CZI3akKLEug` 24; `yt_YAbWeTXeO40` 23 | `yt_SzmcGzB5UxU` 25; `yt_cGP6tL_EdV0` 19; `yt_FGwvWbaLVw4` 9; `yt_yqYoMFVNcss` 7; `yt_eKGdRR0VZpc` 5 |\n\n## Conclusion et limites\n\n**Meilleure candidate selon l’objectif principal : `exp_001`**, qui obtient le rappel val le plus élevé à la précision cible (0,8346). `exp_003` est une alternative intéressante pour son AUC et son AP supérieures, mais son rappel est légèrement inférieur. L’écart de rappel est faible et peut être du bruit avec seulement 35 chaînes en dev.\n\nAucun test final n’a été lancé : le test reste réservé à l’Evaluator. Les données sont limitées à 44 chaînes/vidéos, et 523 images n’ont pas d’étiquette faute d’accord entre annotateurs; les étiquettes conservées peuvent aussi comporter des erreurs communes aux trois LLM. Sans collecte ni annotation supplémentaire, ces résultats val ne permettent pas d’évaluer la fiabilité sur une population plus large.\n\nÀ essayer ensuite : comparer quelques variantes d’hyperparamètres ou de rééchantillonnage sur **le même split**, puis laisser l’Evaluator mesurer le candidat retenu sur le test unique.\n\n## Vérification automatique\n\n- `dataset_info` : appelé 2 fois; aucune erreur.\n- `list_experiments` : appelé 2 fois; aucune erreur.\n- `make_split` : appelé 1 fois; aucune erreur.\n- `train_model` : appelé 7 fois; aucune erreur.\n- `multi_tool_use.parallel` : appelé 2 fois pour des appels parallèles; aucune erreur.\n\n--- Vérification automatique (produite par le code, pas par l'agent) ---\nOutils réellement appelés par model_researcher :\n- dataset_info : 2 réussi(s), 0 échec(s)\n- list_experiments : 2 réussi(s), 0 échec(s)\n- make_split : 1 réussi(s), 0 échec(s)\n- train_model : 7 réussi(s), 0 échec(s)", "note": "Appel et réponse réels (run 001 du 25/10/2026, agent orchestrator)."}, "evaluator.list_experiments": {"call": {"split_id": "split_001"}, "response": {"splits": [{"split_id": "split_001", "chaines_dev": 35, "chaines_test": 9, "chaines_shared": 0, "clips_dev": 35, "clips_test": 9, "images_dev": 3799, "images_dev_positives": 2630, "clips_hors_split": 0, "note": "Établir la première séparation figée dev/test par chaîne sur le dataset existant, stratifiée par orientation et clips sa…", "experiences": [{"id": "exp_001", "embeddings": ["clip_b32:full"], "model": "logreg", "temporal": "none", "params": {}, "hypothese": "Un modèle linéaire sur CLIP entier fournit une référence pour comparer les changements de représentation, de classifieur et d’information temporelle.", "val": {"auc": 0.9191, "ap": 0.9686, "seuil_p95": 0.9316, "recall": 0.8346, "fp": 86, "fn": 435}, "erreurs_val": {"fn_par_clip": {"yt_UGsvfsrP2fo": 107, "yt_tyrQ45Robbk": 78, "yt__LpzkLDdR6U": 53, "yt_YAbWeTXeO40": 23, "yt_CZI3akKLEug": 22}, "fp_par_clip": {"yt_SzmcGzB5UxU": 27, "yt_cGP6tL_EdV0": 21, "yt_FGwvWbaLVw4": 9, "yt_1-vw66aYPo0": 5, "yt_eKGdRR0VZpc": 5}}}, {"id": "exp_002", "embeddings": ["dinov2_s:full"], "model": "logreg", "temporal": "none", "params": {}, "hypothese": "DINOv2-S peut mieux séparer les ajouts graphiques des scènes brutes que la représentation CLIP de référence.", "val": {"auc": 0.7819, "ap": 0.9103, "seuil_p95": 0.9977, "recall": 0.5529, "fp": 55, "fn": 1176}, "erreurs_val": {"fn_par_clip": {"yt_CZI3akKLEug": 208, "yt_tyrQ45Robbk": 175, "yt_UGsvfsrP2fo": 173, "yt__LpzkLDdR6U": 116, "yt_T5WlW2SbRvM": 77}, "fp_par_clip": {"yt_SzmcGzB5UxU": 18, "yt_cGP6tL_EdV0": 12, "yt_yqYoMFVNcss": 9, "yt_NcKmALfFaMA": 5, "yt_eosDvec0i1A": 4}}}, {"id": "exp_003", "embeddings": ["clip_b32:full", "dinov2_s:full"], "model": "logreg", "temporal": "none", "params": {}, "hypothese": "La concaténation CLIP et DINOv2-S peut compléter leurs indices visuels pour augmenter le rappel à précision contrainte.", "val": {"auc": 0.932, "ap": 0.9728, "seuil_p95": 0.951, "recall": 0.8266, "fp": 82, "fn": 456}, "erreurs_val": {"fn_par_clip": {"yt_UGsvfsrP2fo": 101, "yt_tyrQ45Robbk": 100, "yt__LpzkLDdR6U": 60, "yt_CZI3akKLEug": 50, "yt_YAbWeTXeO40": 16}, "fp_par_clip": {"yt_SzmcGzB5UxU": 34, "yt_cGP6tL_EdV0": 24, "yt_FGwvWbaLVw4": 8, "yt_yqYoMFVNcss": 5, "yt_1-vw66aYPo0": 4}}}, {"id": "exp_004", "embeddings": ["clip_b32:grid2"], "model": "logreg", "temporal": "none", "params": {}, "hypothese": "La vue en quadrants peut préserver les indices localisés comme les titres et logos que l'image entière dilue.", "val": {"auc": 0.8861, "ap": 0.9558, "seuil_p95": 0.9678, "recall": 0.7639, "fp": 80, "fn": 621}, "erreurs_val": {"fn_par_clip": {"yt_UGsvfsrP2fo": 138, "yt_tyrQ45Robbk": 101, "yt__LpzkLDdR6U": 60, "yt_CZI3akKLEug": 56, "yt_f32ODwPj2is": 56}, "fp_par_clip": {"yt_yqYoMFVNcss": 26, "yt_1-vw66aYPo0": 13, "yt_cGP6tL_EdV0": 12, "yt_n3ZtWr4KV7Y": 6, "yt_SzmcGzB5UxU": 6}}}, {"id": "exp_005", "embeddings": ["clip_b32:full"], "model": "logreg", "temporal": "diff", "params": {}, "hypothese": "Le changement d'embedding entre secondes consécutives peut révéler des ajouts transitoires invisibles dans l'image isolée.", "val": {"auc": 0.8881, "ap": 0.9555, "seuil_p95": 0.9869, "recall": 0.7407, "fp": 74, "fn": 682}, "erreurs_val": {"fn_par_clip": {"yt_UGsvfsrP2fo": 151, "yt_tyrQ45Robbk": 106, "yt__LpzkLDdR6U": 64, "yt_mRQQFfW56pY": 58, "yt_CZI3akKLEug": 47}, "fp_par_clip": {"yt_yqYoMFVNcss": 42, "yt_SzmcGzB5UxU": 12, "yt_cGP6tL_EdV0": 11, "yt_JTt0EStEne4": 5, "yt_1-vw66aYPo0": 2}}}, {"id": "exp_006", "embeddings": ["clip_b32:full"], "model": "mlp", "temporal": "none", "params": {}, "hypothese": "Un classifieur non linéaire peut exploiter des frontières entre scènes brutes et ajouts que la régression logistique ne sépare pas.", "val": {"auc": 0.8682, "ap": 0.9467, "seuil_p95": 0.9752, "recall": 0.7129, "fp": 71, "fn": 755}, "erreurs_val": {"fn_par_clip": {"yt_UGsvfsrP2fo": 168, "yt_tyrQ45Robbk": 114, "yt_f32ODwPj2is": 56, "yt__LpzkLDdR6U": 55, "yt_CZI3akKLEug": 53}, "fp_par_clip": {"yt_SzmcGzB5UxU": 20, "yt_cGP6tL_EdV0": 17, "yt_yqYoMFVNcss": 15, "yt_1-vw66aYPo0": 9, "yt_JTt0EStEne4": 6}}}, {"id": "exp_007", "embeddings": ["clip_b32:full"], "model": "logreg", "temporal": "none", "params": {}, "weights": {"clip_vide": 3}, "hypothese": "Donner plus de poids aux images de vidéos entièrement sans ajout peut limiter les fausses alertes sur les scènes brutes les plus cohérentes.", "val": {"auc": 0.9138, "ap": 0.9666, "seuil_p95": 0.9412, "recall": 0.8259, "fp": 85, "fn": 458}, "erreurs_val": {"fn_par_clip": {"yt_UGsvfsrP2fo": 125, "yt_tyrQ45Robbk": 80, "yt__LpzkLDdR6U": 53, "yt_CZI3akKLEug": 24, "yt_YAbWeTXeO40": 23}, "fp_par_clip": {"yt_SzmcGzB5UxU": 25, "yt_cGP6tL_EdV0": 19, "yt_FGwvWbaLVw4": 9, "yt_yqYoMFVNcss": 7, "yt_1-vw66aYPo0": 5}}}]}]}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent evaluator)."}, "evaluator.analyze_errors": {"call": {"experiment_id": "exp_001", "precision": 0.95}, "response": {"experiment_id": "exp_001", "precision_visee": 0.95, "threshold": 0.9316, "recall": 0.8346, "precision": 0.9623, "tp": 2195, "fp": 86, "fn": 435, "tn": 1083, "positifs_rates_par_orientation": {"paysage": "396/2506 ratées", "portrait": "39/124 ratées"}, "positifs_rates_par_chaine": {"Amelie Maelyza": "0/8 ratées", "Atelier du Délice": "0/27 ratées", "Brico Com'Antoine ": "6/23 ratées", "Cuisine Marocaine": "22/224 ratées", "Diivine -": "2/48 ratées", "EasyFix": "22/198 ratées", "FC Barcelona": "53/240 ratées", "G.HUSSAIN": "13/26 ratées", "Gio San Pedro": "1/60 ratées", "Histoires Incroyables": "2/18 ratées", "Immobilier Parisien": "0/3 ratées", "La Guitare avec Alexandre": "13/156 ratées", "Les Pépites de Cloé": "107/187 ratées", "Les Tutos": "2/21 ratées", "MSF South Asia": "12/155 ratées", "Magali Laville": "3/28 ratées", "Météo Bretagne": "9/151 ratées", "Nat Geo France": "0/130 ratées", "Odelia ": "19/152 ratées", "Oh So Fact": "12/23 ratées", "Radio Nova": "5/56 ratées", "Real Madrid": "0/69 ratées", "STUDIOCANAL France": "14/21 ratées", "Slate.fr": "0/174 ratées", "Tobby's Journal": "0/21 ratées", "Université d'Angers": "4/35 ratées", "VikChaos": "12/15 ratées", "WEP Belgique": "78/213 ratées", "Xplore": "23/25 ratées", "franceinfo": "1/110 ratées", "만약에말이야": "0/13 ratées"}, "faux_positifs_par_orientation": {"paysage": 76, "portrait": 10}, "faux_positifs_par_clip": {"yt_SzmcGzB5UxU": 27, "yt_cGP6tL_EdV0": 21, "yt_FGwvWbaLVw4": 9, "yt_1-vw66aYPo0": 5, "yt_eKGdRR0VZpc": 5, "yt_JTt0EStEne4": 5, "yt_n3ZtWr4KV7Y": 5, "yt_yqYoMFVNcss": 5}, "exemples_rates": [{"image": "img/yt_0Ff0tqtzmKU/00005.jpg", "t": 4.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00065.jpg", "t": 64.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00069.jpg", "t": 68.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00070.jpg", "t": 69.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00089.jpg", "t": 88.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00090.jpg", "t": 89.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00094.jpg", "t": 93.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00098.jpg", "t": 97.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00121.jpg", "t": 120.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}, {"image": "img/yt_0Ff0tqtzmKU/00122.jpg", "t": 121.0, "video": "MSF Asia Scientific Days & International Conference on Medical Sciences (ICM) 2022"}]}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent evaluator)."}, "evaluator.show_examples": {"call": {"experiment_id": "exp_001", "kind": "missed", "n": 6, "precision": 0.95}, "response": "ajout raté yt_0Ff0tqtzmKU t=4.0 p=0.89 (seuil 0.93)\n<image images/call003_turn03_01.jpg>\najout raté yt_0Ff0tqtzmKU t=64.0 p=0.92 (seuil 0.93)\n<image images/call003_turn03_02.jpg>\najout raté yt_0Ff0tqtzmKU t=68.0 p=0.84 (seuil 0.93)\n<image images/call003_turn03_03.jpg>\najout raté yt_0Ff0tqtzmKU t=69.0 p=0.86 (seuil 0.93)\n<image images/call003_turn03_04.jpg>\najout raté yt_0Ff0tqtzmKU t=88.0 p=0.89 (seuil 0.93)\n<image images/call003_turn03_05.jpg>\najout raté yt_0Ff0tqtzmKU t=89.0 p=0.69 (seuil 0.93)\n<image images/call003_turn03_06.jpg>", "note": "Appel et réponse réels (run 001 du 25/10/2026, agent evaluator)."}, "orchestrator.ask_evaluator": {"call": {"task": "Analyse les erreurs de validation (pas de test final) sur le split split_001 pour comparer exp_001 (meilleur rappel val à précision 95 %) et exp_003 (meilleure AUC/AP). Utilise uniquement les outils evaluator autorisés, notamment l'analyse d'erreurs et éventuellement des exemples si cela aide. Identifie, sur les erreurs observées, les types de faux négatifs/faux positifs récurrents et si une piste concrète justifie une expérience supplémentaire. Ne collecte pas de données et ne lance surtout pas de test final : le seul test final doit être conservé pour le candidat final. Donne les constats appuyés par les outils et leurs limites, et termine par « Vérification automatique » listant les outils réellement appelés et leurs erreurs."}, "response": "## Analyse de validation — `split_001`\n\nLes deux expériences sont comparables : même split, même objectif de précision 95 %. Je n’ai lancé aucun test final.\n\n| Expérience | Représentation | Seuil val | Précision | Rappel | TP / FP / FN | AUC / AP |\n|---|---|---:|---:|---:|---:|---:|\n| `exp_001` | CLIP full + régression logistique | 0,9316 | 0,9623 | **0,8346** | 2195 / 86 / **435** | 0,9191 / 0,9686 |\n| `exp_003` | CLIP full + DINOv2-S full + régression logistique | 0,9510 | 0,9637 | 0,8266 | 2174 / 82 / 456 | **0,9320 / 0,9728** |\n\n`exp_001` détecte 21 positifs de plus et a 21 faux négatifs de moins, avec 4 fausses alertes supplémentaires. `exp_003` a de meilleures AUC et AP, mais pas un meilleur rappel au seuil choisi : l’écart de rappel est de 0,8 point. Les deux précisions observées dépassent 95 % sur val ; cela ne démontre pas que la précision tiendra hors de val.\n\n### Erreurs observées\n\n- **Faux négatifs :** dans les exemples des deux modèles, les ajouts ratés sont notamment des sous-titres/captions en bas d’images de reportage, conférence ou séquences de coupe. Certaines images de la même vidéo sont ratées à plusieurs secondes d’intervalle. Les exemples d’`exp_003` comprennent aussi des scores très bas pour des images sous-titrées. Cela motive une expérience ciblant mieux le texte localisé — par exemple une branche OCR ou des caractéristiques sur des régions/crops — sans garantir qu’elle améliorera le rappel à précision contrainte.\n- **Orientation :** `exp_001` rate 396/2506 positifs paysage et 39/124 portrait ; `exp_003`, 415/2506 et 41/124. La part de positifs ratés est donc plus forte en portrait dans les deux cas. Les faux positifs comptés par orientation sont 76 paysage et 10 portrait pour `exp_001`, contre 81 et 1 pour `exp_003`.\n- **Concentration par chaîne :** les ratés sont particulièrement nombreux pour *Les Pépites de Cloé* (107/187 pour `exp_001`, 101/187 pour `exp_003`) et *WEP Belgique* (78/213 et 100/213). `exp_003` régresse aussi notamment sur *Cuisine Marocaine* (50/224 contre 22/224). Les comptes varient selon les chaînes : avec peu de chaînes, cela ne suffit pas à conclure à une différence robuste.\n- **Faux positifs :** les clips `yt_SzmcGzB5UxU` et `yt_cGP6tL_EdV0` dominent pour les deux expériences : 27 et 21 pour `exp_001`, 34 et 24 pour `exp_003`. Dans les exemples inspectés, on voit notamment des plans de cuisine et une personne filmée, sans ajout de montage évident. Ce sont des scènes brutes visuellement plausibles comme négatifs ; l’abondance d’erreurs dans quelques clips suggère de vérifier ces styles de vidéos dans les données.\n\nJe n’ai pas repéré de faux négatif clairement mal étiqueté : les exemples concernés montrent bien du texte ajouté visible. Les faux positifs inspectés ne montrent pas non plus d’ajout évident ; un logo imprimé sur un objet, s’il est dans la scène filmée, ne constitue pas à lui seul un ajout de montage. Cette inspection porte sur quelques exemples seulement, pas sur toutes les erreurs.\n\n### Verdict et suite concrète\n\nLe choix dépend du critère : **`exp_001` reste le meilleur des deux au rappel val à précision visée** ; `exp_003` améliore AUC/AP mais n’améliore pas ce critère principal. L’écart de rappel est faible et, compte tenu du nombre limité de chaînes, ne prouve pas à lui seul une supériorité générale.\n\nUne expérience supplémentaire est justifiée pour tester une détection plus sensible aux sous-titres et au texte incrusté. En parallèle, les clips à fausses alertes et les chaînes avec beaucoup de ratés sont des cibles concrètes pour la collecte future : styles de vidéos culinaires/personnelles brutes d’un côté, et vidéos de reportage/conférence sous-titrées de l’autre, en couvrant aussi le portrait. Les résultats présents ne permettent pas de prédire le gain de ces pistes.\n\n### Vérification automatique\n\n- `list_experiments` — appelé une fois sur `split_001` ; aucune erreur.\n- `analyze_errors` — appelé pour `exp_001` et `exp_003` à précision visée 0,95 ; aucune erreur.\n- `show_examples` — appelé pour les ratés et fausses alertes de chaque expérience (4 appels) ; aucune erreur.\n- `final_test` — non appelé, conformément à la demande.\n\n--- Vérification automatique (produite par le code, pas par l'agent) ---\nOutils réellement appelés par evaluator :\n- list_experiments : 1 réussi(s), 0 échec(s)\n- analyze_errors : 2 réussi(s), 0 échec(s)\n- show_examples : 4 réussi(s), 0 échec(s)", "note": "Appel et réponse réels (run 001 du 25/10/2026, agent orchestrator)."}, "evaluator.final_test": {"call": {"experiment_id": "exp_001", "precision": 0.95}, "response": {"experiment_id": "exp_001", "split_id": "split_001", "precision_visee": 0.95, "seuil_choisi_sur_val": 0.9316, "val": {"threshold": 0.9316, "recall": 0.8346, "precision": 0.9623, "tp": 2195, "fp": 86, "fn": 435, "tn": 1083}, "test": {"threshold": 0.9316, "recall": 0.866, "precision": 0.7833, "tp": 517, "fp": 143, "fn": 80, "tn": 220}, "test_auc": 0.8668, "test_ap": 0.9208, "final_tests_restants": 0}, "note": "Appel et réponse réels (run 001 du 25/10/2026, agent evaluator)."}, "model_researcher.exclude_clips": {"missing": "Pas d'exemple : outil non appelé pendant le run 001."}}</script></body></html>
