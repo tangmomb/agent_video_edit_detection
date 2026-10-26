@@ -76,7 +76,8 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
     return Tool(
         name="dataset_info",
         description="État du dataset : composition globale (chaînes YouTube, vidéos, images extraites, "
-                    "images étiquetées et sans étiquette faute d'accord des annotateurs, pourcentage "
+                    "images étiquetées, sans étiquette faute d'accord des annotateurs et non annotées (quasi identiques à "
+                    "la précédente annotée), pourcentage "
                     "d'images avec ajout, vidéos sans aucun ajout, répartition des vidéos par "
                     "orientation)"
                     + contenu + ".",

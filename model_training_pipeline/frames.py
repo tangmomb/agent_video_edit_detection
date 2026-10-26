@@ -1,14 +1,18 @@
 """Construit le dataset de frames étiquetées à partir des vraies vidéos de video_source.
 
-Les images sont extraites à FPS par seconde, puis chacune est soumise aux trois LLM
-d'annotators.ANNOTATORS (annotate, appels payants) ; les votes sont gardés dans votes.json à côté
-de la vidéo. build() ne fait aucun appel payant : il relit les votes.
+Les images sont extraites à FPS par seconde, puis soumises aux trois LLM d'annotators.ANNOTATORS
+(annotate, appels payants) ; les votes sont gardés dans votes.json à côté de la vidéo. build() ne
+fait aucun appel payant : il relit les votes.
+
+Une image presque identique à la dernière image annotée de sa vidéo n'est pas annotée (to_annotate) :
+à 1 image par seconde, 4 sur 10 répètent la précédente, et les payer n'apprend rien au modèle.
 
 Chaque ligne de index.jsonl :
   frame, sample_id, t, source (chaîne YouTube : le split se fait par chaîne, voir lab.make_split),
   label_any    : 1 / 0 si les trois LLM sont d'accord (ajout de montage ou image brute),
                  None en cas de désaccord ou d'image pas encore annotée (jamais utilisée pour
                  entraîner ni mesurer, mais gardée pour la composante temporelle)
+  annotee      : au moins un vote reçu (False : image sautée comme quasi identique, ou en attente)
 """
 
 import json
@@ -24,6 +28,11 @@ from video_source.youtube import load_meta
 FPS = 1.0  # frames extraites par seconde de vidéo
 LONG_SIDE = 640
 WORKERS = 8  # images annotées en parallèle
+# Cosinus CLIP (clip_b32, image entière) au-delà duquel une image est jugée identique à la dernière
+# annotée de la vidéo et sautée. Mesuré sur 7 144 images (26/10/2026) en comparant à l'image
+# précédente : 0.97 saute 27 % des images et 1 % des 230 changements d'étiquette (apparition ou
+# disparition d'un ajout) ; 0.95 en sautait 43 %, mais 4 % des changements.
+SKIP_SIMILAR = 0.97
 
 
 def source_key(meta: dict) -> str:
@@ -97,10 +106,34 @@ def missing(votes: dict, frame: str) -> list[str]:
     return [m for m in annotators.ANNOTATORS if m not in got]
 
 
+def to_annotate(sdir: Path, out_dir: Path = FRAMES_DIR, votes: dict | None = None) -> list[Path]:
+    """Images de la vidéo à annoter : chacune est comparée à la dernière image gardée (déjà votée ou
+    retenue) et sautée si leur cosinus CLIP dépasse SKIP_SIMILAR. Comparer à la dernière gardée, et
+    non à la précédente, rattrape une lente dérive. Embeddings calculés au besoin (mis en cache,
+    réutilisés à l'entraînement)."""
+    import numpy as np
+
+    from .features import get_features
+
+    frames = frames_of(sdir, out_dir)
+    if not frames:
+        return []
+    votes = votes if votes is not None else load_votes(sdir)
+    sid = load_meta(sdir)["sample_id"]
+    X = get_features([{"sample_id": sid, "frame": f.name} for f in frames], "clip_b32", "full", Path(out_dir))
+    X /= np.linalg.norm(X, axis=1, keepdims=True)
+    keep, ref = [], None
+    for f, x in zip(frames, X):
+        if votes["frames"].get(f.name, {}).get("votes") or ref is None or float(x @ ref) <= SKIP_SIMILAR:
+            keep.append(f)
+            ref = x
+    return keep
+
+
 def pending(sdir: Path, out_dir: Path = FRAMES_DIR) -> list[Path]:
-    """Images de la vidéo auxquelles il manque au moins un vote."""
+    """Images à annoter (to_annotate) auxquelles il manque au moins un vote."""
     votes = load_votes(sdir)
-    return [f for f in frames_of(sdir, out_dir) if missing(votes, f.name)]
+    return [f for f in to_annotate(sdir, out_dir, votes) if missing(votes, f.name)]
 
 
 def annotate(sdir: Path, max_usd: float | None = None, apis: dict | None = None,
@@ -147,7 +180,8 @@ def build(samples_dir: Path = SAMPLES_DIR, out_dir: Path = FRAMES_DIR, fps: floa
             t = round(i / fps, 3)
             rows.append({"frame": str(f.relative_to(out_dir)).replace("\\", "/"),
                          "sample_id": meta["sample_id"], "t": t, "source": source_key(meta),
-                         "label_any": votes.get(f.name, {}).get("label")})
+                         "label_any": votes.get(f.name, {}).get("label"),
+                         "annotee": bool(votes.get(f.name, {}).get("votes"))})
     index = out_dir / "index.jsonl"
     with open(index, "w", encoding="utf-8") as fh:
         for r in rows:

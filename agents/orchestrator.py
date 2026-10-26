@@ -84,7 +84,7 @@ def make(lab: Lab, session: Session) -> Agent:
         else:
             d = info["dataset"]
             dataset = {k: d[k] for k in ("chaines_distinctes", "videos", "moyenne_videos_par_chaine",
-                                         "images_extraites", "images_etiquetees", "images_sans_etiquette", "videos_sans_ajout",
+                                         "images_extraites", "images_etiquetees", "images_sans_etiquette", "images_non_annotees", "videos_sans_ajout",
                                          "pourcentage_images_avec_ajout")}
             dataset["budgets"] = info["budgets"]
         return {"dataset": dataset,
@@ -103,7 +103,8 @@ def make(lab: Lab, session: Session) -> Agent:
             Tool(name="global_status",
                  description="État global : volumes du dataset (chaînes YouTube distinctes dont proviennent "
                              "les vidéos, vidéos, moyenne de vidéos par chaîne, images extraites, "
-                             "images étiquetées et sans étiquette faute d'accord des annotateurs, vidéos "
+                             "images étiquetées, sans étiquette faute d'accord des annotateurs et non annotées (quasi identiques à "
+                             "la précédente annotée), vidéos "
                              "sans ajout, pourcentage d'images avec ajout), budgets restants (vidéos, "
                              "annotation en $, tests finaux), budget de session. "
                              "Les splits sont dans list_experiments ; le détail de composition "

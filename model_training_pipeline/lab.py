@@ -341,8 +341,10 @@ class Lab:
         out = {"chaines_distinctes": len(chains), "videos": len(sids),
                "moyenne_videos_par_chaine": round(len(sids) / len(chains), 2) if chains else 0,
                "images_extraites": len(rows), "images_etiquetees": len(labeled),
-               # désaccord des annotateurs (ou annotation interrompue) : images jamais utilisées
-               "images_sans_etiquette": len(rows) - len(labeled),
+               # images jamais utilisées : désaccord des annotateurs, ou image non annotée (quasi
+               # identique à la précédente annotée, ou annotation en attente)
+               "images_sans_etiquette": sum(r["label_any"] is None and r.get("annotee", True) for r in rows),
+               "images_non_annotees": sum(not r.get("annotee", True) for r in rows),
                "videos_sans_ajout": len(sids & self._empty_samples()),
                "videos_par_orientation": dict(Counter(_orient(a) for a in anns))}
         if with_positives:

@@ -1,7 +1,7 @@
 """Annotation des images en mode batch (API batch d'OpenAI et de Mistral : 50 % moins cher, résultats
 en quelques minutes à 24 h). Même requête qu'en appel direct (annotators.chat_body), une ligne par
-image et par annotateur manquant ; les votes reçus sont fusionnés dans votes.json comme ceux de
-frames.annotate.
+image à annoter (frames.to_annotate : sans les quasi-doublons) et par annotateur manquant ; les
+votes reçus sont fusionnés dans votes.json comme ceux de frames.annotate.
 
     python -m model_training_pipeline batch estimate     # requêtes à envoyer et coût estimé (gratuit)
     python -m model_training_pipeline batch submit --max-usd 1.0
@@ -57,7 +57,7 @@ def _todo(state: dict, samples: list[Path] | None = None) -> dict[str, list[tupl
         if not (sdir / "meta.json").exists():
             continue
         votes = frames.load_votes(sdir)
-        for f in frames.frames_of(sdir):
+        for f in frames.to_annotate(sdir, votes=votes):
             for m in frames.missing(votes, f.name):
                 if (m, _cid(sdir, f)) not in in_flight:
                     out[m].append((sdir, f))

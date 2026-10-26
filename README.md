@@ -15,7 +15,9 @@ vraies vidéos YouTube, annotées image par image par trois LLM de vision.
   écartée (ni entraînée ni mesurée), sans revue manuelle. Votes dans `votes.json` à côté de la vidéo.
   Effort de raisonnement `medium` pour les GPT, aucun effort précisé pour `zai-glm-5-3-flash` (son
   API n'accepte ni `medium` ni `none`). L'annotation passe par les API batch d'OpenAI et de Mistral (-50 %),
-  suivies dans `data/batches.json`.
+  suivies dans `data/batches.json`. Une image presque identique à la dernière image annotée de sa
+  vidéo (cosinus CLIP > 0.97) n'est pas annotée : environ un quart des images en moins à payer, pour
+  1 % des apparitions ou disparitions d'ajout manquées (`frames.to_annotate`).
 
 ## Installation
 
