@@ -93,7 +93,9 @@ def make(lab: Lab) -> Agent:
                     "properties": {
                         "embeddings": {"type": "array", "items": {"type": "string"},
                                      "description": "Liste 'extracteur:vue', extracteurs " + ", ".join(EXTRACTORS)
-                                                    + " ; vues full (image entière) ou grid2 (image + 4 quadrants). "
+                                                    + " ; vues full (image entière), grid2 (image + 4 quadrants : "
+                                                    "logos, petits overlays) ou bands (image + tiers bas + tiers "
+                                                    "haut : bandeaux de nom, sous-titres, titres). "
                                                     "Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = "
                                                     "embeddings concaténés, ex. ['clip_b32:full', "
                                                     "'dinov2_s:full'] pour CLIP + DINOv2."},

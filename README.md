@@ -104,6 +104,12 @@ Organisation :
   splits suivants mettent tout le reste en dev. Le Dataset
   Builder ne fait qu'ajouter des données ; le Model Researcher peut exclure un clip défectueux
   (`exclude_clips`, `data/excluded.json`), ce qui ne vaut que pour les splits créés ensuite. Seul l'Evaluator mesure sur test.
+  Il voit aussi l'usage réel (`real_videos`) : le modèle en production sur les vidéos testées
+  dans l'interface (`interface/_jobs/`, et `data/real_videos/` une fois annotées), avec rappel et
+  précision si elles sont annotées, sinon des images à juger à l'œil ; jamais pour entraîner.
+  Ses exemples d'erreurs (`show_examples`, `real_videos`) sont les plus franches, une vidéo à tour
+  de rôle. Vues d'embeddings : `full`, `grid2` (image + 4 quadrants) et `bands` (image + tiers bas
+  + tiers haut, pour les bandeaux et sous-titres).
   Aucun agent ne met de modèle en production : en fin de run, le code (`Lab().select_production()`)
   écrit dans `production.json`, sur le plus gros split (le plus de clips), l'expérience de meilleure
   AP par chaîne sur val (moyenne des AP de chaque chaîne) parmi celles qui ont réussi leur test final

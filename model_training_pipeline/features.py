@@ -5,7 +5,10 @@ Vues :
 - full  : l'image entière, redimensionnée en carré (pas de recadrage central, qui
           couperait les sous-titres et les bandeaux en bord d'image) ;
 - grid2 : l'image entière + ses 4 quadrants, embeddings concaténés (5x la dimension),
-          pour mieux voir les petits overlays.
+          pour mieux voir les petits overlays ;
+- bands : l'image entière + son tiers bas + son tiers haut (pleine largeur, étirés en carré),
+          concaténés (3x la dimension) : bandeaux de nom, sous-titres et titres y pèsent plus que
+          dans l'image entière, où la scène domine (un plan de conférence brut pris pour monté).
 """
 
 import json
@@ -26,7 +29,7 @@ EXTRACTORS = {
     "dinov2_s": ("dino", "facebook/dinov2-small"),
     "dinov2_b": ("dino", "facebook/dinov2-base"),
 }
-VIEWS = ("full", "grid2")
+VIEWS = {"full": 1, "grid2": 5, "bands": 3}  # vue -> nombre d'images par frame
 INPUT = 224
 
 _encoders: dict = {}
@@ -64,10 +67,28 @@ def _encoder(name: str, device: str):
 
 def _views(img: Image.Image, view: str) -> list[Image.Image]:
     crops = [img]
+    w, h = img.size
     if view == "grid2":
-        w, h = img.size
         crops += [img.crop((x, y, x + w // 2, y + h // 2)) for y in (0, h // 2) for x in (0, w // 2)]
+    elif view == "bands":
+        crops += [img.crop((0, h - h // 3, w, h)), img.crop((0, 0, w, h // 3))]
     return [c.resize((INPUT, INPUT), Image.BICUBIC) for c in crops]
+
+
+def embed_images(paths: list[Path], extractor: str, view: str = "full", batch_size: int = 64) -> np.ndarray:
+    """Embeddings (len(paths), VIEWS[view] x dim) d'images quelconques, sans cache : utilisé par
+    get_features, l'interface et l'évaluation sur les vidéos réelles. À appeler sous
+    torch.inference_mode()."""
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    encode, n_views = _encoder(extractor, device), VIEWS[view]
+    per_batch = max(1, batch_size // n_views)
+    out = []
+    with torch.autocast(device, enabled=device == "cuda"):
+        for i in range(0, len(paths), per_batch):
+            imgs = [v for f in paths[i:i + per_batch] for v in _views(Image.open(f).convert("RGB"), view)]
+            emb = encode(imgs).float().cpu().numpy()
+            out.append(emb.reshape(-1, n_views * emb.shape[1]))
+    return np.concatenate(out)
 
 
 def _cache_dir(frames_dir: Path, extractor: str, view: str) -> Path:
@@ -87,23 +108,15 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
 
     missing = [s for s in by_sample if not (cdir / f"{s}.npy").exists()]
     if missing:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        encode = _encoder(extractor, device)
-        n_views = 5 if view == "grid2" else 1
         t0, n_frames = time.time(), 0
-        with torch.inference_mode(), torch.autocast(device, enabled=device == "cuda"):
+        with torch.inference_mode():
             for s in missing:
                 frames = sorted((Path(frames_dir) / "img" / s).glob("*.jpg"))
-                out = []
-                per_batch = max(1, batch_size // n_views)
-                for i in range(0, len(frames), per_batch):
-                    imgs = [v for f in frames[i:i + per_batch] for v in _views(Image.open(f).convert("RGB"), view)]
-                    emb = encode(imgs).float().cpu().numpy()
-                    out.append(emb.reshape(-1, n_views * emb.shape[1]))
-                np.save(cdir / f"{s}.npy", np.concatenate(out))
+                np.save(cdir / f"{s}.npy", embed_images(frames, extractor, view, batch_size))
                 n_frames += len(frames)
         if n_frames:
-            meta = {"ms_per_frame": round(1000 * (time.time() - t0) / n_frames, 2), "device": device}
+            meta = {"ms_per_frame": round(1000 * (time.time() - t0) / n_frames, 2),
+                    "device": "cuda" if torch.cuda.is_available() else "cpu"}
             (cdir / "meta.json").write_text(json.dumps(meta))
 
     dim = None

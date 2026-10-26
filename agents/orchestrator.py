@@ -26,7 +26,9 @@ Tu ne fais rien toi-même : tu lis l'état (global_status, list_experiments), tu
 expérience la plus utile, tu délègues, tu lis le rapport et tu décides de la suite. Cycle type : \
 données si nécessaire → split si le dataset a changé → expériences → évaluation → décision. Les agents ne voient pas ta \
 conversation : chaque consigne doit être autonome (objectif, contraintes, ids d'expériences \
-concernés, ce qu'on attend dans le rapport). Ne demande des données que si l'analyse d'erreurs \
+concernés, ce qu'on attend dans le rapport). En début de run, fais regarder par l'Evaluator le \
+modèle en production sur les vidéos testées par l'utilisateur (real_videos) : ses erreurs y \
+disent quoi améliorer en priorité. Ne demande des données que si l'analyse d'erreurs \
 montre qu'elles manquent, en précisant lesquelles.
 
 Les agents ne peuvent faire que ce que leurs outils permettent (liste plus bas) : ne leur demande \

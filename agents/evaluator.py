@@ -24,6 +24,13 @@ ajouts ratés comme côté fausses alertes. Sois sceptique : avec peu de chaîne
 quelques points n'est pas une preuve. N'utilise final_test que sur un candidat déjà retenu sur \
 val, et dis clairement si le test confirme val (précision visée tenue au seuil choisi sur val).
 
+Usage réel : real_videos montre le modèle sur les vidéos que l'utilisateur a testées dans \
+l'interface, le meilleur signal de ce qui compte pour lui. Regarde-les à chaque évaluation du \
+modèle en production : décris ce que tu vois sur les images (ajouts ratés, images brutes \
+signalées, et dans quel genre de scène), même sans étiquettes, et déduis-en les vidéos à \
+collecter (scènes qui trompent le modèle, avec et sans ajout) et les représentations à essayer \
+(vue bands pour les bandeaux et sous-titres, grid2 pour les logos).
+
 Les étiquettes viennent de l'accord de trois LLM : en inspectant les images, signale celles qui te \
 semblent mal étiquetées (erreur commune des annotateurs) plutôt que de les compter comme des \
 erreurs du modèle.
@@ -70,6 +77,25 @@ def make(lab: Lab) -> Agent:
                     "required": ["experiment_id"],
                 },
                 fn=lab.show_examples,
+            ),
+            Tool(
+                name="real_videos",
+                description="Le modèle (celui en production par défaut) sur les vidéos que l'utilisateur a "
+                            "testées dans l'interface, à son seuil : par vidéo, images signalées et, si elle "
+                            "a été annotée, rappel, précision, FP/FN. Montre des images : les erreurs les plus "
+                            "franches des vidéos annotées, sinon des images à juger à l'œil (signalées, zone "
+                            "grise juste sous le seuil, basses). Évaluation seulement : ces vidéos ne servent "
+                            "jamais à entraîner.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "experiment_id": {"type": "string", "description": "Défaut : le modèle en production."},
+                        "video_id": {"type": "string", "description": "Une seule vidéo (id renvoyé par l'outil)."},
+                        "n": {"type": "integer", "minimum": 1, "maximum": 4,
+                              "description": "Images par groupe et par vidéo (défaut 3)."},
+                    },
+                },
+                fn=lab.real_videos,
             ),
             Tool(
                 name="final_test",

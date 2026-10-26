@@ -27,13 +27,12 @@ from threading import Lock
 
 import numpy as np
 import torch
-from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from model_training_pipeline import metrics  # noqa: E402
-from model_training_pipeline.features import _encoder, _views  # noqa: E402
+from model_training_pipeline.features import _encoder, embed_images  # noqa: E402
 from model_training_pipeline.frames import FPS, extract  # noqa: E402
 from model_training_pipeline.lab import EXP_DIR  # noqa: E402
 from utils import dev_reload  # noqa: E402
@@ -84,20 +83,9 @@ class Model:
                 "test": {k: ft[k] for k in ("precision", "recall")} if ft else None}
 
     def score(self, frames: list[Path]) -> np.ndarray:
-        mats = []
-        with torch.inference_mode(), torch.autocast(DEVICE, enabled=DEVICE == "cuda"):
-            for spec in self.config["features"]:
-                ext, _, view = spec.partition(":")
-                view = view or "full"
-                encode, n_views = _encoder(ext, DEVICE), 5 if view == "grid2" else 1
-                out = []
-                for i in range(0, len(frames), max(1, 32 // n_views)):
-                    imgs = [v for f in frames[i:i + max(1, 32 // n_views)]
-                            for v in _views(Image.open(f).convert("RGB"), view)]
-                    emb = encode(imgs).float().cpu().numpy()
-                    out.append(emb.reshape(-1, n_views * emb.shape[1]))
-                mats.append(np.concatenate(out))
-        X = np.concatenate(mats, axis=1)
+        with torch.inference_mode():
+            X = np.concatenate([embed_images(frames, ext, view or "full", batch_size=32)
+                                for ext, _, view in (s.partition(":") for s in self.config["features"])], axis=1)
         if self.config["temporal"] == "diff":  # comme lab._X : la 1re frame n'a pas de précédente (0)
             X_prev = np.vstack([np.zeros_like(X[:1]), X[:-1]])
             X = np.concatenate([X, X - X_prev], axis=1)
