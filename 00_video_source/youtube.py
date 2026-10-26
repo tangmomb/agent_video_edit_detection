@@ -7,6 +7,7 @@ l'autre).
 """
 
 import json
+import os
 import random
 import shutil
 import time
@@ -29,6 +30,10 @@ MIN_CANDIDATES = 25  # plancher : avec peu de vidéos voulues, 4 par vidéo ne s
 SHORT_FILTER = "EgQQARgB"
 REQUEST_PAUSE = (2, 6)  # s : attente aléatoire entre deux lectures de page vidéo, contre le blocage YouTube
 DOWNLOAD_PAUSE = (60, 180)  # s : attente aléatoire entre deux téléchargements, pour ménager YouTube
+# Relais de tout le trafic YouTube (.env), pour une machine dont YouTube bloque l'IP : le VPS Contabo
+# (« not a bot » dès la 1re vidéo, IPv4 comme IPv6) passe par un tunnel SSH vers le VPS Infomaniak,
+# YT_PROXY=socks5://127.0.0.1:1080 (service yt-tunnel). Vide : connexion directe.
+PROXY = os.getenv("YT_PROXY")
 
 
 class NoVideoFound(Exception):
@@ -46,7 +51,8 @@ def downloaded(samples_dir: Path = SAMPLES_DIR) -> set[str]:
 
 def _ydl(**opts):
     import yt_dlp
-    return yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noprogress": True, **opts})
+    proxy = {"proxy": PROXY} if PROXY else {}
+    return yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noprogress": True, **proxy, **opts})
 
 
 def _orientation(info: dict) -> str | None:

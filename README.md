@@ -9,6 +9,8 @@ vraies vidéos YouTube, annotées image par image par trois LLM de vision.
 - `00_video_source/youtube.py` : recherche et téléchargement YouTube avec yt-dlp (aucune clé). Une
   vidéo n'est prise qu'une fois, 5 min au plus, image seule en ≤ 360p (images réduites à 640 px de toute façon) ; portrait = Shorts. Sortie :
   `data/videos_samples/yt_<id>/video.*` + `meta.json` (titre, chaîne, url, requête, dimensions).
+  `YT_PROXY` (`.env`) fait passer tout le trafic YouTube par un relais, pour une machine dont
+  YouTube bloque l'IP (VPS Contabo : tunnel SSH vers le VPS Infomaniak, `socks5://127.0.0.1:1080`).
 - `00_video_source/annotators.py` : une requête par image, réponse `{"ajout": true|false}`. Le
   dataset est annoté par `gpt-6-luna`, `gpt-5.6-luna` et `zai-glm-5-3-flash` (les meilleurs du banc
   `utils/llm_bench`) : une image n'a d'étiquette que s'ils sont **tous d'accord**, sinon elle est
