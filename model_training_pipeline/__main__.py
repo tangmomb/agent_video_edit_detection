@@ -26,6 +26,8 @@ def main() -> None:
     c.add_argument("--direct", action="store_true",
                    help="annotation en appels directs dès chaque téléchargement (prix plein, sans attente)")
     c.add_argument("--orientation", choices=["portrait", "landscape"], help="seulement ces requêtes")
+    c.add_argument("--query", action="append", metavar="TEXTE[|portrait]",
+                   help="requête à la place de la liste par défaut (répétable ; paysage sauf |portrait)")
     args = p.parse_args()
 
     if args.cmd == "collect":
@@ -35,7 +37,9 @@ def main() -> None:
 
         from .collect import collect
         print(json.dumps(collect(args.target, args.per_query, args.max_usd, args.dry_run, not args.no_wait,
-                                 tuple(args.pause or DOWNLOAD_PAUSE), args.direct, args.orientation),
+                                 tuple(args.pause or DOWNLOAD_PAUSE), args.direct, args.orientation,
+                                 [(q.partition("|")[0], q.partition("|")[2] or "landscape") for q in args.query]
+                                 if args.query else None),
                          indent=2, ensure_ascii=False))
         return
 

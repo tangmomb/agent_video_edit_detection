@@ -10,6 +10,7 @@ attente et récupération dans le même appel, comme generate_data.
 --direct : annotation en appels directs dès chaque téléchargement, sans batch (prix plein, deux fois
 plus cher, mais résultats immédiats : un batch peut attendre des heures).
 --orientation : seulement les requêtes de cette orientation.
+--query "texte" (paysage) ou "texte|portrait", répétable : ces requêtes à la place de QUERIES.
 Les vidéos déjà téléchargées mais sans tous leurs votes (collecte interrompue) sont reprises.
 """
 
@@ -47,7 +48,8 @@ def _channels() -> set[str]:
 
 def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run: bool = False,
             wait: bool = True, download_pause: tuple[float, float] = youtube.DOWNLOAD_PAUSE,
-            direct: bool = False, only: str | None = None) -> dict:
+            direct: bool = False, only: str | None = None,
+            queries: list[tuple[str, str]] | None = None) -> dict:
     avoid = _channels()
     got: list[tuple[str, str | None, object]] = []  # (requête, orientation, dossier ou info)
     asked: dict[tuple, int] = {}
@@ -72,7 +74,7 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
                     annotate_now(p.parent)
         if got:
             print(f"[collect] reprise de {len(got)} vidéo(s) déjà téléchargée(s) (≈ {est:.2f} $)", flush=True)
-    for query, orientation in QUERIES:
+    for query, orientation in queries or QUERIES:
         if only and orientation != only:
             continue
         if len(got) >= target:
