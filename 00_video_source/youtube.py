@@ -1,6 +1,6 @@
 """Vraies vidéos YouTube : recherche et téléchargement avec yt-dlp (aucune clé d'API).
 
-Chaque vidéo est rangée dans SAMPLES_DIR/yt_<id YouTube>/ : video.<ext> (image seule, 720p au plus,
+Chaque vidéo est rangée dans SAMPLES_DIR/yt_<id YouTube>/ : video.<ext> (image seule, MAX_RES au plus,
 le son ne sert pas) et meta.json (titre, chaîne, url, requête, durée, dimensions). Une vidéo n'est
 téléchargée qu'une fois ; la chaîne sert de groupe pour le split (même habillage d'une vidéo à
 l'autre).
@@ -18,7 +18,10 @@ from .config import SAMPLES_DIR, ffmpeg_bin
 
 MAX_DURATION = 300  # s : au-delà, la vidéo coûterait trop à annoter (une image par seconde)
 MIN_DURATION = 5
-MAX_RES = 720  # plus petit côté de la vidéo téléchargée
+# Plus petit côté de la vidéo téléchargée. Les images sont réduites à 640 px (frames.LONG_SIDE) et
+# le modèle les voit en 224 : 360p (640×360) suffit. Comparé sur une vidéo à sous-titres (26/10/2026) :
+# bandeau et sous-titres nets comme en 720p, pour 57 % de volume en moins (proxy, temps).
+MAX_RES = 360
 SEARCH_FACTOR = 4  # candidats cherchés par vidéo voulue (déjà prises, trop longues, mauvaise orientation)
 MIN_CANDIDATES = 25  # plancher : avec peu de vidéos voulues, 4 par vidéo ne suffit pas à trouver une bonne
 # Filtre de la recherche YouTube « vidéos de moins de 4 minutes » : sans lui, la plupart des
@@ -112,10 +115,10 @@ def search(query: str, n: int, orientation: str | None = None, exclude: set[str]
 
 
 def download(info: dict, query: str | None, samples_dir: Path = SAMPLES_DIR) -> Path:
-    """Télécharge la vidéo (image seule, 720p au plus) et écrit meta.json ; renvoie son dossier."""
+    """Télécharge la vidéo (image seule, MAX_RES au plus) et écrit meta.json ; renvoie son dossier."""
     out = Path(samples_dir) / sample_id(info["id"])
     out.mkdir(parents=True, exist_ok=True)
-    # res = plus petit côté : 720 vaut pour le paysage (1280×720) comme pour le portrait (720×1280).
+    # res = plus petit côté : 360 vaut pour le paysage (640×360) comme pour le portrait (360×640).
     try:
         with _ydl(format="bv*/b", format_sort=[f"res:{MAX_RES}", "ext:mp4"],
                   outtmpl=str(out / "video.%(ext)s"), ffmpeg_location=ffmpeg_bin()) as ydl:

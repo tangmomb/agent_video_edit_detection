@@ -195,16 +195,24 @@ def examples_from_page(page: Path) -> dict:
     return json.loads(m.group(1)) if m else {}
 
 
+def _empty(result) -> bool:
+    """Réponse sans contenu, comme {"splits": []} avant le premier split : un exemple inutile."""
+    return isinstance(result, dict) and bool(result) and all(v in ([], {}, None) for v in result.values())
+
+
 def examples_from_run(run_dir: Path) -> dict:
     """Premier appel réussi de chaque outil, par agent, dans le journal d'un run
-    (runs/<NNN>_…/pipeline.json) : appel et réponse réels, tels que l'agent les a reçus. Clés
+    (runs/<NNN>_…/pipeline.json) : appel et réponse réels, tels que l'agent les a reçus ; une
+    réponse vide n'est gardée que faute d'un appel suivant qui renvoie quelque chose. Clés
     « agent.outil » (un même outil, comme dataset_info, ne renvoie pas la même chose à chaque agent)."""
     log = json.loads((run_dir / "pipeline.json").read_text(encoding="utf-8"))
     out = {}
     for s in log["steps"]:
         key = f"{s['agent']}.{s.get('tool')}"
-        if s["type"] != "tool" or key in out or s["error"]:
+        if s["type"] != "tool" or (key in out and not _empty(out[key]["response"])) or s["error"]:
             continue
+        if key in out and _empty(s["result"]):
+            continue  # déjà un exemple vide : on attend une réponse avec du contenu
         result = s["result"]
         if isinstance(result, dict) and "error" in result:
             continue  # refus d'un outil (budget épuisé…) : on attend un appel abouti

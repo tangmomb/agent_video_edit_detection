@@ -29,7 +29,12 @@ conversation : chaque consigne doit être autonome (objectif, contraintes, ids d
 concernés, ce qu'on attend dans le rapport). En début de run, fais regarder par l'Evaluator le \
 modèle en production sur les vidéos testées par l'utilisateur (real_videos) : ses erreurs y \
 disent quoi améliorer en priorité. Ne demande des données que si l'analyse d'erreurs \
-montre qu'elles manquent, en précisant lesquelles.
+montre qu'elles manquent, en précisant lesquelles. Mais si c'est le cas et que global_status \
+annonce des vidéos annotables (videos_annotables_estimees), fais-les collecter avant de conclure, \
+même peu : avec une soixantaine de chaînes, chaque chaîne de plus compte, et une session qui finit \
+en disant que les données manquent sans en avoir demandé laisse le problème entier. Pour qu'elles \
+comptent, fais ensuite créer un nouveau split (le test ne change pas, elles vont en dev) et \
+ré-entraîner la meilleure config dessus.
 
 Les agents ne peuvent faire que ce que leurs outils permettent (liste plus bas) : ne leur demande \
 jamais d'écrire ou d'exécuter un script, de lancer une commande ou de lire des fichiers. Chaque \
@@ -106,7 +111,8 @@ def make(lab: Lab, session: Session) -> Agent:
                              "images étiquetées, sans étiquette faute d'accord des annotateurs et non annotées (quasi identiques à "
                              "la précédente annotée), vidéos "
                              "sans ajout, pourcentage d'images avec ajout), budgets restants (vidéos, "
-                             "annotation en $, tests finaux), budget de session. "
+                             "annotation en $ et nombre estimé de vidéos qu'elle permet d'annoter, tests "
+                             "finaux), budget de session. "
                              "Les splits sont dans list_experiments ; le détail de composition "
                              "(orientation, chaînes) n'est visible que des sous-agents.",
                  input_schema={"type": "object", "properties": {}}, fn=global_status),
@@ -126,11 +132,13 @@ def make(lab: Lab, session: Session) -> Agent:
 
 
 def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annotation_usd: float = 2.0,
-        model: str | None = None, completion=None) -> Session:
-    lab = Lab(data_budget=data_budget, final_test_budget=final_tests, annotation_budget_usd=annotation_usd)
+        model: str | None = None, completion=None, direct_annotation: bool = False) -> Session:
+    lab = Lab(data_budget=data_budget, final_test_budget=final_tests, annotation_budget_usd=annotation_usd,
+              direct_annotation=direct_annotation)
     session = Session(budget_usd, completion=completion, model=model,
                       params={"goal": goal, "data_budget": data_budget, "final_tests": final_tests,
-                              "annotation_usd": annotation_usd, "agent_model": model})
+                              "annotation_usd": annotation_usd, "agent_model": model,
+                              "annotation_directe": direct_annotation})
     try:
         report = session.run(make(lab, session), goal)
     except BaseException as e:

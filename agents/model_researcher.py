@@ -100,14 +100,14 @@ def make(lab: Lab) -> Agent:
                                                     "embeddings concaténés, ex. ['clip_b32:full', "
                                                     "'dinov2_s:full'] pour CLIP + DINOv2."},
                         "model": {"type": "string", "enum": list(MODELS),
-                                  "description": "logreg et mlp : quelques secondes ; hgb : plusieurs minutes "
-                                                 "(dix ou plus sur des embeddings concaténés ou grid2)."},
+                                  "description": "logreg (régression logistique) ou mlp (petit réseau de "
+                                                 "neurones) : quelques secondes chacun."},
                         "temporal": {"type": "string", "enum": ["none", "diff"],
                                      "description": "diff ajoute e_t - e_(t-1) (changement depuis l'image "
                                                     "précédente)."},
                         "params": {"type": "object",
                                    "description": "logreg: C ; mlp: hidden (liste), alpha ; "
-                                                  "hgb: max_iter, lr, max_leaf_nodes ; tous: pca (int)."},
+                                                  "tous: pca (int)."},
                         "balance": {"type": "object", "additionalProperties": {"type": "number"},
                                     "description": "Rééchantillonnage des images d'entraînement seulement "
                                                    "(images mesurées et test intacts) : {groupe: facteur, 0 à 10}. Sous 1, on garde "
@@ -123,8 +123,8 @@ def make(lab: Lab) -> Agent:
                                                    "les données : {groupe: poids, > 0 et au plus 10}, mêmes "
                                                    "groupes que balance. Une image dans plusieurs groupes prend "
                                                    "le plus grand poids, les autres gardent 1. S'ajoute à la "
-                                                   "pondération équilibrée des classes déjà appliquée (logreg, "
-                                                   "hgb). Ex. {'clip_vide': 3}."},
+                                                   "pondération équilibrée des classes déjà appliquée (logreg). "
+                                                   "Ex. {'clip_vide': 3}."},
                         "note": {"type": "string",
                                  "description": "Hypothèse testée, en une phrase, sans recopier la config."},
                         "split_id": {"type": "string",

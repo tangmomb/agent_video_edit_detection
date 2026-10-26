@@ -71,7 +71,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
         return out
 
     contenu = (", diversité (chaînes les plus représentées), budgets restants (vidéos, "
-               "annotation en $)" if agent == "dataset_builder" else
+               "annotation en $ et nombre estimé de vidéos qu'elle permet d'annoter)" if agent == "dataset_builder" else
                " ; avec split_id, la même composition pour dev et test")
     return Tool(
         name="dataset_info",

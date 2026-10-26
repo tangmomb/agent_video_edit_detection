@@ -14,8 +14,11 @@ def main() -> None:
     p.add_argument("--agent-model",
                    help="même modèle pour les 4 agents, au format LiteLLM « fournisseur/identifiant » "
                         "(ex. openai/gpt-5.6-luna, anthropic/claude-haiku-5-5) ; défaut : mistral/mistral-large-4-0")
+    p.add_argument("--direct-annotation", action="store_true",
+                   help="annotation en appels directs (prix plein, sans attente) au lieu des batchs (-50 %%)")
     a = p.parse_args()
-    run(a.goal, a.budget_usd, a.data_budget, a.final_tests, a.annotation_usd, model=a.agent_model)
+    run(a.goal, a.budget_usd, a.data_budget, a.final_tests, a.annotation_usd, model=a.agent_model,
+        direct_annotation=a.direct_annotation)
 
 
 if __name__ == "__main__":

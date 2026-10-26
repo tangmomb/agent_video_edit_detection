@@ -35,18 +35,17 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from sklearn.decomposition import PCA
-from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from video_source import youtube
+from video_source import annotators, youtube
 from video_source.config import DATA_DIR, LAB_DIR, SAMPLES_DIR
 
 from . import batch, metrics
 from .features import embed_images, extraction_cost, get_features
-from .frames import FPS, FRAMES_DIR, build, load_index, source_key
+from .frames import FPS, FRAMES_DIR, SKIPPED_SHARE, annotate, build, load_index, source_key
 
 EXP_DIR = LAB_DIR / "model_results"
 DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
@@ -68,7 +67,10 @@ SPLITS = ("dev", "test")
 FOLDS = 5  # plis de la validation croisée sur dev
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
 STRATIFY_KEYS = ("orientation", "clip_vide")
-MODELS = ("logreg", "mlp", "hgb")
+# hgb (HistGradientBoosting) retiré le 26/10/2026 : sur les 20 essais du banc b2, jamais le meilleur
+# ni sur val ni sur les chaînes cachées (rappel idéal caché 0.14 en moyenne contre 0.51 en logreg),
+# pour 270 fois le temps d'entraînement ; des arbres conviennent mal à des embeddings denses.
+MODELS = ("logreg", "mlp")
 # Groupes d'images de train qu'on peut rééchantillonner (paramètre balance) ou pondérer (weights) :
 # positif / negatif = images avec / sans ajout ; clip_vide = images des vidéos sans aucune image
 # avec ajout ; orientation.
@@ -208,12 +210,15 @@ def _video_traits(meta: dict, empty: bool, keys: list[str]) -> set[str]:
 
 class Lab:
     def __init__(self, data_budget: int = 250, final_test_budget: int = 2, max_per_request: int = 20,
-                 annotation_budget_usd: float = 2.0):
+                 annotation_budget_usd: float = 2.0, direct_annotation: bool = False):
         self.data_budget = data_budget
+        # Annotation en appels directs (prix plein, résultats immédiats) au lieu des batchs (-50 %,
+        # jusqu'à des heures d'attente) : agents --direct-annotation.
+        self.direct_annotation = direct_annotation
         self.max_per_request = max_per_request
         self.generated = 0
         self.annotation_budget_usd = annotation_budget_usd
-        self.annotation_spent = 0.0  # coût réel des batchs de la session récupérés
+        self.annotation_spent = 0.0  # coût réel de l'annotation de la session (batchs récupérés ou appels directs)
         self.final_tests_left = final_test_budget
         self._rows: list[dict] | None = None
         self._ann_cache: dict[str, dict] = {}
@@ -365,11 +370,28 @@ class Lab:
                         "clips_hors_split": len(all_sids - set(m) - set(sp["excluded"]))})
         return out
 
+    def _video_cost_usd(self, rows: list[dict]) -> float | None:
+        """Coût estimé de l'annotation d'une nouvelle vidéo : coût réel moyen d'une image par les trois
+        annotateurs (batchs déjà récupérés, prix plein en annotation directe) x images d'une vidéo
+        moyenne du dataset, moins les quasi-doublons sautés. None tant qu'un annotateur n'a pas de
+        coût mesuré."""
+        state = batch._load()
+        per_image = [batch._measured(m, state) for m in annotators.ANNOTATORS]
+        if not rows or None in per_image:
+            return None
+        frames_per_video = len(rows) / len({r["sample_id"] for r in rows})
+        factor = 1 / batch.DISCOUNT if self.direct_annotation else 1.0
+        return sum(per_image) * factor * frames_per_video * (1 - SKIPPED_SHARE)
+
     def dataset_info(self, split_id: str | None = None) -> dict:
         rows = self.rows
+        left_usd = self.annotation_budget_usd - self.annotation_spent
         budgets = {"videos_collectables_restantes": self.data_budget - self.generated,
-                   "budget_annotation_restant_usd": round(self.annotation_budget_usd - self.annotation_spent, 3),
-                   "final_tests_restants": self.final_tests_left}
+                   "budget_annotation_restant_usd": round(left_usd, 3)}
+        per_video = self._video_cost_usd(rows)
+        if per_video:
+            budgets["videos_annotables_estimees"] = min(int(left_usd / per_video), budgets["videos_collectables_restantes"])
+        budgets["final_tests_restants"] = self.final_tests_left
         if not rows:
             return {"dataset_vide": True, "budgets": budgets,
                     "message": "Aucune vidéo : le dataset est à constituer (generate_data)."}
@@ -392,10 +414,10 @@ class Lab:
 
     def generate_data(self, n: int, reason: str, query: str, orientation: str | None = None) -> dict:
         """Collecte n nouvelles vraies vidéos YouTube pour la requête, puis fait annoter leurs images
-        par les trois LLM en mode batch (appels payants, plafonnés par annotation_budget_usd) et attend
-        les résultats, sans limite. Envoi et récupération se font dans le même appel : un batch que
-        l'appel n'a pas récupéré (interrompu) est oublié, et une vidéo non annotée (budget épuisé)
-        reste sans étiquette, jamais reprise."""
+        par les trois LLM (appels payants, plafonnés par annotation_budget_usd) : en mode batch, en
+        attendant les résultats sans limite (envoi et récupération dans le même appel : un batch que
+        l'appel n'a pas récupéré, s'il est interrompu, est oublié), ou en appels directs si
+        direct_annotation. Une vidéo non annotée (budget épuisé) reste sans étiquette, jamais reprise."""
         n = min(int(n), self.max_per_request, self.data_budget - self.generated)
         if n <= 0:
             return {"error": "budget de vidéos épuisé pour cette session"}
@@ -409,8 +431,9 @@ class Lab:
             got = {"dirs": [], "errors": [str(e)]}
         self.generated += len(got["dirs"])  # seules les vidéos téléchargées consomment le budget
         errors, chosen, est, stopped = list(got["errors"]), [], 0.0, None
+        factor = 1 / batch.DISCOUNT if self.direct_annotation else 1.0  # estimations au tarif batch
         for d in got["dirs"]:
-            e = batch.estimate([d])["total_usd_estime"]
+            e = batch.estimate([d])["total_usd_estime"] * factor
             if self.annotation_spent + est + e > self.annotation_budget_usd:
                 stopped = "budget d'annotation épuisé : vidéos suivantes téléchargées mais laissées sans étiquette"
                 break
@@ -418,8 +441,14 @@ class Lab:
             est += e
         before = self.annotation_spent
         failed = 0
+        for d in chosen if self.direct_annotation else []:
+            res = annotate(d, max_usd=self.annotation_budget_usd - self.annotation_spent)
+            self.annotation_spent += res["cost_usd"]
+            if res["arret_budget"]:
+                stopped = "budget d'annotation épuisé pendant l'annotation directe"
+                break
         # 2e passage pour les requêtes en échec (ex. effort « medium » refusé, renvoyé en « none »)
-        for _ in range(2 if chosen else 0):
+        for _ in range(2 if chosen and not self.direct_annotation else 0):
             try:
                 sent = batch.submit(float("inf"), samples=chosen)["envoyes"]
             except Exception as e:
@@ -888,15 +917,10 @@ class Lab:
             steps.append(PCA(n_components=int(params["pca"]), random_state=0))
         if model == "logreg":
             clf = LogisticRegression(C=float(params.get("C", 0.1)), max_iter=3000, class_weight="balanced")
-        elif model == "mlp":
+        else:
             clf = MLPClassifier(hidden_layer_sizes=tuple(params.get("hidden", [256])),
                                 alpha=float(params.get("alpha", 1e-3)), early_stopping=True,
                                 max_iter=300, random_state=0)
-        else:
-            clf = HistGradientBoostingClassifier(max_iter=int(params.get("max_iter", 200)),
-                                                 learning_rate=float(params.get("lr", 0.1)),
-                                                 max_leaf_nodes=int(params.get("max_leaf_nodes", 31)),
-                                                 class_weight="balanced", random_state=0)
         return make_pipeline(*steps, clf)
 
     def _fit(self, model: str, params: dict, tr: np.ndarray, balance: dict | None, weights: dict | None,

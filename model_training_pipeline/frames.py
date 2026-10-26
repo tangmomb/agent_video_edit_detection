@@ -33,6 +33,7 @@ WORKERS = 8  # images annotées en parallèle
 # précédente : 0.97 saute 27 % des images et 1 % des 230 changements d'étiquette (apparition ou
 # disparition d'un ajout) ; 0.95 en sautait 43 %, mais 4 % des changements.
 SKIP_SIMILAR = 0.97
+SKIPPED_SHARE = 0.27  # part des images sautées à ce seuil : estimation du coût d'une vidéo
 
 
 def source_key(meta: dict) -> str:
