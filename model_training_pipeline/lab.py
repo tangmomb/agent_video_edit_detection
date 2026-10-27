@@ -156,10 +156,12 @@ def _compact(e: dict) -> dict:
     return out
 
 
-def _split_line(split_id: str, exps: list[dict]) -> dict:
+def _split_line(split_id: str, exps: list[dict], test_status) -> dict:
     """Ancien split en une ligne : nombre d'expériences, la meilleure (AP par chaîne en val, le
     critère du modèle de production) et le modèle en production s'il en vient, chacun avec sa
-    config pour être refait sur le split récent."""
+    config pour être refait sur le split récent et le statut de son test final (test_status : id ->
+    réussi / échoué / non testé) : la production passe d'abord par un test réussi, d'où l'écart
+    possible avec la meilleure en val."""
     def key(e):
         v = e["val"]
         return v.get("ap_par_chaine") if v.get("ap_par_chaine") is not None else v["ap"]
@@ -168,12 +170,13 @@ def _split_line(split_id: str, exps: list[dict]) -> dict:
     score = "ap_par_chaine" if best["val"].get("ap_par_chaine") is not None else "ap"
     out = {"split_id": split_id, "experiences": len(exps),
            "meilleure": {"id": best["id"], score: key(best),
-                         "recall": op["recall"] if isinstance(op, dict) else op, **_config(best)}}
+                         "recall": op["recall"] if isinstance(op, dict) else op,
+                         "test": test_status(best["id"]), **_config(best)}}
     prod = next((e for e in exps if e.get("en_production")), None)
     if prod is best:
         out["meilleure"]["en_production"] = True
     elif prod:
-        out["en_production"] = {"id": prod["id"], **_config(prod)}
+        out["en_production"] = {"id": prod["id"], "test": test_status(prod["id"]), **_config(prod)}
     return out
 
 
@@ -795,7 +798,8 @@ class Lab:
             mine = [e for e in exps if e.get("split_id") == sid]
             if sid != latest:
                 if mine:
-                    out.append(_split_line(sid, mine))
+                    out.append(_split_line(
+                        sid, mine, lambda i: self._test_status(i, metrics.DEFAULT_PRECISION)["statut"]))
                 continue
             dev = self._idx("dev", sid)
             # Chaînes par partie, recomptées sur les clips réellement assignés : chaines_shared
