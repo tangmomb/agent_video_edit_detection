@@ -120,20 +120,22 @@ def _image_blocks(path: Path, caption: str) -> list[dict]:
 
 
 def _compact_val(val: dict) -> dict:
-    """Val au point de précision par défaut (95 %) : seuil, rappel, erreurs. La précision n'est
-    pas reprise (au moins 95 % par construction), les volumes du val sont ceux du split."""
-    out = {"auc": val["auc"], "ap": val["ap"]}
+    """Val pour les agents : AP, AP par chaîne (choix du modèle de production), rappel et erreurs au
+    point de précision par défaut (95 %). Ni la précision (au moins 95 % par construction), ni l'AUC
+    et le seuil, qui ne décident de rien ; les volumes du val sont ceux du split."""
+    out = {"ap": val["ap"]}
     if val.get("ap_par_chaine") is not None:
         out["ap_par_chaine"] = val["ap_par_chaine"]
     op = val[f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"]
     if not isinstance(op, dict):
         return {**out, "p95": op}  # "précision non atteinte"
-    return {**out, "seuil_p95": op["threshold"], "recall": op["recall"], "fp": op["fp"], "fn": op["fn"]}
+    return {**out, "recall": op["recall"], "fp": op["fp"], "fn": op["fn"]}
 
 
-def _compact(e: dict, errors: dict | None = None) -> dict:
+def _compact(e: dict) -> dict:
     """Expérience en format court pour les agents, sans son split (elle est rangée dessous) :
-    config, hypothèse, val à 95 % et ses erreurs (errors, voir Lab._val_errors), test final. Le détail (90/99 %, volumes, durées) reste dans model_results/."""
+    config, hypothèse, val à 95 %, test final. Le détail (90/99 %, AUC, volumes, durées) reste dans
+    model_results/, les erreurs dans analyze_errors."""
     out = {"id": e["id"]} if "id" in e else {}
     out["embeddings"] = e["features"]
     out.update({k: e[k] for k in ("model", "params") if k in e})
@@ -143,14 +145,29 @@ def _compact(e: dict, errors: dict | None = None) -> dict:
         out["weights"] = e["weights"]
     out["hypothese"] = e.get("note", "")
     out["val"] = _compact_val(e["val"])
-    if errors is not None:
-        out["erreurs_val"] = errors
     if "final_test" in e:
-        t, ft = e["final_test"]["test"], e["final_test"]
-        out["test"] = {"recall": t["recall"], "precision": t["precision"], "fp": t["fp"], "fn": t["fn"],
-                       "auc": ft["test_auc"], "ap": ft["test_ap"]}
+        t = e["final_test"]["test"]
+        out["test"] = {"recall": t["recall"], "precision": t["precision"], "fp": t["fp"], "fn": t["fn"]}
     if e.get("en_production"):
         out["en_production"] = True
+    return out
+
+
+def _split_line(split_id: str, exps: list[dict]) -> dict:
+    """Ancien split en une ligne : nombre d'expériences, la meilleure (AP par chaîne en val, le
+    critère du modèle de production) et le modèle en production s'il en vient."""
+    def key(e):
+        v = e["val"]
+        return v.get("ap_par_chaine") if v.get("ap_par_chaine") is not None else v["ap"]
+    best = max(exps, key=key)
+    op = best["val"][f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"]
+    score = "ap_par_chaine" if best["val"].get("ap_par_chaine") is not None else "ap"
+    out = {"split_id": split_id, "experiences": len(exps),
+           "meilleure": {"id": best["id"], score: key(best),
+                         "recall": op["recall"] if isinstance(op, dict) else op}}
+    prod = next((e["id"] for e in exps if e.get("en_production")), None)
+    if prod:
+        out["en_production"] = prod
     return out
 
 
@@ -759,18 +776,20 @@ class Lab:
         return out
 
     def experiments_overview(self, split_id: str | None = None) -> dict:
-        """Ce que renvoie l'outil list_experiments : chaque split avec ses expériences en format
-        court. Un split sans expérience n'apparaît que s'il est le plus récent (celui sur lequel
-        entraîner)."""
+        """Ce que renvoie l'outil list_experiments : le split demandé (par défaut le plus récent,
+        celui sur lequel entraîner) avec ses expériences en format court ; sans split_id, une ligne
+        par ancien split ayant des expériences (elles ne se comparent pas à celles du récent)."""
         exps = self.list_experiments()
         summaries = self._split_summaries()
-        latest = summaries[-1]["split_id"] if summaries else None
+        detail = split_id or (summaries[-1]["split_id"] if summaries else None)
         y = self._y()
         out = []
         for sp in summaries:
             sid = sp["split_id"]
-            mine = [_compact(e, self._val_errors(e["id"])) for e in exps if e.get("split_id") == sid]
-            if (split_id and sid != split_id) or (not split_id and not mine and sid != latest):
+            mine = [e for e in exps if e.get("split_id") == sid]
+            if sid != detail:
+                if not split_id and mine:
+                    out.append(_split_line(sid, mine))
                 continue
             dev = self._idx("dev", sid)
             # Chaînes par partie, recomptées sur les clips réellement assignés : chaines_shared
@@ -782,15 +801,17 @@ class Lab:
                     parts.setdefault(r["source"], set()).add(m[r["sample_id"]])
             entry = {"split_id": sid,
                      **{f"chaines_{s}": sum(ps == {s} for ps in parts.values()) for s in SPLITS},
-                     "chaines_shared": sum(len(ps) > 1 for ps in parts.values()),
                      **{f"clips_{s}": sp[s] for s in SPLITS},
                      "images_dev": len(dev), "images_dev_positives": int(y[dev].sum()),
                      "clips_hors_split": sp["clips_hors_split"]}
             if sp["clips_exclus"]:
                 entry["clips_exclus"] = sp["clips_exclus"]
+            shared = sum(len(ps) > 1 for ps in parts.values())
+            if shared:  # impossible par construction : test fuirait dans dev
+                entry["anomalie_chaines_dans_dev_et_test"] = shared
             note = sp["note"]
             entry["note"] = note if len(note) <= 120 else note[:120].rstrip() + "…"
-            entry["experiences"] = mine
+            entry["experiences"] = [_compact(e) for e in mine]
             out.append(entry)
         return {"splits": out}
 
@@ -995,26 +1016,6 @@ class Lab:
         if op is None:
             raise ValueError(f"précision {precision} jamais atteinte sur val par {experiment_id}")
         return preds["frames"], y, probs, op
-
-    def _val_errors(self, experiment_id: str) -> dict | None:
-        """Résumé des erreurs val au seuil de précision par défaut, pour list_experiments : clips aux
-        ajouts ratés, clips à fausses alertes. Le détail est dans analyze_errors."""
-        try:
-            frames, y, probs, op = self._val_at(experiment_id, metrics.DEFAULT_PRECISION)
-        except ValueError:
-            return None  # précision jamais atteinte
-        by_frame = {r["frame"]: r for r in self.rows}
-        pred = probs >= op["threshold"]
-        fn, fp = Counter(), Counter()
-        for f, yi, pi in zip(frames, y, pred):
-            if f not in by_frame:
-                continue
-            if yi and not pi:
-                fn[by_frame[f]["sample_id"]] += 1
-            elif pi and not yi:
-                fp[by_frame[f]["sample_id"]] += 1
-        return {"fn_par_clip": dict(fn.most_common(5)),
-                "fp_par_clip": dict(fp.most_common(5))}
 
     def _orientation(self, r: dict) -> str:
         v = self._ann(r["sample_id"])["video"]

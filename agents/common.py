@@ -91,17 +91,16 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
 def list_experiments_tool(lab: Lab) -> Tool:
     return Tool(
         name="list_experiments",
-        description="Splits figés et, sous chacun, ses expériences (toutes sessions). Split : chaînes "
-                    "YouTube en dev/test et chaines_shared (chaînes présentes dans les deux parties, "
-                    "toujours 0 : une chaîne n'appartient qu'à une partie), vidéos (clips) en "
-                    "dev/test, images étiquetées de dev et images positives de dev, vidéos "
-                    "collectées après le split, "
-                    "note. Expérience : config (embeddings, modèle, hyperparamètres, "
-                    "rééchantillonnage, pondération), hypothèse, val (AUC, AP, AP par chaîne, seuil et rappel à 95 % de précision, FP/FN), "
-                    "erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), "
-                    "test final, en_production si c'est le modèle en production. Un split sans "
-                    "expérience n'apparaît que s'il est le plus récent.",
+        description="Le split le plus récent (celui sur lequel entraîner) et ses expériences (toutes "
+                    "sessions), puis une ligne par ancien split : nombre d'expériences, la meilleure "
+                    "(AP par chaîne en val) et le modèle en production s'il en vient. Split : chaînes "
+                    "YouTube et vidéos (clips) en dev/test, images étiquetées et positives de dev, "
+                    "vidéos collectées après le split, note. Expérience : config (embeddings, modèle, "
+                    "hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AP, AP par "
+                    "chaîne, rappel à 95 % de précision, FP/FN), test final, en_production si c'est "
+                    "le modèle en production.",
         input_schema={"type": "object", "properties": {
-            "split_id": {"type": "string", "description": "Ne renvoyer que ce split et ses expériences."}}},
+            "split_id": {"type": "string", "description": "Détailler ce split (ancien compris) au lieu "
+                                                          "du plus récent."}}},
         fn=lab.experiments_overview,
     )
