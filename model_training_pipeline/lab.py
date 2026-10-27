@@ -672,22 +672,38 @@ class Lab:
         })
 
     def show_examples(self, experiment_id: str, kind: str = "missed", n: int = 4,
-                      precision: float = metrics.DEFAULT_PRECISION) -> list[dict]:
-        """Renvoie des blocs image (frames val) pour inspection visuelle : les erreurs les plus
-        franches (ajouts ratés les moins bien notés, fausses alertes les mieux notées), une par
-        vidéo à tour de rôle, pour ne pas montrer n fois la même vidéo."""
+                      precision: float = metrics.DEFAULT_PRECISION, order: str = "franches",
+                      start: int = 0) -> list[dict]:
+        """Renvoie des blocs image (frames val) pour inspection visuelle, une vidéo à tour de rôle
+        pour ne pas montrer n fois la même : les erreurs les plus franches (order="franches" :
+        ajouts ratés les moins bien notés, fausses alertes les mieux notées), souvent des erreurs
+        d'étiquette, ou dans un ordre au hasard (order="hasard", toujours le même), plus
+        représentatif de l'ensemble des erreurs. start : rang du premier exemple, pour voir les
+        suivants."""
+        if order not in ("franches", "hasard"):
+            raise ValueError("order doit être 'franches' ou 'hasard'")
         frames, y, probs, op = self._val_at(experiment_id, precision)
         pred = probs >= op["threshold"]
         want = (y == 1) & ~pred if kind == "missed" else (y == 0) & pred
         by_frame = {r["frame"]: r for r in self.rows}
         label = "ajout raté" if kind == "missed" else "faux positif"
-        idx = sorted(np.flatnonzero(want), key=lambda i: probs[i] if kind == "missed" else -probs[i])
-        blocks: list[dict] = []
-        for i in _round_robin(idx, lambda i: by_frame[frames[i]]["sample_id"])[:n]:
+        idx = list(np.flatnonzero(want))
+        if order == "franches":
+            idx.sort(key=lambda i: probs[i] if kind == "missed" else -probs[i])
+        else:
+            np.random.default_rng(0).shuffle(idx)
+        ranked = _round_robin(idx, lambda i: by_frame[frames[i]]["sample_id"])
+        start = max(0, int(start))
+        shown = ranked[start:start + n]
+        if not shown:
+            return [{"type": "text", "text": f"aucun exemple à partir du rang {start} ({len(ranked)} erreurs)"}]
+        blocks: list[dict] = [{"type": "text", "text": f"exemples {start + 1} à {start + len(shown)} sur "
+                                                       f"{len(ranked)} {'ajouts ratés' if kind == 'missed' else 'faux positifs'} (ordre : {order})"}]
+        for i in shown:
             r = by_frame[frames[i]]
             blocks += _image_blocks(FRAMES_DIR / r["frame"], f"{label} {r['sample_id']} t={r['t']} "
                                                              f"p={probs[i]:.3f} (seuil {op['threshold']:.3f})")
-        return blocks or [{"type": "text", "text": "aucun exemple"}]
+        return blocks
 
     def list_experiments(self) -> list[dict]:
         """Tout ce qu'on sait de chaque expérience : config, métriques val, volume de données,

@@ -20,7 +20,10 @@ list_experiments) ; deux expériences sur des splits différents ne se comparent
 demande un ré-entraînement sur le même split. Signale un split créé après l'analyse d'erreurs d'un \
 modèle qui ferait monter le score sans que le modèle change. Appuie chaque conclusion sur les \
 chiffres (analyze_errors) et sur l'inspection visuelle de quelques cas (show_examples), côté \
-ajouts ratés comme côté fausses alertes. Sois sceptique : avec peu de chaînes, un écart de \
+ajouts ratés comme côté fausses alertes. Les erreurs les plus franches (order franches) sont \
+souvent des étiquettes fausses : pour juger un motif récurrent, regarde aussi un échantillon au \
+hasard (order hasard, start pour la suite), et n'appelle un motif « fréquent » que s'il revient \
+sur des vidéos différentes. Sois sceptique : avec peu de chaînes, un écart de \
 quelques points n'est pas une preuve. N'utilise final_test que sur un candidat déjà retenu sur \
 val, et dis clairement si le test confirme val (précision visée tenue au seuil choisi sur val).
 
@@ -45,8 +48,9 @@ def make(lab: Lab) -> Agent:
             analyze_errors_tool(lab),
             Tool(
                 name="show_examples",
-                description="Montre des images de val (prédites hors pli) : images avec ajout ratées "
-                            "(kind=missed) ou fausses alertes (kind=false_positive).",
+                description="Montre des images de val (prédites hors pli), une vidéo à tour de rôle : "
+                            "images avec ajout ratées (kind=missed) ou fausses alertes "
+                            "(kind=false_positive). Indique combien d'erreurs il y a en tout.",
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -54,6 +58,13 @@ def make(lab: Lab) -> Agent:
                         "kind": {"type": "string", "enum": ["missed", "false_positive"]},
                         "n": {"type": "integer", "minimum": 1, "maximum": 6},
                         "precision": PRECISION,
+                        "order": {"type": "string", "enum": ["franches", "hasard"],
+                                  "description": "franches (défaut) : les erreurs où le modèle est le plus "
+                                                 "sûr de lui, souvent des étiquettes fausses ; hasard : un "
+                                                 "échantillon représentatif des erreurs."},
+                        "start": {"type": "integer", "minimum": 0,
+                                  "description": "Rang du premier exemple (défaut 0) : n pour voir les "
+                                                 "suivants."},
                     },
                     "required": ["experiment_id"],
                 },
