@@ -49,7 +49,7 @@ def _link_or_copy(src: Path, dst: Path) -> None:
 
 
 def _copy_data(src: Path, dst: Path, samples: set[str]) -> None:
-    """Copie le dataset de src pour ces vidéos : images (.jpg) et embeddings (.npy) en liens
+    """Copie le dataset de src pour ces vidéos : images (.jpg) et embeddings (.npz) en liens
     physiques, car le labo ne réécrit jamais les images et remplace un cache d'embeddings complété
     par un fichier neuf ; le reste copié (votes.json compris, réécrit à chaque annotation)."""
     for sid in samples:
@@ -69,9 +69,9 @@ def _copy_data(src: Path, dst: Path, samples: set[str]) -> None:
     for cdir in feat.iterdir() if feat.exists() else []:
         for p in cdir.iterdir():
             out = dst / "videos_samples_frames" / "feat" / cdir.name / p.name
-            if p.suffix == ".npy" and p.stem in samples:
+            if p.suffix == ".npz" and p.stem in samples:
                 _link_or_copy(p, out)
-            elif p.suffix != ".npy":
+            elif p.suffix != ".npz":
                 out.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(p, out)
     lines = (src / "videos_samples_frames" / "index.jsonl").read_text(encoding="utf-8").splitlines()

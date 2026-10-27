@@ -71,7 +71,7 @@ def _drop(out_dir: Path, sample_id: str) -> None:
     for f in (out_dir / "img" / sample_id).iterdir():
         if f.name != "votes.json":
             f.unlink()
-    for f in (out_dir / "feat").glob(f"*/{sample_id}.npy"):
+    for f in (out_dir / "feat").glob(f"*/{sample_id}.npz"):
         f.unlink()
 
 

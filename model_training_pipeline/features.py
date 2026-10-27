@@ -1,5 +1,6 @@
 """Embeddings figés des frames, cache par échantillon
-(data/videos_samples_frames/feat/<extracteur>__<vue>/<sample_id>.npy).
+(data/videos_samples_frames/feat/<extracteur>__<vue>/<sample_id>.npz : ids, numéros des images
+calculées (frame i -> i - 1), et emb, leurs embeddings ; seules les images demandées sont calculées).
 
 Vues :
 - full  : l'image entière, redimensionnée en carré (pas de recadrage central, qui
@@ -97,10 +98,10 @@ def _cache_dir(frames_dir: Path, extractor: str, view: str) -> Path:
 
 def get_features(rows: list[dict], extractor: str, view: str = "full",
                  frames_dir: Path = FRAMES_DIR, batch_size: int = 64) -> np.ndarray:
-    """Matrice (len(rows), dim) alignée sur rows. Cache : un fichier par vidéo, une ligne par image
-    (frame i -> ligne i - 1), NaN pour une image jamais demandée ; seules les images demandées et
-    absentes du cache sont calculées (en pratique les images étiquetées, sauf pour le saut d'images,
-    qui demande toute la vidéo en clip_b32:full)."""
+    """Matrice (len(rows), dim) alignée sur rows. Cache : un fichier par vidéo avec les seules images
+    déjà calculées (ids, emb) ; les images demandées et absentes du cache sont calculées et
+    ajoutées (en pratique les images étiquetées, sauf pour le saut d'images, qui demande toute la
+    vidéo en clip_b32:full)."""
     if extractor not in EXTRACTORS or view not in VIEWS:
         raise ValueError(f"extracteur/vue inconnus : {extractor}/{view}")
     cdir = _cache_dir(frames_dir, extractor, view)
@@ -111,26 +112,30 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
 
     t0, n_frames, out = time.time(), 0, None
     for s, idxs in by_sample.items():
-        path = cdir / f"{s}.npy"
-        arr = np.load(path) if path.exists() else None
+        path = cdir / f"{s}.npz"
+        ids, emb = np.zeros(0, dtype=np.int32), None
+        if path.exists():
+            with np.load(path) as z:  # fermé tout de suite : Windows refuse de remplacer un fichier ouvert
+                ids, emb = z["ids"], z["emb"]
         frame_ids = [int(Path(rows[i]["frame"]).stem) - 1 for i in idxs]
-        todo = sorted({k for k in frame_ids if arr is None or np.isnan(arr[k, 0])})
+        todo = sorted(set(frame_ids) - set(ids.tolist()))
         if todo:
             frames = sorted((Path(frames_dir) / "img" / s).glob("*.jpg"))
             with torch.inference_mode():
-                emb = embed_images([frames[k] for k in todo], extractor, view, batch_size)
-            if arr is None:
-                arr = np.full((len(frames), emb.shape[1]), np.nan, dtype=np.float32)
-            arr[todo] = emb
+                new = embed_images([frames[k] for k in todo], extractor, view, batch_size)
+            ids = np.concatenate([ids, np.array(todo, dtype=np.int32)])
+            emb = new.astype(np.float32) if emb is None else np.concatenate([emb, new.astype(np.float32)])
+            order = np.argsort(ids)
+            ids, emb = ids[order], emb[order]
             # fichier neuf puis remplacement : jamais de cache à moitié écrit, et un cache lié
             # (hard link d'un banc) n'est pas modifié à la source
-            tmp = path.with_suffix(".tmp.npy")
-            np.save(tmp, arr)
+            tmp = path.with_suffix(".tmp.npz")
+            np.savez(tmp, ids=ids, emb=emb)
             tmp.replace(path)
             n_frames += len(todo)
         if out is None:
-            out = np.zeros((len(rows), arr.shape[1]), dtype=np.float32)
-        out[idxs] = arr[frame_ids]
+            out = np.zeros((len(rows), emb.shape[1]), dtype=np.float32)
+        out[idxs] = emb[np.searchsorted(ids, frame_ids)]
     if n_frames:
         meta = {"ms_per_frame": round(1000 * (time.time() - t0) / n_frames, 2),
                 "device": "cuda" if torch.cuda.is_available() else "cpu"}
