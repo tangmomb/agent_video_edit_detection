@@ -132,17 +132,20 @@ def _compact_val(val: dict) -> dict:
     return {**out, "recall": op["recall"], "fp": op["fp"], "fn": op["fn"]}
 
 
+def _config(e: dict) -> dict:
+    """Ce qu'il faut pour refaire l'expérience : embeddings, modèle, hyperparamètres,
+    rééchantillonnage et pondération (ces deux derniers seulement s'ils sont utilisés)."""
+    out = {"embeddings": e["features"], **{k: e[k] for k in ("model", "params") if k in e}}
+    out.update({k: e[k] for k in ("balance", "weights") if e.get(k)})
+    return out
+
+
 def _compact(e: dict) -> dict:
     """Expérience en format court pour les agents, sans son split (elle est rangée dessous) :
     config, hypothèse, val à 95 %, test final. Le détail (90/99 %, AUC, volumes, durées) reste dans
     model_results/, les erreurs dans analyze_errors."""
     out = {"id": e["id"]} if "id" in e else {}
-    out["embeddings"] = e["features"]
-    out.update({k: e[k] for k in ("model", "params") if k in e})
-    if e.get("balance"):
-        out["balance"] = e["balance"]
-    if e.get("weights"):
-        out["weights"] = e["weights"]
+    out.update(_config(e))
     out["hypothese"] = e.get("note", "")
     out["val"] = _compact_val(e["val"])
     if "final_test" in e:
@@ -155,7 +158,8 @@ def _compact(e: dict) -> dict:
 
 def _split_line(split_id: str, exps: list[dict]) -> dict:
     """Ancien split en une ligne : nombre d'expériences, la meilleure (AP par chaîne en val, le
-    critère du modèle de production) et le modèle en production s'il en vient."""
+    critère du modèle de production) et le modèle en production s'il en vient, chacun avec sa
+    config pour être refait sur le split récent."""
     def key(e):
         v = e["val"]
         return v.get("ap_par_chaine") if v.get("ap_par_chaine") is not None else v["ap"]
@@ -164,10 +168,12 @@ def _split_line(split_id: str, exps: list[dict]) -> dict:
     score = "ap_par_chaine" if best["val"].get("ap_par_chaine") is not None else "ap"
     out = {"split_id": split_id, "experiences": len(exps),
            "meilleure": {"id": best["id"], score: key(best),
-                         "recall": op["recall"] if isinstance(op, dict) else op}}
-    prod = next((e["id"] for e in exps if e.get("en_production")), None)
-    if prod:
-        out["en_production"] = prod
+                         "recall": op["recall"] if isinstance(op, dict) else op, **_config(best)}}
+    prod = next((e for e in exps if e.get("en_production")), None)
+    if prod is best:
+        out["meilleure"]["en_production"] = True
+    elif prod:
+        out["en_production"] = {"id": prod["id"], **_config(prod)}
     return out
 
 
@@ -775,20 +781,20 @@ class Lab:
             out.append(e)
         return out
 
-    def experiments_overview(self, split_id: str | None = None) -> dict:
-        """Ce que renvoie l'outil list_experiments : le split demandé (par défaut le plus récent,
-        celui sur lequel entraîner) avec ses expériences en format court ; sans split_id, une ligne
-        par ancien split ayant des expériences (elles ne se comparent pas à celles du récent)."""
+    def experiments_overview(self) -> dict:
+        """Ce que renvoie l'outil list_experiments : le split le plus récent (celui sur lequel
+        entraîner) avec ses expériences en format court, et une ligne par ancien split ayant des
+        expériences (elles ne se comparent pas à celles du récent)."""
         exps = self.list_experiments()
         summaries = self._split_summaries()
-        detail = split_id or (summaries[-1]["split_id"] if summaries else None)
+        latest = summaries[-1]["split_id"] if summaries else None
         y = self._y()
         out = []
         for sp in summaries:
             sid = sp["split_id"]
             mine = [e for e in exps if e.get("split_id") == sid]
-            if sid != detail:
-                if not split_id and mine:
+            if sid != latest:
+                if mine:
                     out.append(_split_line(sid, mine))
                 continue
             dev = self._idx("dev", sid)

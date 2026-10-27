@@ -93,14 +93,13 @@ def list_experiments_tool(lab: Lab) -> Tool:
         name="list_experiments",
         description="Le split le plus récent (celui sur lequel entraîner) et ses expériences (toutes "
                     "sessions), puis une ligne par ancien split : nombre d'expériences, la meilleure "
-                    "(AP par chaîne en val) et le modèle en production s'il en vient. Split : chaînes "
+                    "(AP par chaîne en val) et le modèle en production s'il en vient, avec leur config pour "
+                    "les refaire sur le split récent. Split : chaînes "
                     "YouTube et vidéos (clips) en dev/test, images étiquetées et positives de dev, "
                     "vidéos collectées après le split, note. Expérience : config (embeddings, modèle, "
                     "hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AP, AP par "
                     "chaîne, rappel à 95 % de précision, FP/FN), test final, en_production si c'est "
                     "le modèle en production.",
-        input_schema={"type": "object", "properties": {
-            "split_id": {"type": "string", "description": "Détailler ce split (ancien compris) au lieu "
-                                                          "du plus récent."}}},
+        input_schema={"type": "object", "properties": {}},
         fn=lab.experiments_overview,
     )
