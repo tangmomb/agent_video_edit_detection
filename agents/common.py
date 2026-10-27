@@ -66,6 +66,8 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
         if info.get("dataset_vide"):
             return info
         out = {k: info[k] for k in keys if k in info}
+        # images sautées comme quasi identiques (voulu) : rien à en faire pour un agent
+        out["dataset"] = {k: v for k, v in out["dataset"].items() if k != "images_non_annotees"}
         if "budgets" in out:
             out["budgets"] = {k: v for k, v in out["budgets"].items() if k != "final_tests_restants"}
         return out

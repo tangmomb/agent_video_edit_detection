@@ -1,5 +1,7 @@
 import argparse
 
+from model_training_pipeline import batch
+
 from .orchestrator import run
 
 
@@ -17,6 +19,11 @@ def main() -> None:
     p.add_argument("--direct-annotation", action="store_true",
                    help="annotation en appels directs (prix plein, sans attente) au lieu des batchs (-50 %%)")
     a = p.parse_args()
+    # Des votes encore dans des batchs : le dataset que verraient les agents serait incomplet.
+    pending = batch.in_flight()
+    if pending:
+        raise SystemExit(f"{len(pending)} batch(s) d'annotation pas encore récupéré(s) : lance d'abord "
+                         "`python -m model_training_pipeline batch collect` (batch status pour suivre).")
     run(a.goal, a.budget_usd, a.data_budget, a.final_tests, a.annotation_usd, model=a.agent_model,
         direct_annotation=a.direct_annotation)
 
