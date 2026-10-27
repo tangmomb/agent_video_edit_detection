@@ -486,11 +486,13 @@ class Lab:
         return _jsonable({
             "videos_collectees": len(got["dirs"]),
             "echecs": len(errors), "exemples_erreurs": errors[:3], "arret": stopped,
-            "images_envoyees_en_annotation": len(mine),
-            "images_avec_accord": sum(r["label_any"] is not None for r in mine),
+            # sans les images sautées comme quasi identiques (frames.to_annotate)
+            "images_envoyees_en_annotation": sum(r.get("annotee", True) for r in mine),
+            "images_etiquetees": sum(r["label_any"] is not None for r in mine),
             "requetes_en_echec": failed,
             "cout_annotation_usd": round(self.annotation_spent - before, 4),
-            "images_total": len(self.rows), "videos_collectables_restantes": self.data_budget - self.generated,
+            "images_etiquetees_total": sum(r["label_any"] is not None for r in self.rows),
+            "videos_collectables_restantes": self.data_budget - self.generated,
             "budget_annotation_restant_usd": round(self.annotation_budget_usd - self.annotation_spent, 3)})
 
     def data_requests(self) -> list[dict]:
