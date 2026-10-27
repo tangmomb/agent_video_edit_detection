@@ -112,3 +112,21 @@ def list_experiments_tool(lab: Lab) -> Tool:
         input_schema={"type": "object", "properties": {}},
         fn=lab.experiments_overview,
     )
+
+
+PRECISION = {"type": "number", "description": "Précision visée sur val, qui fixe le seuil (défaut 0.95)."}
+
+
+def analyze_errors_tool(lab: Lab) -> Tool:
+    return Tool(
+        name="analyze_errors",
+        description="Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux "
+                    "d'images positives ratées par orientation et par chaîne ; "
+                    "répartition des fausses alertes ; exemples d'images ratées.",
+        input_schema={
+            "type": "object",
+            "properties": {"experiment_id": {"type": "string"}, "precision": PRECISION},
+            "required": ["experiment_id"],
+        },
+        fn=lab.analyze_errors,
+    )

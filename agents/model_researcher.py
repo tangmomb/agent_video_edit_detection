@@ -3,7 +3,7 @@
 from model_training_pipeline.features import EXTRACTORS
 from model_training_pipeline.lab import BALANCE_GROUPS, MODELS, STRATIFY_KEYS, Lab
 
-from .common import CONTEXT, dataset_info_tool, list_experiments_tool
+from .common import CONTEXT, analyze_errors_tool, dataset_info_tool, list_experiments_tool
 from .runner import Agent, Tool
 
 SYSTEM = CONTEXT + """
@@ -32,12 +32,15 @@ Méthode : consulte l'historique pour ne pas refaire une expérience existante. 
 par expérience (champ note : l'hypothèse seule, en une phrase, sans recopier la config ni le split, \
 déjà enregistrés) et change un facteur à la fois, sur le même split, pour que les \
 résultats soient comparables. Après un nouveau split, ré-entraîne la meilleure config précédente \
-dessus pour avoir une référence. Arrête-toi quand le lot demandé est fait ou quand les résultats ne \
-bougent plus.
+dessus pour avoir une référence. Quand une expérience vise un groupe d'erreurs (pondération, \
+rééchantillonnage, vue d'embeddings), compare son analyze_errors à celui de la référence : le \
+changement ne vaut que si les erreurs de ce groupe baissent sans que les autres montent, pas \
+seulement le score global. Tu ne vois pas les images : leur inspection revient à l'Evaluator. \
+Arrête-toi quand le lot demandé est fait ou quand les résultats ne bougent plus.
 
 Rapport final (court, en français) : le split utilisé (et pourquoi si tu l'as créé) ; pour chaque \
-expérience, son id, l'hypothèse et le résultat (AP par chaîne, rappel à 95 % de précision, AUC, \
-AP) ; le meilleur candidat selon toi (d'abord sur l'AP par chaîne) et pourquoi ; ce que tu essaierais ensuite et les données qui te \
+expérience, son id, l'hypothèse et le résultat (AP par chaîne, rappel à 95 % de précision, AP, et \
+l'effet sur le groupe visé) ; le meilleur candidat selon toi (d'abord sur l'AP par chaîne) et pourquoi ; ce que tu essaierais ensuite et les données qui te \
 manquent, le cas échéant."""
 
 
@@ -48,6 +51,7 @@ def make(lab: Lab) -> Agent:
         max_turns=20,
         tools=[
             dataset_info_tool(lab, "model_researcher"),
+            analyze_errors_tool(lab),
             list_experiments_tool(lab),
             Tool(
                 name="make_split",

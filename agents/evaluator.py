@@ -2,7 +2,7 @@
 
 from model_training_pipeline.lab import Lab
 
-from .common import CONTEXT, list_experiments_tool
+from .common import CONTEXT, PRECISION, analyze_errors_tool, list_experiments_tool
 from .runner import Agent, Tool
 
 SYSTEM = CONTEXT + """
@@ -33,7 +33,6 @@ Rapport final (court, en français) : chiffres clés par expérience évaluée, 
 leur cause probable, verdict sur l'amélioration, et recommandations concrètes : quelles vidéos \
 collecter (thèmes, styles de montage, orientation), quelles pistes de modèle tester."""
 
-PRECISION = {"type": "number", "description": "Précision visée sur val, qui fixe le seuil (défaut 0.95)."}
 
 
 def make(lab: Lab) -> Agent:
@@ -43,18 +42,7 @@ def make(lab: Lab) -> Agent:
         max_turns=15,
         tools=[
             list_experiments_tool(lab),
-            Tool(
-                name="analyze_errors",
-                description="Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux "
-                            "d'images positives ratées par orientation et par chaîne ; "
-                            "répartition des fausses alertes ; exemples d'images ratées.",
-                input_schema={
-                    "type": "object",
-                    "properties": {"experiment_id": {"type": "string"}, "precision": PRECISION},
-                    "required": ["experiment_id"],
-                },
-                fn=lab.analyze_errors,
-            ),
+            analyze_errors_tool(lab),
             Tool(
                 name="show_examples",
                 description="Montre des images de val (prédites hors pli) : images avec ajout ratées "
