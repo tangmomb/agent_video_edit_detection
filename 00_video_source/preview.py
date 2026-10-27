@@ -17,7 +17,7 @@ def contact_sheet(sample_dir: str | Path, n: int = 12, cols: int = 4) -> Path:
     if not frames:
         raise ValueError(f"aucune image extraite pour {sample_dir.name} : lancer d'abord "
                          "python -m model_training_pipeline frames")
-    votes_path = sample_dir / "votes.json"
+    votes_path = FRAMES_DIR / "img" / sample_dir.name / "votes.json"  # avec les images
     votes = json.loads(votes_path.read_text(encoding="utf-8"))["frames"] if votes_path.exists() else {}
     picked = [frames[round(i * (len(frames) - 1) / max(1, n - 1))] for i in range(min(n, len(frames)))]
     tiles = []

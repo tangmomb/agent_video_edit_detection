@@ -50,9 +50,10 @@ def _link_or_copy(src: Path, dst: Path) -> None:
 
 def _copy_data(src: Path, dst: Path, samples: set[str]) -> None:
     """Copie le dataset de src pour ces vidéos : images (.jpg) et embeddings (.npy) en liens
-    physiques, car le labo ne les réécrit jamais ; le reste copié."""
+    physiques, car le labo ne réécrit jamais les images et remplace un cache d'embeddings complété
+    par un fichier neuf ; le reste copié (votes.json compris, réécrit à chaque annotation)."""
     for sid in samples:
-        for f in ("meta.json", "votes.json"):
+        for f in ("meta.json",):  # votes.json : avec les images, copié ci-dessous
             p = src / "videos_samples" / sid / f
             if p.exists():
                 (dst / "videos_samples" / sid).mkdir(parents=True, exist_ok=True)

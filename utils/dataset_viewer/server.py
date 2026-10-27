@@ -23,7 +23,7 @@ from video_source.youtube import load_meta  # noqa: E402
 
 
 def _votes(d: Path) -> dict:
-    p = d / "votes.json"
+    p = FRAMES_DIR / "img" / d.name / "votes.json"  # avec les images (frames.votes_path)
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"frames": {}, "cost_usd": 0.0}
 
 

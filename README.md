@@ -14,7 +14,8 @@ vraies vidéos YouTube, annotées image par image par trois LLM de vision.
 - `00_video_source/annotators.py` : une requête par image, réponse `{"ajout": true|false}`. Le
   dataset est annoté par `gpt-6-luna`, `gpt-5.6-luna` et `zai-glm-5-3-flash` (les meilleurs du banc
   `utils/llm_bench`) : une image n'a d'étiquette que s'ils sont **tous d'accord**, sinon elle est
-  écartée (ni entraînée ni mesurée), sans revue manuelle. Votes dans `votes.json` à côté de la vidéo.
+  écartée (ni entraînée ni mesurée), sans revue manuelle. Votes dans `votes.json`, avec les images
+  de la vidéo (`data/videos_samples_frames/img/<sample_id>/`).
   Effort de raisonnement `medium` pour les GPT, aucun effort précisé pour `zai-glm-5-3-flash` (son
   API n'accepte ni `medium` ni `none`). L'annotation passe par les API batch d'OpenAI et de Mistral (-50 %),
   suivies dans `data/batches.json`. Une image presque identique à la dernière image annotée de sa

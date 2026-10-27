@@ -1,7 +1,8 @@
 """Construit le dataset de frames étiquetées à partir des vraies vidéos de video_source.
 
 Les images sont extraites à FPS par seconde, puis soumises aux trois LLM d'annotators.ANNOTATORS
-(annotate, appels payants) ; les votes sont gardés dans votes.json à côté de la vidéo. build() ne
+(annotate, appels payants) ; les votes sont gardés dans votes.json à côté de ses images
+(img/<sample_id>/, voir votes_path). build() ne
 fait aucun appel payant : il relit les votes.
 
 Une image presque identique à la dernière image annotée de sa vidéo n'est pas annotée (to_annotate) :
@@ -16,7 +17,6 @@ Chaque ligne de index.jsonl :
 """
 
 import json
-import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -66,8 +66,11 @@ def _stale(frames_dir: Path) -> bool:
 
 
 def _drop(out_dir: Path, sample_id: str) -> None:
-    """Supprime les frames d'un échantillon et leurs embeddings en cache (données dérivées)."""
-    shutil.rmtree(out_dir / "img" / sample_id)
+    """Supprime les frames d'un échantillon et leurs embeddings en cache (données dérivées), mais
+    garde ses votes (votes.json, payés), rangés dans le même dossier."""
+    for f in (out_dir / "img" / sample_id).iterdir():
+        if f.name != "votes.json":
+            f.unlink()
     for f in (out_dir / "feat").glob(f"*/{sample_id}.npy"):
         f.unlink()
 
@@ -85,14 +88,23 @@ def frames_of(sdir: Path, out_dir: Path = FRAMES_DIR, fps: float = FPS, long_sid
     return [f for i, f in enumerate(frames) if not duration or i / fps < duration]
 
 
+def votes_path(sdir: Path) -> Path:
+    """votes.json d'une vidéo (dossier sdir de videos_samples) : avec ses images, dans le dossier
+    videos_samples_frames/img/ voisin (vrai aussi pour la copie du dataset d'un banc)."""
+    sdir = Path(sdir)
+    return sdir.parent.parent / FRAMES_DIR.name / "img" / sdir.name / "votes.json"
+
+
 def load_votes(sdir: Path) -> dict:
     """votes.json : {"frames": {image: {"votes": {modèle: bool|None}, "label": 1|0|None}}, "cost_usd"}."""
-    path = Path(sdir) / "votes.json"
+    path = votes_path(sdir)
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"frames": {}, "cost_usd": 0.0}
 
 
 def save_votes(sdir: Path, votes: dict) -> None:
-    (Path(sdir) / "votes.json").write_text(json.dumps(votes, ensure_ascii=False), encoding="utf-8")
+    path = votes_path(sdir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(votes, ensure_ascii=False), encoding="utf-8")
 
 
 def add_votes(votes: dict, frame: str, new: dict, cost_usd: float) -> None:
