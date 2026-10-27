@@ -321,7 +321,7 @@ class Session:
                 if not calls:
                     break
 
-                images, image_paths = [], []  # l'API n'accepte les images que dans un message user
+                images, logged = [], []  # l'API n'accepte les images que dans un message user
                 for c in calls:
                     name, args = c.function.name, c.function.arguments
                     self._say(f"[{agent.name} → {name}] {str(args)[:200]}")
@@ -341,17 +341,25 @@ class Session:
                         sys.stdout = saved_stdout
                     paths = []
                     if isinstance(content, list):
-                        imgs = [b for b in content if b["type"] == "image"]
-                        images += [{"type": "image_url", "image_url": {
-                                       "url": f"data:{b['source']['media_type']};base64,{b['source']['data']}"}}
-                                   for b in imgs]
-                        for b in imgs:
-                            n_images += 1
-                            paths.append(self._save_image(call, turn, n_images, b["source"]))
-                        image_paths += paths
-                        text = "\n".join(b["text"] for b in content if b["type"] == "text")
-                        if imgs:
-                            text += f"\n[{len(imgs)} image(s) dans le message suivant]"
+                        # Un texte suivi d'une image est sa légende : il part avec elle dans le message
+                        # user, pour que le modèle n'ait pas à les apparier en comptant.
+                        captions = {k for k, b in enumerate(content[:-1])
+                                    if b["type"] == "text" and content[k + 1]["type"] == "image"}
+                        for k, b in enumerate(content):
+                            if b["type"] == "image":
+                                n_images += 1
+                                paths.append(self._save_image(call, turn, n_images, b["source"]))
+                                images.append({"type": "image_url", "image_url": {
+                                    "url": f"data:{b['source']['media_type']};base64,{b['source']['data']}"}})
+                                logged.append(f"<image {paths[-1]}>")
+                            elif k in captions:
+                                images.append({"type": "text", "text": b["text"]})
+                                logged.append(b["text"])
+                        text = "\n".join(b["text"] for k, b in enumerate(content)
+                                         if b["type"] == "text" and k not in captions)
+                        if paths:
+                            text = (text + "\n" if text else "") + \
+                                f"[{len(paths)} image(s), chacune précédée de sa légende, dans le message suivant]"
                     else:
                         text = content
                     messages.append({"role": "tool", "name": name, "content": text, "tool_call_id": c.id})
@@ -361,9 +369,8 @@ class Session:
                          traceback=tb, stdout=capture.buf.getvalue() or None,
                          duration_s=round(time.perf_counter() - t0, 2))
 
-                follow_up, logged = list(images), [f"<image {p}>" for p in image_paths]
-                if follow_up:
-                    add_user(follow_up, logged)
+                if images:
+                    add_user(images, logged)
                 # Un tour de plus dépasserait la limite (estimé au coût du dernier) : on conclut.
                 if self.spent + last_cost >= limit:
                     final = last_report(turn + 1, f"Budget atteint ({self.spent:.2f}/{limit:.2f} $).")
