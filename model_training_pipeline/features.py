@@ -134,3 +134,25 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
 def extraction_cost(extractor: str, view: str, frames_dir: Path = FRAMES_DIR) -> float | None:
     meta = _cache_dir(frames_dir, extractor, view) / "meta.json"
     return json.loads(meta.read_text())["ms_per_frame"] if meta.exists() else None
+
+
+def precompute(extractors: list[str] | None = None, views: list[str] | None = None,
+               frames_dir: Path = FRAMES_DIR) -> list[dict]:
+    """Calcule d'avance les embeddings de toutes les vidéos de l'index, pour chaque extracteur et
+    vue (par défaut tous ceux proposés à l'agent), afin que train_model n'ait plus qu'à les relire.
+    Seules les vidéos absentes du cache sont calculées."""
+    from .frames import load_index
+
+    rows = load_index(frames_dir)
+    samples = {r["sample_id"] for r in rows}
+    out = []
+    for ext in extractors or list(EXTRACTORS):
+        for view in views or list(VIEWS):
+            cdir = _cache_dir(frames_dir, ext, view)
+            todo = sum(not (cdir / f"{s}.npy").exists() for s in samples)
+            t0 = time.time()
+            print(f"[features] {ext}:{view} : {todo} vidéo(s) sur {len(samples)} à calculer…", flush=True)
+            get_features(rows, ext, view, frames_dir)
+            out.append({"embeddings": f"{ext}:{view}", "videos_calculees": todo,
+                        "duree_s": round(time.time() - t0, 1), "ms_par_image": extraction_cost(ext, view, frames_dir)})
+    return out

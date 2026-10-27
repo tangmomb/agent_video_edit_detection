@@ -50,6 +50,8 @@ video_source preview data/videos_samples/yt_<id>                        # planch
 ```bash
 python -m model_training_pipeline frames    # frames à 1 fps + index (data/videos_samples_frames/index.jsonl), sans appel payant
 python -m model_training_pipeline info      # état du dataset
+python -m model_training_pipeline features  # précalcule les embeddings (tous extracteurs et vues, GPU), sans appel payant
+python -m model_training_pipeline exclude <sample_id> "<raison>"  # retire une vidéo défectueuse des splits suivants
 ```
 
 Cible binaire `label_any` (au moins un ajout visible sur l'image), `null` sans accord des annotateurs.

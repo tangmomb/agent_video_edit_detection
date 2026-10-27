@@ -14,6 +14,9 @@ def main() -> None:
     bt.add_argument("action", choices=["estimate", "submit", "status", "collect"])
     bt.add_argument("--max-usd", type=float, help="submit : plafond du coût estimé")
     sub.add_parser("info", help="état du dataset (outil dataset_info de l'agent)")
+    fe = sub.add_parser("features", help="précalcule les embeddings de toutes les vidéos (GPU, sans appel payant)")
+    fe.add_argument("--extractor", action="append", help="seulement cet extracteur (répétable ; défaut : tous)")
+    fe.add_argument("--view", action="append", help="seulement cette vue (répétable ; défaut : toutes)")
     ex = sub.add_parser("exclude", help="retire une vidéo défectueuse (cassée, doublon) des splits créés ensuite")
     ex.add_argument("sample_id", help="dossier de la vidéo, ex. yt_eT0O3wigEEA")
     ex.add_argument("raison", help="défaut constaté sur la vidéo elle-même, jamais une erreur de modèle")
@@ -75,6 +78,11 @@ def main() -> None:
 
         from .lab import Lab
         print(json.dumps(Lab().dataset_info(), indent=2, ensure_ascii=False))
+    elif args.cmd == "features":
+        import json
+
+        from .features import precompute
+        print(json.dumps(precompute(args.extractor, args.view), indent=2, ensure_ascii=False))
     elif args.cmd == "exclude":
         import json
 
