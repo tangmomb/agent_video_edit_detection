@@ -439,9 +439,9 @@ class Lab:
             return {"error": "budget d'annotation épuisé pour cette session"}
         # Une vidéo par chaîne absente du dataset : deux vidéos d'une chaîne partagent son habillage,
         # et le split se fait par chaîne.
-        known = youtube.channels()
+        avoid = youtube.channels()
         try:
-            got = youtube.collect(query, n, orientation, avoid_channels=set(known))
+            got = youtube.collect(query, n, orientation, avoid_channels=avoid)
         except youtube.NoVideoFound as e:
             got = {"dirs": [], "errors": [str(e)]}
         self.generated += len(got["dirs"])  # seules les vidéos téléchargées consomment le budget
@@ -486,10 +486,8 @@ class Lab:
             fh.write(json.dumps({"n": n, "ok": len(got["dirs"]), "query": query, "orientation": orientation,
                                  "cost_usd": round(self.annotation_spent - before, 4),
                                  "cost_usd_estime": round(est, 4), "reason": reason, "time": time.time()}) + "\n")
-        new_channels = {youtube.load_meta(d).get("channel_id") for d in got["dirs"]}
         return _jsonable({
-            "videos_collectees": len(got["dirs"]),
-            "chaines_distinctes": len(new_channels), "chaines_nouvelles": len(new_channels - known),
+            "videos_collectees": len(got["dirs"]),  # autant de chaînes nouvelles (une vidéo chacune)
             "echecs": len(errors), "exemples_erreurs": errors[:3], "arret": stopped,
             # sans les images sautées comme quasi identiques (frames.to_annotate)
             "images_envoyees_en_annotation": sum(r.get("annotee", True) for r in mine),
