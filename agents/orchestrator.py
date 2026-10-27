@@ -89,7 +89,7 @@ def make(lab: Lab, session: Session) -> Agent:
         else:
             d = info["dataset"]
             dataset = {k: d[k] for k in ("chaines_distinctes", "videos", "moyenne_videos_par_chaine",
-                                         "images_extraites", "images_etiquetees", "images_sans_etiquette", "images_non_annotees", "videos_sans_ajout",
+                                         "images_extraites", "images_etiquetees", "images_sans_etiquette", "videos_sans_ajout",
                                          "pourcentage_images_avec_ajout")}
             dataset["budgets"] = info["budgets"]
         return {"dataset": dataset,
