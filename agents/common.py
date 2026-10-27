@@ -94,7 +94,7 @@ def list_experiments_tool(lab: Lab) -> Tool:
                     "toujours 0 : une chaîne n'appartient qu'à une partie), vidéos (clips) en "
                     "dev/test, images étiquetées de dev et images positives de dev, vidéos "
                     "collectées après le split, "
-                    "note. Expérience : config (embeddings, modèle, temporal, hyperparamètres, "
+                    "note. Expérience : config (embeddings, modèle, hyperparamètres, "
                     "rééchantillonnage, pondération), hypothèse, val (AUC, AP, AP par chaîne, seuil et rappel à 95 % de précision, FP/FN), "
                     "erreurs_val à ce seuil (clips aux ajouts ratés, clips à fausses alertes), "
                     "test final, en_production si c'est le modèle en production. Un split sans "

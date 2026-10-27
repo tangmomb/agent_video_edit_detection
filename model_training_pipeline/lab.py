@@ -136,7 +136,7 @@ def _compact(e: dict, errors: dict | None = None) -> dict:
     config, hypothèse, val à 95 % et ses erreurs (errors, voir Lab._val_errors), test final. Le détail (90/99 %, volumes, durées) reste dans model_results/."""
     out = {"id": e["id"]} if "id" in e else {}
     out["embeddings"] = e["features"]
-    out.update({k: e[k] for k in ("model", "temporal", "params") if k in e})
+    out.update({k: e[k] for k in ("model", "params") if k in e})
     if e.get("balance"):
         out["balance"] = e["balance"]
     if e.get("weights"):
@@ -308,32 +308,19 @@ class Lab:
         labeled = {r["sample_id"] for r in self.rows if r["label_any"] is not None}
         return labeled - self._positive_samples()
 
-    def _prev(self) -> np.ndarray:
-        prev = np.full(len(self.rows), -1)
-        last: dict[str, int] = {}
-        for i in sorted(range(len(self.rows)), key=lambda i: (self.rows[i]["sample_id"], self.rows[i]["t"])):
-            prev[i] = last.get(self.rows[i]["sample_id"], -1)
-            last[self.rows[i]["sample_id"]] = i
-        return prev
-
     def _ann(self, sample_id: str) -> dict:
         """meta.json de la vidéo (titre, chaîne, dimensions, requête)."""
         if sample_id not in self._ann_cache:
             self._ann_cache[sample_id] = youtube.load_meta(SAMPLES_DIR / sample_id)
         return self._ann_cache[sample_id]
 
-    def _X(self, features: list[str], temporal: str, prev: np.ndarray) -> tuple[np.ndarray, float]:
+    def _X(self, features: list[str]) -> tuple[np.ndarray, float]:
         mats, ms = [], 0.0
         for spec in features:
             ext, _, view = spec.partition(":")
             mats.append(get_features(self.rows, ext, view or "full"))
             ms += extraction_cost(ext, view or "full") or 0.0
         X = np.concatenate(mats, axis=1)
-        if temporal == "diff":
-            X_prev = np.where(prev[:, None] >= 0, X[np.maximum(prev, 0)], 0.0)
-            X = np.concatenate([X, X - X_prev], axis=1)
-        elif temporal != "none":
-            raise ValueError("temporal doit être 'none' ou 'diff'")
         return X, ms
 
     # ------------------------------------------------------------------ outils
@@ -346,9 +333,10 @@ class Lab:
         out = {"chaines_distinctes": len(chains), "videos": len(sids),
                "moyenne_videos_par_chaine": round(len(sids) / len(chains), 2) if chains else 0,
                "images_extraites": len(rows), "images_etiquetees": len(labeled),
-               # images jamais utilisées : désaccord des annotateurs, ou image non annotée (quasi
-               # identique à la précédente annotée, ou annotation en attente)
+               # annotées mais sans étiquette retenue (désaccord des annotateurs)
                "images_sans_etiquette": sum(r["label_any"] is None and r.get("annotee", True) for r in rows),
+               # jamais envoyées aux annotateurs : quasi identiques à la précédente annotée, ou
+               # annotation en attente
                "images_non_annotees": sum(not r.get("annotee", True) for r in rows),
                "videos_sans_ajout": len(sids & self._empty_samples()),
                "videos_par_orientation": dict(Counter(_orient(a) for a in anns))}
@@ -565,8 +553,7 @@ class Lab:
         path = EXP_DIR / "production.json"
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
-    def train_model(self, embeddings: list[str], model: str = "logreg", temporal: str = "none",
-                    params: dict | None = None, balance: dict | None = None,
+    def train_model(self, embeddings: list[str], model: str = "logreg", params: dict | None = None, balance: dict | None = None,
                     weights: dict | None = None, note: str = "", split_id: str | None = None) -> dict:
         if not split_id:
             raise ValueError("split_id obligatoire : un split créé par make_split (voir list_experiments)")
@@ -579,7 +566,7 @@ class Lab:
         folds = self._folds(split_id)
         fold = np.array([folds[self.rows[i]["source"]] for i in dev])
         groups = np.array([self.rows[i]["source"] for i in dev])
-        X, feat_ms = self._X(embeddings, temporal, self._prev())
+        X, feat_ms = self._X(embeddings)
         y = self._y()
 
         t0 = time.time()
@@ -611,7 +598,7 @@ class Lab:
         if weighted:
             result["ponderation_train"] = {g: f"poids {float(w):g}" for g, w in sorted(weights.items())}
         # Clé "features" gardée dans config.json : l'interface et final_test la relisent.
-        config = {"split_id": split_id, "features": embeddings, "model": model, "temporal": temporal,
+        config = {"split_id": split_id, "features": embeddings, "model": model,
                   "params": params, "balance": balance or {}, "weights": weights or {}, "note": note}
         d = EXP_DIR / exp_id
         d.mkdir(parents=True)
@@ -752,10 +739,7 @@ class Lab:
                 cache.parent.mkdir(exist_ok=True)
                 np.save(cache, emb)
             mats.append(np.load(cache))
-        X = np.concatenate(mats, axis=1)
-        if config["temporal"] == "diff":  # comme _X : la 1re frame n'a pas de précédente (0)
-            X = np.concatenate([X, X - np.vstack([np.zeros_like(X[:1]), X[:-1]])], axis=1)
-        return X
+        return np.concatenate(mats, axis=1)
 
     def list_experiments(self) -> list[dict]:
         """Tout ce qu'on sait de chaque expérience : config, métriques val, volume de données,
@@ -821,7 +805,7 @@ class Lab:
         self.final_tests_left -= 1
         with open(d / "model.pkl", "rb") as fh:
             clf = pickle.load(fh)
-        X, _ = self._X(config["features"], config["temporal"], self._prev())
+        X, _ = self._X(config["features"])
         y = self._y()[te]
         probs = clf.predict_proba(X[te])[:, 1]
         s = metrics.summary(y, probs)

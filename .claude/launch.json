@@ -33,6 +33,14 @@
         "utils/dataset_viewer/server.py"
       ],
       "port": 8800
+    },
+    {
+      "name": "skip-tester",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "utils/skip_tester/server.py"
+      ],
+      "port": 8810
     }
   ]
 }

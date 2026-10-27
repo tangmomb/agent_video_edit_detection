@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test du saut d'images</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --fg: #1c1c1e; --muted: #6e6e73; --line: #dedcd6; --soft: #efede8;
+  --sent: #2f5bd3; --sent-soft: #e2e9fb; --yes: #2f7d4f; --no: #8e8e93; --bad: #c0392b; --bad-soft: #f8dedb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --panel: #1d1d20; --fg: #ececee; --muted: #9a9aa1; --line: #33333a; --soft: #26262b;
+    --sent: #7d9cff; --sent-soft: #1f2a47; --yes: #5cc48a; --no: #9a9aa1; --bad: #ff7a6b; --bad-soft: #42211d;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+.muted { color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+select, button { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--fg); }
+select { max-width: 100%; min-width: 0; flex: 1 1 320px; }
+button { cursor: pointer; }
+.drop { border: 2px dashed var(--line); border-radius: 9px; padding: 8px 14px; color: var(--muted); font-size: 14px; cursor: pointer; }
+.drop.over { border-color: var(--sent); color: var(--fg); }
+input[type=range] { width: 220px; max-width: 100%; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
+.card { border: 3px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.card.sent { border-color: var(--sent); }
+.card.skip { opacity: .55; }
+.card.diff { border-color: var(--bad); opacity: 1; }
+.card img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
+.card .t { padding: 3px 6px; font-size: 12px; display: flex; justify-content: space-between; gap: 6px; font-variant-numeric: tabular-nums; }
+.err { color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Test du saut d'images</h1>
+  <p class="sub">Avant l'annotation, une image dont le cosinus CLIP avec la dernière image gardée dépasse le seuil n'est pas envoyée aux annotateurs (<code>frames.skip_refs</code>, seuil du pipeline <code id="pipe"></code>). Aucun appel payant.</p>
+
+  <section class="panel">
+    <div class="row">
+      <select id="video"><option value="">Choisis une vidéo…</option></select>
+      <label class="drop" id="drop">ou envoie une vidéo<input type="file" id="file" accept="video/*" hidden></label>
+    </div>
+    <div class="row" style="margin-top: 10px">
+      <label for="seuil">Seuil</label>
+      <input type="range" id="seuil" min="0.85" max="0.995" step="0.005">
+      <b id="seuil-v" style="font-variant-numeric: tabular-nums"></b>
+      <button id="reset">Seuil du pipeline</button>
+      <span id="status" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="all" hidden>
+    <h2 id="all-h"></h2>
+    <p class="sub" id="all-sub" style="margin: 0"></p>
+    <div class="grid" id="all-grid"></div>
+  </section>
+
+  <section class="panel" id="sent" hidden>
+    <h2 id="sent-h"></h2>
+    <p class="sub" style="margin: 0">Le chiffre sous chaque image est son cosinus avec l'image envoyée précédente : il est resté sous le seuil.</p>
+    <div class="grid" id="sent-grid"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let pipe = 0.87, data = null, titles = {};
+
+const pct = (a, b) => b ? `${(100 * a / b).toFixed(1)} %` : "–";
+const isDiff = (f) => !f.kept && f.label !== null && data.frames[f.ref].label !== null && f.label !== data.frames[f.ref].label;
+const seuil = () => Number($("seuil").value);
+
+function setSeuil(v) {
+  $("seuil").value = v;
+  $("seuil-v").textContent = Number(v).toFixed(3);
+}
+
+async function init() {
+  const r = await (await fetch("/api/videos")).json();
+  pipe = r.seuil_pipeline;
+  $("pipe").textContent = pipe;
+  setSeuil(pipe);
+  fillVideos(r.videos);
+}
+
+function fillVideos(list, select) {
+  const groups = { dataset: "Dataset (étiquettes connues)", envoyee: "Vidéos envoyées" };
+  $("video").innerHTML = '<option value="">Choisis une vidéo…</option>';
+  for (const kind of ["envoyee", "dataset"]) {
+    const items = list.filter((v) => v.kind === kind);
+    if (!items.length) continue;
+    const g = document.createElement("optgroup");
+    g.label = groups[kind];
+    for (const v of items) {
+      titles[v.id] = v.title || v.id;
+      const o = new Option(`${v.title || v.id}${v.channel ? " — " + v.channel : ""} (${Math.round(v.duration)} s)`, v.id);
+      g.append(o);
+    }
+    $("video").append(g);
+  }
+  if (select) $("video").value = select;
+}
+
+async function load() {
+  const id = $("video").value;
+  if (!id) return;
+  $("status").textContent = "Calcul…";
+  const r = await fetch(`/api/simulate?id=${encodeURIComponent(id)}&seuil=${seuil()}`);
+  const j = await r.json();
+  if (!r.ok) { $("status").innerHTML = `<span class="err">${j.error || r.status}</span>`; return; }
+  $("status").textContent = "";
+  data = j;
+  render();
+}
+
+function card(f, inAll) {
+  const cls = f.kept ? "sent" : isDiff(f) ? "skip diff" : "skip";
+  const right = !f.kept ? `≈ #${f.ref} · ${f.cos.toFixed(3)}` : f.cos === null ? "" : f.cos.toFixed(3);
+  const tip = !f.kept ? `sautée : cosinus ${f.cos} avec l'envoyée #${f.ref}` : "envoyée";
+  return `<div class="card ${inAll ? cls : ""}" title="${tip}"><img loading="lazy" src="${f.url}" alt="image ${f.i}">
+    <div class="t"><span>#${f.i}</span><span class="muted">${right}</span></div></div>`;
+}
+
+function render() {
+  const d = data, sk = d.images - d.envoyees;
+  $("all").hidden = $("sent").hidden = false;
+  $("all-h").textContent = `Toutes les images · ${d.images}`;
+  $("all-sub").textContent = "Bordure bleue : envoyée. Estompée : sautée, « ≈ #n » est l'envoyée qui la remplace et son cosinus avec elle."
+    + (d.etiquetee ? ` Bordure rouge : étiquette différente de celle de l'envoyée (${d.sautees_differentes} / ${d.sautees_comparables}).` : "");
+  $("all-grid").innerHTML = d.frames.map((f) => card(f, true)).join("");
+  $("sent-h").textContent = `Images envoyées aux annotateurs · ${d.envoyees} (${pct(sk, d.images)} sautées)`;
+  $("sent-grid").innerHTML = d.frames.filter((f) => f.kept).map((f) => card(f, false)).join("");
+}
+
+async function upload(file) {
+  $("status").textContent = `Envoi de ${file.name} et extraction des images…`;
+  const r = await fetch("/api/upload", { method: "POST", body: file, headers: { "X-Filename": encodeURIComponent(file.name) } });
+  const j = await r.json();
+  if (!r.ok) { $("status").innerHTML = `<span class="err">${j.error || r.status}</span>`; return; }
+  fillVideos((await (await fetch("/api/videos")).json()).videos, j.id);
+  $("status").textContent = "Calcul des embeddings CLIP…";
+  load();
+}
+
+$("video").onchange = load;
+let t = null;
+$("seuil").oninput = () => { setSeuil(seuil()); clearTimeout(t); t = setTimeout(load, 150); };
+$("reset").onclick = () => { setSeuil(pipe); load(); };
+$("file").onchange = () => $("file").files[0] && upload($("file").files[0]);
+const drop = $("drop");
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) upload(f); };
+init();
+</script>
+</body>
+</html>

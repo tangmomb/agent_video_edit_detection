@@ -11,7 +11,7 @@ Chaque ligne de index.jsonl :
   frame, sample_id, t, source (chaîne YouTube : le split se fait par chaîne, voir lab.make_split),
   label_any    : 1 / 0 si les trois LLM sont d'accord (ajout de montage ou image brute),
                  None en cas de désaccord ou d'image pas encore annotée (jamais utilisée pour
-                 entraîner ni mesurer, mais gardée pour la composante temporelle)
+                 entraîner ni mesurer)
   annotee      : au moins un vote reçu (False : image sautée comme quasi identique, ou en attente)
 """
 
@@ -29,11 +29,13 @@ FPS = 1.0  # frames extraites par seconde de vidéo
 LONG_SIDE = 640
 WORKERS = 8  # images annotées en parallèle
 # Cosinus CLIP (clip_b32, image entière) au-delà duquel une image est jugée identique à la dernière
-# annotée de la vidéo et sautée. Mesuré sur 7 144 images (26/10/2026) en comparant à l'image
-# précédente : 0.97 saute 27 % des images et 1 % des 230 changements d'étiquette (apparition ou
-# disparition d'un ajout) ; 0.95 en sautait 43 %, mais 4 % des changements.
-SKIP_SIMILAR = 0.97
-SKIPPED_SHARE = 0.27  # part des images sautées à ce seuil : estimation du coût d'une vidéo
+# annotée de la vidéo et sautée. Mesuré avec skip_refs sur les 7 144 images du dataset (27/10/2026) :
+# 0.87 saute 69 % des images, mais 20 % des 230 changements d'étiquette (apparition ou disparition
+# d'un ajout) tombent sur une image sautée et 2,5 % des images sautées ont une autre étiquette que
+# leur référence ; 0.97 n'en sautait que 24 %, pour 1 % des changements et 0,1 % des étiquettes.
+# Choisi à l'œil dans utils/skip_tester : à 0.97, trop d'images quasi identiques partaient encore.
+SKIP_SIMILAR = 0.87
+SKIPPED_SHARE = 0.69  # part des images sautées à ce seuil : estimation du coût d'une vidéo
 
 
 def source_key(meta: dict) -> str:
@@ -107,13 +109,26 @@ def missing(votes: dict, frame: str) -> list[str]:
     return [m for m in annotators.ANNOTATORS if m not in got]
 
 
-def to_annotate(sdir: Path, out_dir: Path = FRAMES_DIR, votes: dict | None = None) -> list[Path]:
-    """Images de la vidéo à annoter : chacune est comparée à la dernière image gardée (déjà votée ou
-    retenue) et sautée si leur cosinus CLIP dépasse SKIP_SIMILAR. Comparer à la dernière gardée, et
-    non à la précédente, rattrape une lente dérive. Embeddings calculés au besoin (mis en cache,
-    réutilisés à l'entraînement)."""
+def skip_refs(X, voted: list[bool] | None = None, threshold: float = SKIP_SIMILAR) -> list[int]:
+    """Pour chaque image (embeddings CLIP X dans l'ordre de la vidéo), l'image gardée à laquelle elle
+    a été comparée : elle-même si elle est gardée, sinon la dernière gardée avant elle, dont le
+    cosinus dépassait threshold. Une image déjà votée est toujours gardée. Comparer à la dernière
+    gardée, et non à la précédente, rattrape une lente dérive."""
     import numpy as np
 
+    X = X / np.linalg.norm(X, axis=1, keepdims=True)
+    refs, ref = [], None
+    for i, x in enumerate(X):
+        if (voted and voted[i]) or ref is None or float(x @ X[ref]) <= threshold:
+            ref = i
+        refs.append(ref)
+    return refs
+
+
+def to_annotate(sdir: Path, out_dir: Path = FRAMES_DIR, votes: dict | None = None) -> list[Path]:
+    """Images de la vidéo à annoter (skip_refs) : sans celles dont le cosinus CLIP avec la dernière
+    image gardée dépasse SKIP_SIMILAR. Embeddings calculés au besoin (mis en cache, réutilisés à
+    l'entraînement)."""
     from .features import get_features
 
     frames = frames_of(sdir, out_dir)
@@ -122,13 +137,8 @@ def to_annotate(sdir: Path, out_dir: Path = FRAMES_DIR, votes: dict | None = Non
     votes = votes if votes is not None else load_votes(sdir)
     sid = load_meta(sdir)["sample_id"]
     X = get_features([{"sample_id": sid, "frame": f.name} for f in frames], "clip_b32", "full", Path(out_dir))
-    X /= np.linalg.norm(X, axis=1, keepdims=True)
-    keep, ref = [], None
-    for f, x in zip(frames, X):
-        if votes["frames"].get(f.name, {}).get("votes") or ref is None or float(x @ ref) <= SKIP_SIMILAR:
-            keep.append(f)
-            ref = x
-    return keep
+    refs = skip_refs(X, [bool(votes["frames"].get(f.name, {}).get("votes")) for f in frames])
+    return [f for i, f in enumerate(frames) if refs[i] == i]
 
 
 def pending(sdir: Path, out_dir: Path = FRAMES_DIR) -> list[Path]:

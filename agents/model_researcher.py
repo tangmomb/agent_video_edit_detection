@@ -10,8 +10,8 @@ SYSTEM = CONTEXT + """
 
 Ton rôle : Model Researcher. Tu constitues les splits dev/test (make_split) et tu mènes les \
 expériences demandées par l'orchestrateur : choix des embeddings figés (CLIP seul, DINOv2 seul ou \
-les deux concaténés ; image entière ou quadrants), du classifieur et de ses hyperparamètres, de \
-l'information temporelle, du rééchantillonnage des images d'entraînement (balance : retirer ou dupliquer des \
+les deux concaténés ; image entière ou quadrants), du classifieur et de ses hyperparamètres, du \
+rééchantillonnage des images d'entraînement (balance : retirer ou dupliquer des \
 images d'un groupe) et de la pondération de la perte (weights : faire peser davantage un groupe \
 difficile, par exemple les images brutes que le modèle prend pour des ajouts). Le seuil est choisi par le code sur \
 val (meilleur rappel à 95 % de précision, choisi prudemment) : pondérer toutes les images positives ou négatives revient \
@@ -102,9 +102,6 @@ def make(lab: Lab) -> Agent:
                         "model": {"type": "string", "enum": list(MODELS),
                                   "description": "logreg (régression logistique) ou mlp (petit réseau de "
                                                  "neurones) : quelques secondes chacun."},
-                        "temporal": {"type": "string", "enum": ["none", "diff"],
-                                     "description": "diff ajoute e_t - e_(t-1) (changement depuis l'image "
-                                                    "précédente)."},
                         "params": {"type": "object",
                                    "description": "logreg: C ; mlp: hidden (liste), alpha ; "
                                                   "tous: pca (int)."},

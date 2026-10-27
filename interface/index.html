@@ -178,7 +178,7 @@ fetch("/api/model").then((r) => r.json()).then((m) => {
   model = m;
   threshold = m.threshold;
   const test = m.test ? ` · test : précision <b>${pct(m.test.precision)}</b>, rappel <b>${pct(m.test.recall)}</b>` : "";
-  $("model").innerHTML = `modèle <b>${m.experiment_id}</b> · ${m.features.join(" + ")}${m.temporal === "diff" ? " + diff" : ""}`
+  $("model").innerHTML = `modèle <b>${m.experiment_id}</b> · ${m.features.join(" + ")}`
     + ` · ${m.model} · seuil <b>${m.threshold.toFixed(3)}</b> (précision visée ${pct(m.precision_visee)})${test} · ${m.device}`;
 }).catch(() => { $("model").textContent = "serveur injoignable"; });
 

@@ -4,7 +4,7 @@
 
 Sans --exp, utilise le modèle désigné dans model_results/production.json (et son seuil). La vidéo
 est traitée exactement comme à l'entraînement : frames à FPS par seconde (frames.extract), mêmes
-embeddings (features), même composante temporelle (lab._X), même classifieur.
+embeddings (features, lab._X), même classifieur.
 Fichiers de travail dans interface/_jobs/<id>/ (frames + résultat), effaçables à tout moment.
 
 Une vidéo peut ensuite être annotée par les trois LLM annotateurs du dataset (bouton de la page,
@@ -77,7 +77,7 @@ class Model:
     def info(self) -> dict:
         ft = (self.final_test or {}).get("test")
         return {"experiment_id": self.exp_id, "features": self.config["features"],
-                "model": self.config["model"], "temporal": self.config["temporal"],
+                "model": self.config["model"],
                 "split_id": self.config.get("split_id"), "threshold": self.threshold,
                 "precision_visee": self.precision, "device": DEVICE,
                 "test": {k: ft[k] for k in ("precision", "recall")} if ft else None}
@@ -86,9 +86,6 @@ class Model:
         with torch.inference_mode():
             X = np.concatenate([embed_images(frames, ext, view or "full", batch_size=32)
                                 for ext, _, view in (s.partition(":") for s in self.config["features"])], axis=1)
-        if self.config["temporal"] == "diff":  # comme lab._X : la 1re frame n'a pas de précédente (0)
-            X_prev = np.vstack([np.zeros_like(X[:1]), X[:-1]])
-            X = np.concatenate([X, X - X_prev], axis=1)
         return self.clf.predict_proba(X)[:, 1]
 
 
