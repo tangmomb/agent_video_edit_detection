@@ -42,15 +42,11 @@ QUERIES = [
 ]
 
 
-def _channels() -> set[str]:
-    return {youtube.load_meta(p.parent).get("channel_id") for p in SAMPLES_DIR.glob("yt_*/meta.json")}
-
-
 def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run: bool = False,
             wait: bool = True, download_pause: tuple[float, float] = youtube.DOWNLOAD_PAUSE,
             direct: bool = False, only: str | None = None,
             queries: list[tuple[str, str]] | None = None) -> dict:
-    avoid = _channels()
+    avoid = youtube.channels()
     got: list[tuple[str, str | None, object]] = []  # (requête, orientation, dossier ou info)
     asked: dict[tuple, int] = {}
     errors, est, cost = [], 0.0, 0.0

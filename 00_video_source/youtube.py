@@ -143,12 +143,21 @@ def download(info: dict, query: str | None, samples_dir: Path = SAMPLES_DIR) -> 
     return out
 
 
-def collect(query: str, n: int, orientation: str | None = None, samples_dir: Path = SAMPLES_DIR) -> dict:
-    """Cherche et télécharge jusqu'à n nouvelles vidéos ; renvoie les dossiers obtenus et les erreurs."""
-    found = search(query, n, orientation)
+def channels(samples_dir: Path = SAMPLES_DIR) -> set[str]:
+    """Chaînes des vidéos déjà collectées."""
+    return {load_meta(p.parent).get("channel_id") for p in Path(samples_dir).glob("yt_*/meta.json")}
+
+
+def collect(query: str, n: int, orientation: str | None = None, samples_dir: Path = SAMPLES_DIR,
+            avoid_channels: set[str] | None = None) -> dict:
+    """Cherche et télécharge jusqu'à n nouvelles vidéos ; renvoie les dossiers obtenus et les erreurs.
+    avoid_channels : comme pour search (complété au fil de la recherche : une vidéo par chaîne)."""
+    found = search(query, n, orientation, avoid_channels=avoid_channels)
     if not found:
         raise NoVideoFound(f"aucune nouvelle vidéo YouTube pour « {query} »"
-                           + (f" ({orientation})" if orientation else "") + " : change de requête")
+                           + (f" ({orientation})" if orientation else "")
+                           + (" hors des chaînes déjà présentes" if avoid_channels is not None else "")
+                           + " : change de requête")
     dirs, errors = [], []
     for i, info in enumerate(found):
         time.sleep(random.uniform(*(DOWNLOAD_PAUSE if i else REQUEST_PAUSE)))  # après la recherche, puis entre deux

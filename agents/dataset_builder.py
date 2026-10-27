@@ -18,8 +18,8 @@ autant que des images avec ajout.
 Méthode : commence par dataset_info (composition globale, chaînes ayant plusieurs vidéos, budgets) \
 et l'historique des collectes, puis collecte exactement ce qui est demandé (volume, thèmes, \
 orientation) sans dépasser les budgets. Préfère plusieurs petites collectes ciblées à une grosse \
-générique, et comble en priorité les cas rares. Une vidéo n'est jamais reprise : une requête déjà \
-très exploitée (voir data_requested_history) finit par ne plus rien donner, et l'erreur « aucune \
+générique, et comble en priorité les cas rares. Une vidéo n'est jamais reprise, et une collecte ne \
+garde qu'une vidéo par chaîne absente du dataset : une requête déjà très exploitée (voir data_requested_history) finit par ne plus rien donner, et l'erreur « aucune \
 nouvelle vidéo YouTube » signifie qu'il faut changer de requête ou d'orientation. La requête \
 (query) est une recherche YouTube : quelques mots-clés (« recette pâtes rapide », « vlog voyage \
 japon »), qui fixent le thème et donc, indirectement, le style de montage. Chaque image collectée \
@@ -49,7 +49,8 @@ def make(lab: Lab) -> Agent:
             ),
             Tool(
                 name="generate_data",
-                description="Collecte de nouvelles vraies vidéos YouTube (jamais prises, 5 min au plus) "
+                description="Collecte de nouvelles vraies vidéos YouTube (jamais prises, 5 min au plus, une "
+                            "seule par chaîne absente du dataset) "
                             "pour une recherche, les ajoute au dataset, extrait leurs images (1 par seconde) "
                             "et les fait annoter par trois LLM, en batch ou en appels directs selon la "
                             "session (une image n'est étiquetée que s'ils sont d'accord ; les images presque "
