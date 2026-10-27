@@ -410,20 +410,18 @@ class Lab:
             return {"dataset_vide": True, "budgets": budgets,
                     "message": "Aucune vidéo : le dataset est à constituer (generate_data)."}
         sids = sorted({r["sample_id"] for r in rows})
-        info = {"fps": FPS, "dataset": self._composition(set(sids)), "budgets": budgets}
+        info = {"dataset": self._composition(set(sids)), "budgets": budgets}
         if split_id:
             m = self._split_map(split_id)
             info["composition_du_split"] = {
                 "split_id": split_id,
                 **{s: self._composition({k for k, v in m.items() if v == s}, with_positives=s != "test")
                    for s in SPLITS}}
+        # Plusieurs vidéos d'une même chaîne partagent son habillage : elles diversifient peu.
         chains = Counter(source_key(self._ann(s)) for s in sids)
-        info["diversite"] = {
-            "chaines_distinctes": len(chains), "videos": len(sids),
-            "moyenne_videos_par_chaine": round(len(sids) / len(chains), 2) if chains else 0,
-            # Plusieurs vidéos d'une même chaîne partagent son habillage : elles diversifient peu.
-            "videos_par_chaine_la_plus_representee": dict(chains.most_common(5)),
-        }
+        several = {c: n for c, n in chains.most_common() if n >= 2}
+        if several:
+            info["dataset"]["chaines_avec_plusieurs_videos"] = several
         return _jsonable(info)
 
     def generate_data(self, n: int, reason: str, query: str, orientation: str | None = None) -> dict:

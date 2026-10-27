@@ -46,11 +46,18 @@ refusée en changeant seulement ses paramètres.
 que rien d'autre n'a été fait."""
 
 
-# Ce que chaque agent lit de dataset_info : le Dataset Builder la diversité et les budgets de
-# collecte, le Model Researcher la composition d'un split (les extracteurs sont listés dans
-# la description de train_model).
-DATASET_INFO_KEYS = {"dataset_builder": ("dataset", "diversite", "budgets"),
-                     "model_researcher": ("fps", "dataset", "composition_du_split")}
+# Ce que chaque agent lit de dataset_info : le Dataset Builder les budgets de collecte, le Model
+# Researcher la composition d'un split (les extracteurs sont listés dans la description de
+# train_model).
+DATASET_INFO_KEYS = {"dataset_builder": ("dataset", "budgets"),
+                     "model_researcher": ("dataset", "composition_du_split")}
+# Comptes d'images qui ne décident de rien pour un agent : toutes les images extraites, et celles
+# jamais annotées (sautées comme quasi identiques, voulu) ; restent dans dataset_info pour la CLI.
+HIDDEN_COUNTS = ("images_extraites", "images_non_annotees")
+
+
+def _visible(composition: dict) -> dict:
+    return {k: v for k, v in composition.items() if k not in HIDDEN_COUNTS}
 
 
 def dataset_info_tool(lab: Lab, agent: str) -> Tool:
@@ -66,22 +73,23 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
         if info.get("dataset_vide"):
             return info
         out = {k: info[k] for k in keys if k in info}
-        # images sautées comme quasi identiques (voulu) : rien à en faire pour un agent
-        out["dataset"] = {k: v for k, v in out["dataset"].items() if k != "images_non_annotees"}
+        out["dataset"] = _visible(out["dataset"])
+        if "composition_du_split" in out:
+            out["composition_du_split"] = {k: _visible(v) if isinstance(v, dict) else v
+                                           for k, v in out["composition_du_split"].items()}
         if "budgets" in out:
             out["budgets"] = {k: v for k, v in out["budgets"].items() if k != "final_tests_restants"}
         return out
 
-    contenu = (", diversité (chaînes les plus représentées), budgets restants (vidéos, "
+    contenu = (", budgets restants (vidéos, "
                "annotation en $ et nombre estimé de vidéos qu'elle permet d'annoter)" if agent == "dataset_builder" else
                " ; avec split_id, la même composition pour dev et test")
     return Tool(
         name="dataset_info",
-        description="État du dataset : composition globale (chaînes YouTube, vidéos, images extraites, "
-                    "images étiquetées, sans étiquette faute d'accord des annotateurs et non annotées (quasi identiques à "
-                    "la précédente annotée), pourcentage "
+        description="État du dataset : composition globale (chaînes YouTube, vidéos, images "
+                    "étiquetées et sans étiquette faute d'accord des annotateurs, pourcentage "
                     "d'images avec ajout, vidéos sans aucun ajout, répartition des vidéos par "
-                    "orientation)"
+                    "orientation, chaînes ayant plusieurs vidéos)"
                     + contenu + ".",
         input_schema={"type": "object", "properties": props},
         fn=fn,

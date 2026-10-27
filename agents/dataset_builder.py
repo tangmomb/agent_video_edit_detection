@@ -15,7 +15,7 @@ varié : beaucoup de chaînes différentes, des styles de montage variés (vidé
 sous-titrées, sobres), des vidéos portrait (Shorts) et paysage, et des images brutes de caméra \
 autant que des images avec ajout.
 
-Méthode : commence par dataset_info (composition globale, chaînes les plus représentées, budgets) \
+Méthode : commence par dataset_info (composition globale, chaînes ayant plusieurs vidéos, budgets) \
 et l'historique des collectes, puis collecte exactement ce qui est demandé (volume, thèmes, \
 orientation) sans dépasser les budgets. Préfère plusieurs petites collectes ciblées à une grosse \
 générique, et comble en priorité les cas rares. Une vidéo n'est jamais reprise : une requête déjà \
