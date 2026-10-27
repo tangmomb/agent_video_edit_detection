@@ -36,6 +36,7 @@ WORKERS = 8  # images annotées en parallèle
 # Choisi à l'œil dans utils/skip_tester : à 0.97, trop d'images quasi identiques partaient encore.
 SKIP_SIMILAR = 0.87
 SKIPPED_SHARE = 0.69  # part des images sautées à ce seuil : estimation du coût d'une vidéo
+SKIP_FEATURES = ("clip_b32", "full")  # embeddings comparés : calculés pour toutes les images
 
 
 def source_key(meta: dict) -> str:
@@ -136,7 +137,7 @@ def to_annotate(sdir: Path, out_dir: Path = FRAMES_DIR, votes: dict | None = Non
         return []
     votes = votes if votes is not None else load_votes(sdir)
     sid = load_meta(sdir)["sample_id"]
-    X = get_features([{"sample_id": sid, "frame": f.name} for f in frames], "clip_b32", "full", Path(out_dir))
+    X = get_features([{"sample_id": sid, "frame": f.name} for f in frames], *SKIP_FEATURES, Path(out_dir))
     refs = skip_refs(X, [bool(votes["frames"].get(f.name, {}).get("votes")) for f in frames])
     return [f for i, f in enumerate(frames) if refs[i] == i]
 

@@ -336,9 +336,15 @@ class Lab:
 
     def _X(self, features: list[str]) -> tuple[np.ndarray, float]:
         mats, ms = [], 0.0
+        # seules les images étiquetées servent (_idx) : les autres restent à 0, sans calcul
+        labeled = [i for i, r in enumerate(self.rows) if r["label_any"] is not None]
         for spec in features:
             ext, _, view = spec.partition(":")
-            mats.append(get_features(self.rows, ext, view or "full"))
+            feats = get_features([self.rows[i] for i in labeled], ext, view or "full")
+            X = np.zeros((len(self.rows), 0 if feats is None else feats.shape[1]), dtype=np.float32)
+            if feats is not None:
+                X[labeled] = feats
+            mats.append(X)
             ms += extraction_cost(ext, view or "full") or 0.0
         X = np.concatenate(mats, axis=1)
         return X, ms

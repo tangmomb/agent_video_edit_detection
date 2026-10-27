@@ -97,7 +97,10 @@ def _cache_dir(frames_dir: Path, extractor: str, view: str) -> Path:
 
 def get_features(rows: list[dict], extractor: str, view: str = "full",
                  frames_dir: Path = FRAMES_DIR, batch_size: int = 64) -> np.ndarray:
-    """Matrice (len(rows), dim) alignée sur rows ; calcule seulement les échantillons manquants."""
+    """Matrice (len(rows), dim) alignée sur rows. Cache : un fichier par vidéo, une ligne par image
+    (frame i -> ligne i - 1), NaN pour une image jamais demandée ; seules les images demandées et
+    absentes du cache sont calculées (en pratique les images étiquetées, sauf pour le saut d'images,
+    qui demande toute la vidéo en clip_b32:full)."""
     if extractor not in EXTRACTORS or view not in VIEWS:
         raise ValueError(f"extracteur/vue inconnus : {extractor}/{view}")
     cdir = _cache_dir(frames_dir, extractor, view)
@@ -106,28 +109,32 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
     for i, r in enumerate(rows):
         by_sample[r["sample_id"]].append(i)
 
-    missing = [s for s in by_sample if not (cdir / f"{s}.npy").exists()]
-    if missing:
-        t0, n_frames = time.time(), 0
-        with torch.inference_mode():
-            for s in missing:
-                frames = sorted((Path(frames_dir) / "img" / s).glob("*.jpg"))
-                np.save(cdir / f"{s}.npy", embed_images(frames, extractor, view, batch_size))
-                n_frames += len(frames)
-        if n_frames:
-            meta = {"ms_per_frame": round(1000 * (time.time() - t0) / n_frames, 2),
-                    "device": "cuda" if torch.cuda.is_available() else "cpu"}
-            (cdir / "meta.json").write_text(json.dumps(meta))
-
-    dim = None
-    out = None
+    t0, n_frames, out = time.time(), 0, None
     for s, idxs in by_sample.items():
-        arr = np.load(cdir / f"{s}.npy")
-        if out is None:
-            dim = arr.shape[1]
-            out = np.zeros((len(rows), dim), dtype=np.float32)
+        path = cdir / f"{s}.npy"
+        arr = np.load(path) if path.exists() else None
         frame_ids = [int(Path(rows[i]["frame"]).stem) - 1 for i in idxs]
+        todo = sorted({k for k in frame_ids if arr is None or np.isnan(arr[k, 0])})
+        if todo:
+            frames = sorted((Path(frames_dir) / "img" / s).glob("*.jpg"))
+            with torch.inference_mode():
+                emb = embed_images([frames[k] for k in todo], extractor, view, batch_size)
+            if arr is None:
+                arr = np.full((len(frames), emb.shape[1]), np.nan, dtype=np.float32)
+            arr[todo] = emb
+            # fichier neuf puis remplacement : jamais de cache à moitié écrit, et un cache lié
+            # (hard link d'un banc) n'est pas modifié à la source
+            tmp = path.with_suffix(".tmp.npy")
+            np.save(tmp, arr)
+            tmp.replace(path)
+            n_frames += len(todo)
+        if out is None:
+            out = np.zeros((len(rows), arr.shape[1]), dtype=np.float32)
         out[idxs] = arr[frame_ids]
+    if n_frames:
+        meta = {"ms_per_frame": round(1000 * (time.time() - t0) / n_frames, 2),
+                "device": "cuda" if torch.cuda.is_available() else "cpu"}
+        (cdir / "meta.json").write_text(json.dumps(meta))
     return out
 
 
@@ -138,21 +145,21 @@ def extraction_cost(extractor: str, view: str, frames_dir: Path = FRAMES_DIR) ->
 
 def precompute(extractors: list[str] | None = None, views: list[str] | None = None,
                frames_dir: Path = FRAMES_DIR) -> list[dict]:
-    """Calcule d'avance les embeddings de toutes les vidéos de l'index, pour chaque extracteur et
-    vue (par défaut tous ceux proposés à l'agent), afin que train_model n'ait plus qu'à les relire.
-    Seules les vidéos absentes du cache sont calculées."""
-    from .frames import load_index
+    """Calcule d'avance les embeddings des images étiquetées (les seules qui servent à entraîner et
+    mesurer) pour chaque extracteur et vue (par défaut tous ceux proposés à l'agent), afin que
+    train_model n'ait plus qu'à les relire ; celui du saut d'images (SKIP_FEATURES) couvre toutes
+    les images. Seules les images absentes du cache sont calculées."""
+    from .frames import SKIP_FEATURES, load_index
 
     rows = load_index(frames_dir)
-    samples = {r["sample_id"] for r in rows}
+    labeled = [r for r in rows if r["label_any"] is not None]
     out = []
     for ext in extractors or list(EXTRACTORS):
         for view in views or list(VIEWS):
-            cdir = _cache_dir(frames_dir, ext, view)
-            todo = sum(not (cdir / f"{s}.npy").exists() for s in samples)
+            want = rows if (ext, view) == SKIP_FEATURES else labeled
+            print(f"[features] {ext}:{view} : {len(want)} images…", flush=True)
             t0 = time.time()
-            print(f"[features] {ext}:{view} : {todo} vidéo(s) sur {len(samples)} à calculer…", flush=True)
-            get_features(rows, ext, view, frames_dir)
-            out.append({"embeddings": f"{ext}:{view}", "videos_calculees": todo,
-                        "duree_s": round(time.time() - t0, 1), "ms_par_image": extraction_cost(ext, view, frames_dir)})
+            get_features(want, ext, view, frames_dir)
+            out.append({"embeddings": f"{ext}:{view}", "images": len(want), "duree_s": round(time.time() - t0, 1),
+                        "ms_par_image": extraction_cost(ext, view, frames_dir)})
     return out
