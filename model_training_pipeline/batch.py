@@ -9,7 +9,9 @@ votes reçus sont fusionnés dans votes.json comme ceux de frames.annotate.
     python -m model_training_pipeline batch collect      # récupère les batchs finis, puis reconstruit l'index
 
 Suivi des batchs envoyés dans data/batches.json : une image déjà envoyée n'est pas renvoyée tant que
-son batch n'est pas récupéré. Une requête en échec (refusée, expirée) est renvoyée au submit suivant.
+son batch n'est pas récupéré. Un batch récupéré en sort : il n'en reste que le total des requêtes et
+de leur coût réel par modèle (cout_mesure), qui sert aux estimations. Une requête en échec (refusée,
+expirée) est renvoyée au submit suivant.
 Effort de raisonnement de chaque modèle : annotators.reasoning.
 """
 
@@ -36,7 +38,22 @@ OUT_PER_IMAGE = 15 + 150
 
 
 def _load() -> dict:
-    return json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {"jobs": []}
+    """{"jobs": batchs envoyés pas encore récupérés, "cout_mesure": {modèle: {"requetes", "usd"}}}."""
+    state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
+    state.setdefault("jobs", [])
+    state.setdefault("cout_mesure", {})
+    for j in [j for j in state["jobs"] if j.get("collected")]:  # ancien format : batchs gardés
+        _fold(state, j)
+    state["jobs"] = [j for j in state["jobs"] if not j.get("collected")]
+    return state
+
+
+def _fold(state: dict, job: dict) -> None:
+    """Ajoute un batch récupéré au coût mesuré de son modèle (sauf coût nul : rien de mesuré)."""
+    if job.get("cost_usd"):
+        m = state["cout_mesure"].setdefault(job["model"], {"requetes": 0, "usd": 0.0})
+        m["requetes"] += job["requests"]
+        m["usd"] = round(m["usd"] + job["cost_usd"], 5)
 
 
 def _save(state: dict) -> None:
@@ -51,7 +68,7 @@ def _cid(sdir: Path, frame: Path) -> str:
 def _todo(state: dict, samples: list[Path] | None = None) -> dict[str, list[tuple[Path, Path]]]:
     """{modèle: [(dossier vidéo, image)]} : votes manquants (de toutes les vidéos, ou de samples),
     hors requêtes d'un batch en cours."""
-    in_flight = {(j["model"], c) for j in state["jobs"] if not j.get("collected") for c in j["custom_ids"]}
+    in_flight = {(j["model"], c) for j in state["jobs"] for c in j["custom_ids"]}
     out = defaultdict(list)
     for sdir in sorted(SAMPLES_DIR.glob("yt_*")) if samples is None else [Path(d) for d in samples]:
         if not (sdir / "meta.json").exists():
@@ -66,9 +83,8 @@ def _todo(state: dict, samples: list[Path] | None = None) -> dict[str, list[tupl
 
 def _measured(model: str, state: dict) -> float | None:
     """Coût réel moyen d'une requête du modèle (tarif batch), sur ses batchs déjà récupérés."""
-    done = [j for j in state["jobs"] if j["model"] == model and j.get("collected") and j.get("cost_usd")]
-    n = sum(j["requests"] for j in done)
-    return sum(j["cost_usd"] for j in done) / n if n else None
+    m = state["cout_mesure"].get(model)
+    return m["usd"] / m["requetes"] if m and m["requetes"] else None
 
 
 def _estimate(model: str, items: list[tuple[Path, Path]], state: dict | None = None) -> float:
@@ -169,9 +185,8 @@ def status(apis: dict | None = None, job_ids: set[str] | None = None) -> list[di
     for j in state["jobs"]:
         if job_ids is not None and j["job_id"] not in job_ids:
             continue
-        if not j.get("collected"):
-            api = apis.setdefault(j["provider"], annotators.client(j["provider"]))
-            j["status"] = str(_job(j["provider"], api, j["job_id"]).status)
+        api = apis.setdefault(j["provider"], annotators.client(j["provider"]))
+        j["status"] = str(_job(j["provider"], api, j["job_id"]).status)
         out.append({k: j.get(k) for k in ("model", "job_id", "requests", "submitted", "status", "collected")})
     _save(state)
     return out
@@ -179,7 +194,7 @@ def status(apis: dict | None = None, job_ids: set[str] | None = None) -> list[di
 
 def in_flight(job_ids: set[str] | None = None) -> list[dict]:
     """Batchs envoyés pas encore récupérés (tous, ou parmi job_ids)."""
-    return [j for j in _load()["jobs"] if not j.get("collected") and (job_ids is None or j["job_id"] in job_ids)]
+    return [j for j in _load()["jobs"] if job_ids is None or j["job_id"] in job_ids]
 
 
 def wait(job_ids: set[str], every_s: float = 180, apis: dict | None = None) -> None:
@@ -217,15 +232,15 @@ def _timing(job) -> dict:
 
 
 def collect(apis: dict | None = None, job_ids: set[str] | None = None) -> dict:
-    """Récupère les batchs terminés (tous, ou parmi job_ids), fusionne leurs votes dans votes.json et
-    reconstruit l'index."""
+    """Récupère les batchs terminés (tous, ou parmi job_ids), fusionne leurs votes dans votes.json,
+    les retire de batches.json (seul leur coût reste, dans cout_mesure) et reconstruit l'index."""
     state = _load()
     apis = apis if apis is not None else {}
     report = {"batchs_recuperes": 0, "votes": 0, "echecs": Counter(), "cost_usd": 0.0, "en_cours": 0,
-              "jobs": {}}  # jobs : coût réel de chaque batch récupéré
+              "jobs": {}}  # jobs : coût réel et durée de chaque batch récupéré
     by_video: dict[str, dict] = {}
     for j in state["jobs"]:
-        if j.get("collected") or (job_ids is not None and j["job_id"] not in job_ids):
+        if job_ids is not None and j["job_id"] not in job_ids:
             continue
         api = apis.setdefault(j["provider"], annotators.client(j["provider"]))
         job = _job(j["provider"], api, j["job_id"])
@@ -253,13 +268,14 @@ def collect(apis: dict | None = None, job_ids: set[str] | None = None) -> dict:
             job_cost += usd
         j["collected"] = True
         j["cost_usd"] = round(job_cost, 5)
-        j.update(_timing(job))
+        _fold(state, j)
         report["cost_usd"] += job_cost
         report["batchs_recuperes"] += 1
-        report["jobs"][j["job_id"]] = job_cost
+        report["jobs"][j["job_id"]] = {"model": j["model"], "cost_usd": j["cost_usd"], **_timing(job)}
     for sid, votes in by_video.items():
         frames.save_votes(SAMPLES_DIR / sid, votes)
-    _save(state)  # votes écrits d'abord : un batch marqué récupéré a toujours ses votes sur disque
+    state["jobs"] = [j for j in state["jobs"] if not j.get("collected")]
+    _save(state)  # votes écrits d'abord : un batch retiré a toujours ses votes sur disque
     if report["batchs_recuperes"]:
         frames.build()
     report["cost_usd"] = round(report["cost_usd"], 4)
