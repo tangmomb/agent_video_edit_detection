@@ -14,6 +14,9 @@ def main() -> None:
     bt.add_argument("action", choices=["estimate", "submit", "status", "collect"])
     bt.add_argument("--max-usd", type=float, help="submit : plafond du coût estimé")
     sub.add_parser("info", help="état du dataset (outil dataset_info de l'agent)")
+    ex = sub.add_parser("exclude", help="retire une vidéo défectueuse (cassée, doublon) des splits créés ensuite")
+    ex.add_argument("sample_id", help="dossier de la vidéo, ex. yt_eT0O3wigEEA")
+    ex.add_argument("raison", help="défaut constaté sur la vidéo elle-même, jamais une erreur de modèle")
     c = sub.add_parser("collect", help="collecte directe de vidéos variées puis annotation en batch (payant)")
     c.add_argument("--target", type=int, default=50, help="vidéos à collecter")
     c.add_argument("--per-query", type=int, default=2, help="vidéos au plus par requête")
@@ -72,6 +75,11 @@ def main() -> None:
 
         from .lab import Lab
         print(json.dumps(Lab().dataset_info(), indent=2, ensure_ascii=False))
+    elif args.cmd == "exclude":
+        import json
+
+        from .lab import Lab
+        print(json.dumps(Lab().exclude_clips({args.sample_id: args.raison}), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

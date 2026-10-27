@@ -23,15 +23,10 @@ dataset (dataset_info), jamais des erreurs d'un \
 modèle. Crée un split quand aucun n'existe ou quand le dataset a nettement grossi \
 (clips_hors_split) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
 raison précise. Le test est figé au premier split : les suivants mettent tout le reste en dev \
-(nouvelles vidéos comprises), et seul exclude_clips retire un clip des splits. Ne refais jamais \
+(nouvelles vidéos comprises). Ne refais jamais \
 un split pour améliorer un score val : les plis de validation suivent la graine du split, et un \
 découpage choisi pour être facile ne mesure plus rien. \
 Vérifie la composition de dev et test (dataset_info avec split_id) avant d'entraîner.
-
-Exclusions : exclude_clips retire un clip des splits créés ensuite ; les splits existants ne \
-changent pas, il faut donc un nouveau split pour qu'elle compte. Ne l'utilise que pour un défaut du clip lui-même (vidéo cassée, doublon), jamais parce qu'un modèle \
-s'y trompe : les cas où le modèle échoue sont précisément ceux qu'il faut garder, et retirer un \
-clip difficile de dev fausse la mesure. Justifie chaque exclusion dans ton rapport.
 
 Méthode : consulte l'historique pour ne pas refaire une expérience existante. Formule une hypothèse \
 par expérience (champ note : l'hypothèse seule, en une phrase, sans recopier la config ni le split, \
@@ -131,21 +126,6 @@ def make(lab: Lab) -> Agent:
                     "required": ["embeddings", "split_id"],
                 },
                 fn=lab.train_model,
-            ),
-            Tool(
-                name="exclude_clips",
-                description="Retire des clips des splits créés ensuite (make_split), sans supprimer de "
-                            "fichier ; les splits existants ne changent pas. Réservé aux vidéos défectueuses "
-                            "ou dupliquées.",
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "clips": {"type": "object", "additionalProperties": {"type": "string"},
-                                  "description": "{sample_id: raison du défaut}"},
-                    },
-                    "required": ["clips"],
-                },
-                fn=lab.exclude_clips,
             ),
         ],
     )
