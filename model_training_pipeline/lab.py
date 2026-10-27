@@ -45,7 +45,7 @@ from video_source.config import DATA_DIR, LAB_DIR, SAMPLES_DIR
 
 from . import batch, metrics
 from .features import embed_images, extraction_cost, get_features
-from .frames import FPS, FRAMES_DIR, SKIPPED_SHARE, annotate, build, load_index, source_key
+from .frames import FPS, FRAMES_DIR, SKIPPED_SHARE, annotate, build, load_index, source_key, to_annotate
 
 EXP_DIR = LAB_DIR / "model_results"
 DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
@@ -489,9 +489,11 @@ class Lab:
         return _jsonable({
             "videos_collectees": len(got["dirs"]),  # autant de chaînes nouvelles (une vidéo chacune)
             "echecs": len(errors), "exemples_erreurs": errors[:3], "arret": stopped,
-            # sans les images sautées comme quasi identiques (frames.to_annotate)
-            "images_envoyees_en_annotation": sum(r.get("annotee", True) for r in mine),
-            "images_etiquetees": sum(r["label_any"] is not None for r in mine),
+            # images des vidéos collectées : toutes, celles retenues pour l'annotation (sans les
+            # quasi identiques, frames.to_annotate) et celles annotées avec accord des trois LLM
+            "total_images_extraites_videos": len(mine),
+            "total_images_pour_annotation": sum(len(to_annotate(d)) for d in got["dirs"]),
+            "total_images_annotees": sum(r["label_any"] is not None for r in mine),
             "requetes_en_echec": failed,
             "cout_annotation_usd": round(self.annotation_spent - before, 4),
             "images_etiquetees_total": sum(r["label_any"] is not None for r in self.rows),
