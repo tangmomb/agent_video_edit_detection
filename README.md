@@ -107,13 +107,10 @@ Organisation :
   dev ; l'ancien découpage `hash`, non figé, est refusé ; les anciens splits train/val/test se
   lisent comme dev/test). Le test est figé au premier split (`data/splits/test_set.json`) : les
   splits suivants mettent tout le reste en dev. Le Dataset
-  Builder ne fait qu'ajouter des données ; le Model Researcher peut exclure un clip défectueux
-  (`exclude_clips`, `data/excluded.json`), ce qui ne vaut que pour les splits créés ensuite. Seul l'Evaluator mesure sur test.
-  Il voit aussi l'usage réel (`real_videos`) : le modèle en production sur les vidéos testées
-  dans l'interface (`interface/_jobs/`, et `data/real_videos/` une fois annotées), avec rappel et
-  précision si elles sont annotées, sinon des images à juger à l'œil ; jamais pour entraîner.
-  Ses exemples d'erreurs (`show_examples`, `real_videos`) sont les plus franches, une vidéo à tour
-  de rôle. Vues d'embeddings : `full`, `grid2` (image + 4 quadrants) et `bands` (image + tiers bas
+  Builder ne fait qu'ajouter des données ; un clip défectueux (vidéo cassée, doublon) s'exclut à la
+  main (`python -m model_training_pipeline exclude <sample_id> "<raison>"`, `data/excluded.json`),
+  ce qui ne vaut que pour les splits créés ensuite. Seul l'Evaluator mesure sur test.
+  Ses exemples d'erreurs (`show_examples`) sont les plus franches, une vidéo à tour de rôle. Vues d'embeddings : `full`, `grid2` (image + 4 quadrants) et `bands` (image + tiers bas
   + tiers haut, pour les bandeaux et sous-titres).
   Aucun agent ne met de modèle en production : en fin de run, le code (`Lab().select_production()`)
   écrit dans `production.json`, sur le plus gros split (le plus de clips), l'expérience de meilleure

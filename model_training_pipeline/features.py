@@ -77,7 +77,7 @@ def _views(img: Image.Image, view: str) -> list[Image.Image]:
 
 def embed_images(paths: list[Path], extractor: str, view: str = "full", batch_size: int = 64) -> np.ndarray:
     """Embeddings (len(paths), VIEWS[view] x dim) d'images quelconques, sans cache : utilisé par
-    get_features, l'interface et l'évaluation sur les vidéos réelles. À appeler sous
+    get_features et l'interface. À appeler sous
     torch.inference_mode()."""
     device = "cuda" if torch.cuda.is_available() else "cpu"
     encode, n_views = _encoder(extractor, device), VIEWS[view]

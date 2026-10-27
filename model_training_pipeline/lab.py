@@ -44,7 +44,7 @@ from video_source import annotators, youtube
 from video_source.config import DATA_DIR, LAB_DIR, SAMPLES_DIR
 
 from . import batch, metrics
-from .features import embed_images, extraction_cost, get_features
+from .features import extraction_cost, get_features
 from .frames import FPS, FRAMES_DIR, SKIPPED_SHARE, annotate, build, load_index, source_key, to_annotate
 
 EXP_DIR = LAB_DIR / "model_results"
@@ -53,16 +53,10 @@ SPLITS_DIR = DATA_DIR / "splits"
 # Chaînes du test, figées au premier split : les splits suivants mettent tout le reste en dev, et les
 # vidéos collectées ensuite n'entrent jamais en test (le Model Researcher ne peut pas l'influencer).
 TEST_SET = SPLITS_DIR / "test_set.json"
-# Clips retirés des splits créés ensuite (vidéo défectueuse, doublon) : exclude_clips, Model Researcher.
+# Clips retirés des splits créés ensuite (vidéo défectueuse, doublon) : exclude_clips, à la main (CLI exclude).
 EXCLUDED = DATA_DIR / "excluded.json"
 # Découpage d'avant make_split, non figé : refusé pour entraîner et tester.
 LEGACY_SPLIT = "hash"
-# Vidéos testées par l'utilisateur dans l'interface : interface/_jobs/<id>/ (images à 1 fps) et, une
-# fois annotées par les trois LLM depuis l'interface, data/real_videos/<id>/ (labels.json). Hors de
-# l'index du dataset : on n'entraîne jamais dessus, l'Evaluator s'en sert pour voir l'usage réel.
-JOBS_DIR = LAB_DIR / "interface" / "_jobs"
-REAL_DIR = DATA_DIR / "real_videos"
-REAL_MAX_IMAGES = 12
 SPLITS = ("dev", "test")
 FOLDS = 5  # plis de la validation croisée sur dev
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
@@ -694,83 +688,6 @@ class Lab:
             blocks += _image_blocks(FRAMES_DIR / r["frame"], f"{label} {r['sample_id']} t={r['t']} "
                                                              f"p={probs[i]:.3f} (seuil {op['threshold']:.3f})")
         return blocks or [{"type": "text", "text": "aucun exemple"}]
-
-    def real_videos(self, experiment_id: str | None = None, video_id: str | None = None,
-                    n: int = 3) -> list[dict]:
-        """Le modèle (production par défaut) sur les vidéos testées dans l'interface, à son seuil.
-        Vidéos annotées : rappel, précision et erreurs les plus franches en images. Sinon : images
-        à juger à l'œil (signalées, zone grise juste sous le seuil, basses), n par groupe et par
-        vidéo, REAL_MAX_IMAGES au plus."""
-        exp_id = experiment_id or (self.production() or {}).get("experiment_id")
-        if not exp_id:
-            raise ValueError("aucun modèle en production : précise experiment_id")
-        videos = {d.name: d for d in sorted(JOBS_DIR.glob("*")) if (d / "frames").is_dir()}             if JOBS_DIR.exists() else {}
-        videos.update({d.name: d for d in sorted(REAL_DIR.glob("*")) if (d / "frames").is_dir()}
-                      if REAL_DIR.exists() else {})  # la copie annotée remplace le job
-        if video_id:
-            videos = {k: v for k, v in videos.items() if k == video_id}
-        if not videos:
-            return [{"type": "text", "text": "aucune vidéo testée dans l'interface" + (f" ({video_id})" if video_id else "")}]
-        d = EXP_DIR / exp_id
-        config = json.loads((d / "config.json").read_text(encoding="utf-8"))
-        with open(d / "model.pkl", "rb") as fh:
-            clf = pickle.load(fh)
-        prod = self.production() or {}
-        threshold = prod["threshold"] if prod.get("experiment_id") == exp_id else             self._val_at(exp_id, metrics.DEFAULT_PRECISION)[3]["threshold"]
-
-        summary, errors, to_check = [], [], []
-        for vid, vdir in videos.items():
-            frames = sorted((vdir / "frames").glob("*.jpg"))
-            probs = clf.predict_proba(self._real_X(vdir, frames, config))[:, 1]
-            labels = {}
-            if (vdir / "labels.json").exists():
-                for lab in json.loads((vdir / "labels.json").read_text(encoding="utf-8"))["frames"]:
-                    v = lab["manuel"] if lab.get("manuel") is not None else lab["ajout"]
-                    if v is not None:
-                        labels[round(lab["t"] * FPS)] = bool(v)
-            pred = probs >= threshold
-            row = {"video": vid, "images": len(frames), "signalees": int(pred.sum()), "etiquetees": len(labels)}
-            if labels:
-                idx = np.array(sorted(labels))
-                y = np.array([labels[i] for i in idx])
-                op = metrics.operating_point(y, probs[idx], threshold)
-                row.update(rappel=round(op["recall"], 3), precision=round(op["precision"], 3), fp=op["fp"], fn=op["fn"])
-                errors += [(vid, frames[i], probs[i], "ajout raté", probs[i]) for i in idx if labels[i] and not pred[i]]
-                errors += [(vid, frames[i], probs[i], "fausse alerte", 1 - probs[i]) for i in idx if not labels[i] and pred[i]]
-            else:
-                high = [i for i in range(len(frames)) if pred[i]]
-                grey = [i for i in range(len(frames)) if 0.5 <= probs[i] < threshold]
-                low = [i for i in range(len(frames)) if probs[i] < 0.5]
-                for name, group in (("signalée", _spread(high, n)), ("zone grise", _spread(grey, n)),
-                                    ("basse", _spread(low, n))):
-                    to_check += [(vid, frames[i], probs[i], name) for i in group]
-            summary.append(row)
-
-        errors.sort(key=lambda e: e[4])  # les plus franches d'abord
-        shown = _round_robin(errors, lambda e: e[0])[:REAL_MAX_IMAGES] if errors else             _round_robin(to_check, lambda e: e[0])[:REAL_MAX_IMAGES]
-        blocks = [{"type": "text", "text": json.dumps(_jsonable({
-            "experiment_id": exp_id, "seuil": threshold, "videos": summary,
-            "images": ("erreurs les plus franches (vidéos annotées)" if errors else
-                       "vidéos non annotées : juge chaque image à l'œil (ajout visible ou non) ; signalée = "
-                       "au-dessus du seuil, zone grise = juste en dessous, basse = jugée sans ajout")}), ensure_ascii=False)}]
-        for vid, path, p, kind, *_ in shown:
-            blocks += _image_blocks(path, f"{kind} — vidéo {vid}, t={int(path.stem) - 1}s, p={p:.3f} (seuil {threshold:.3f})")
-        return blocks
-
-    def _real_X(self, vdir: Path, frames: list[Path], config: dict) -> np.ndarray:
-        """Features d'une vidéo de l'interface pour une config, en cache dans son dossier (feat/)."""
-        mats = []
-        for spec in config["features"]:
-            ext, _, view = spec.partition(":")
-            cache = vdir / "feat" / f"{ext}__{view or 'full'}.npy"
-            if not cache.exists():
-                import torch
-                with torch.inference_mode():
-                    emb = embed_images(frames, ext, view or "full")
-                cache.parent.mkdir(exist_ok=True)
-                np.save(cache, emb)
-            mats.append(np.load(cache))
-        return np.concatenate(mats, axis=1)
 
     def list_experiments(self) -> list[dict]:
         """Tout ce qu'on sait de chaque expérience : config, métriques val, volume de données,
