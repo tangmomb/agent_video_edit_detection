@@ -62,14 +62,10 @@ def _visible(composition: dict) -> dict:
 
 def dataset_info_tool(lab: Lab, agent: str) -> Tool:
     keys = DATASET_INFO_KEYS[agent]
-    props = {}
-    if agent == "model_researcher":
-        props["split_id"] = {"type": "string",
-                             "description": "Ajoute la composition détaillée de dev et test pour ce "
-                                            "split (id renvoyé par make_split)."}
 
-    def fn(split_id: str | None = None) -> dict:
-        info = lab.dataset_info(split_id)
+    def fn() -> dict:
+        # Model Researcher : avec la composition du split le plus récent, celui sur lequel entraîner.
+        info = lab.dataset_info(lab.latest_split() if "composition_du_split" in keys else None)
         if info.get("dataset_vide"):
             return info
         out = {k: info[k] for k in keys if k in info}
@@ -83,7 +79,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
 
     contenu = (", budgets restants (vidéos, "
                "annotation en $ et nombre estimé de vidéos qu'elle permet d'annoter)" if agent == "dataset_builder" else
-               " ; avec split_id, la même composition pour dev et test")
+               " ; la même composition pour dev et test du split le plus récent, s'il y en a un")
     return Tool(
         name="dataset_info",
         description="État du dataset : composition globale (chaînes YouTube, vidéos, images "
@@ -91,7 +87,7 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
                     "d'images avec ajout, vidéos sans aucun ajout, répartition des vidéos par "
                     "orientation, chaînes ayant plusieurs vidéos)"
                     + contenu + ".",
-        input_schema={"type": "object", "properties": props},
+        input_schema={"type": "object", "properties": {}},
         fn=fn,
     )
 

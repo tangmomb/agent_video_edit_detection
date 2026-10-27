@@ -26,7 +26,7 @@ raison précise. Le test est figé au premier split : les suivants mettent tout 
 (nouvelles vidéos comprises). Ne refais jamais \
 un split pour améliorer un score val : les plis de validation suivent la graine du split, et un \
 découpage choisi pour être facile ne mesure plus rien. \
-Vérifie la composition de dev et test (dataset_info avec split_id) avant d'entraîner.
+Vérifie la composition de dev et test du split le plus récent (dataset_info) avant d'entraîner.
 
 Méthode : consulte l'historique pour ne pas refaire une expérience existante. Formule une hypothèse \
 par expérience (champ note : l'hypothèse seule, en une phrase, sans recopier la config ni le split, \

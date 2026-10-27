@@ -365,6 +365,11 @@ class Lab:
                 round(100 * sum(r["label_any"] for r in labeled) / len(labeled), 1) if labeled else None)
         return out
 
+    def latest_split(self) -> str | None:
+        """Le split le plus récent, celui sur lequel entraîner (None s'il n'y en a pas)."""
+        splits = sorted(p.stem for p in SPLITS_DIR.glob("split_*.json"))
+        return splits[-1] if splits else None
+
     def _split_summaries(self) -> list[dict]:
         out = []
         all_sids = {r["sample_id"] for r in self.rows}
