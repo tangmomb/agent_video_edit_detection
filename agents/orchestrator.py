@@ -66,8 +66,8 @@ TASK = {"type": "object",
 
 def make(lab: Lab, session: Session) -> Agent:
     agents = {"dataset_builder": dataset_builder.make(lab),
-              "model_researcher": model_researcher.make(lab),
-              "evaluator": evaluator.make(lab)}
+              "model_researcher": model_researcher.make(lab, session),
+              "evaluator": evaluator.make(lab, session)}
 
     def delegate(name: str):
         def ask(task: str):

@@ -15,11 +15,20 @@ from PIL import Image
 
 from . import config  # noqa: F401  (charge le .env)
 
+try:
+    # Importé ici, avant les threads d'annotation : le SDK OpenAI lit httpx2 dans sys.modules sans
+    # l'importer, et tombait sur un module à moitié chargé quand le client Mistral l'importait au
+    # même moment dans un autre thread (run 004, AttributeError sur httpx2.Response).
+    import httpx2  # noqa: F401
+except ImportError:
+    pass
+
 # Modèles comparés (docs.mistral.ai/models, developers.openai.com/api/docs/pricing,
 # platform.claude.com, octobre 2026) : identifiant d'API, nom, lecture d'images, tarif en $ par
 # million de tokens, fournisseur.
 MODELS = [
-    ("mistral-large-4-0", "Mistral Large 4", True, {"input": 1.36, "cached_input": 0.14, "output": 4.18}, "mistral"),
+    # tarif baissé le 01/11/2026 (1.36 / 0.14 / 4.18 avant)
+    ("mistral-large-4-0", "Mistral Large 4", True, {"input": 0.70, "cached_input": 0.07, "output": 2.10}, "mistral"),
     ("mistral-large-2512", "Mistral Large 3", True, {"input": 0.50, "output": 1.50}, "mistral"),
     ("mistral-small-2603", "Mistral Small 4", True, {"input": 0.15, "output": 0.60}, "mistral"),
     ("ministral-14b-2512", "Ministral 3 14B", True, {"input": 0.20, "output": 0.20}, "mistral"),
@@ -92,16 +101,18 @@ def _usage(u) -> dict:
     return {"input": get(u, "prompt_tokens") or 0, "cached_input": cached, "output": get(u, "completion_tokens") or 0}
 
 
-def chat_body(provider: str, model: str, path: Path, max_side: int, reasoning: str | None) -> dict:
-    """Corps d'une requête chat completions (OpenAI ou Mistral) : consigne + une image. Le même
-    corps sert à l'appel direct et aux lignes d'un batch."""
+def chat_body(provider: str, model: str, path: Path, max_side: int, reasoning: str | None,
+              prompt: str = PROMPT) -> dict:
+    """Corps d'une requête chat completions (OpenAI ou Mistral) : consigne (PROMPT par défaut, une
+    autre pour model_training_pipeline.describe) + une image, réponse en JSON. Le même corps sert
+    à l'appel direct et aux lignes d'un batch."""
     url = data_url(path, max_side)
     if provider == "openai":
-        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": {"url": url}}]
+        content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": url}}]
         body = {"model": model, "messages": [{"role": "user", "content": content}],
                 "response_format": {"type": "json_object"}, "max_completion_tokens": 8000}
     elif provider == "mistral":
-        content = [{"type": "text", "text": PROMPT}, {"type": "image_url", "image_url": url}]
+        content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": url}]
         body = {"model": model, "messages": [{"role": "user", "content": content}],
                 "response_format": {"type": "json_object"}, "max_tokens": 8000}
     else:

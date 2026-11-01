@@ -153,10 +153,9 @@ def _agent(agent, examples: dict, note: str, subagents: dict, open_: bool = Fals
 
 def _agents() -> list:
     """L'orchestrateur puis ses trois sous-agents, construits comme pour un run."""
-    lab = Lab()
-    return [orchestrator.make(lab, _Session()),
-            *(mod.make(lab) for mod in (orchestrator.dataset_builder, orchestrator.model_researcher,
-                                        orchestrator.evaluator))]
+    lab, session = Lab(), _Session()
+    return [orchestrator.make(lab, session), orchestrator.dataset_builder.make(lab),
+            orchestrator.model_researcher.make(lab, session), orchestrator.evaluator.make(lab, session)]
 
 
 def render(examples: dict, note: str) -> str:

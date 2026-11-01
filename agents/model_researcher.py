@@ -35,7 +35,9 @@ déjà enregistrés) et change un facteur à la fois pour que les résultats soi
 dessus pour avoir une référence. Quand une expérience vise un groupe d'erreurs (pondération, \
 rééchantillonnage, vue d'embeddings), compare son analyze_errors à celui de la référence : le \
 changement ne vaut que si les erreurs de ce groupe baissent sans que les autres montent, pas \
-seulement le score global. Tu ne vois pas les images : leur inspection revient à l'Evaluator. \
+seulement le score global. Tu ne vois pas les images : pour savoir quels ajouts tu rates (logo, \
+sous-titres, bandeau…), demande analyze_errors avec analyse_visuelle, une fois sur ta référence \
+plutôt qu'à chaque expérience (payant). \
 Arrête-toi quand le lot demandé est fait ou quand les résultats ne bougent plus.
 
 Rapport final (court, en français) : le split utilisé (et pourquoi si tu l'as créé) ; pour chaque \
@@ -44,14 +46,14 @@ l'effet sur le groupe visé) ; le meilleur candidat selon toi (d'abord sur l'AP 
 manquent, le cas échéant."""
 
 
-def make(lab: Lab) -> Agent:
+def make(lab: Lab, session=None) -> Agent:
     return Agent(
         name="model_researcher",
         system=SYSTEM,
         max_turns=20,
         tools=[
             dataset_info_tool(lab, "model_researcher"),
-            analyze_errors_tool(lab),
+            analyze_errors_tool(lab, session),
             list_experiments_tool(lab),
             Tool(
                 name="make_split",

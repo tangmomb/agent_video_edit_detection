@@ -43,7 +43,7 @@ from sklearn.preprocessing import StandardScaler
 from video_source import annotators, youtube
 from video_source.config import DATA_DIR, LAB_DIR, SAMPLES_DIR
 
-from . import batch, metrics
+from . import batch, describe, metrics
 from .features import extraction_cost, get_features
 from .frames import FPS, FRAMES_DIR, SKIPPED_SHARE, annotate, build, load_index, source_key, to_annotate
 
@@ -700,13 +700,15 @@ class Lab:
 
     def show_examples(self, experiment_id: str, kind: str = "missed", n: int = 4,
                       precision: float = metrics.DEFAULT_PRECISION, order: str = "franches",
-                      start: int = 0) -> list[dict]:
+                      start: int = 0, query: str | None = None, channel: str | None = None,
+                      video: str | None = None) -> list[dict]:
         """Renvoie des blocs image (frames val) pour inspection visuelle, une vidéo à tour de rôle
         pour ne pas montrer n fois la même : les erreurs les plus franches (order="franches" :
         ajouts ratés les moins bien notés, fausses alertes les mieux notées), souvent des erreurs
         d'étiquette, ou dans un ordre au hasard (order="hasard", toujours le même), plus
         représentatif de l'ensemble des erreurs. start : rang du premier exemple, pour voir les
-        suivants."""
+        suivants. query, channel, video : seulement les erreurs de cette requête YouTube, chaîne
+        ou vidéo (sample_id), telles qu'analyze_errors les nomme."""
         if order not in ("franches", "hasard"):
             raise ValueError("order doit être 'franches' ou 'hasard'")
         frames, y, probs, op = self._val_at(experiment_id, precision)
@@ -714,7 +716,14 @@ class Lab:
         want = (y == 1) & ~pred if kind == "missed" else (y == 0) & pred
         by_frame = {r["frame"]: r for r in self.rows}
         label = "ajout raté" if kind == "missed" else "faux positif"
-        idx = list(np.flatnonzero(want))
+        filters = {k: v.strip() for k, v in (("query", query), ("channel", channel)) if v}
+        idx = [i for i in np.flatnonzero(want)
+               if all((self._ann(by_frame[frames[i]]["sample_id"]).get(k) or "").strip() == v
+                      for k, v in filters.items())
+               and (not video or by_frame[frames[i]]["sample_id"] == video)]
+        if not idx and (filters or video):
+            return [{"type": "text", "text": "aucune erreur de ce type pour ce filtre (" + ", ".join(
+                f"{k}={v}" for k, v in {**filters, "video": video}.items() if v) + ")"}]
         if order == "franches":
             idx.sort(key=lambda i: probs[i] if kind == "missed" else -probs[i])
         else:
@@ -728,9 +737,31 @@ class Lab:
                                                        f"{len(ranked)} {'ajouts ratés' if kind == 'missed' else 'faux positifs'} (ordre : {order})"}]
         for i in shown:
             r = by_frame[frames[i]]
-            blocks += _image_blocks(FRAMES_DIR / r["frame"], f"{label} {r['sample_id']} t={r['t']} "
+            ann = self._ann(r["sample_id"])
+            blocks += _image_blocks(FRAMES_DIR / r["frame"], f"{label} {r['sample_id']} ({ann['channel']}, "
+                                                             f"requête « {ann.get('query')} ») t={r['t']} "
                                                              f"p={probs[i]:.3f} (seuil {op['threshold']:.3f})")
         return blocks
+
+    def describe_errors(self, experiment_id: str, precision: float = metrics.DEFAULT_PRECISION,
+                        max_usd: float = 1.0) -> dict:
+        """Toutes les erreurs val de l'expérience (ajouts ratés et fausses alertes), chacune avec la
+        description de ce qu'on voit sur l'image (describe : batch, mis en cache, refusé au-delà de
+        max_usd) : de quoi en tirer les points communs."""
+        frames, y, probs, op = self._val_at(experiment_id, precision)
+        pred = probs >= op["threshold"]
+        errors = [i for i in range(len(frames)) if bool(y[i]) != bool(pred[i])]
+        res = describe.describe([frames[i] for i in errors], max_usd)
+        by_frame = {r["frame"]: r for r in self.rows}
+        items = []
+        for i in errors:
+            r = by_frame[frames[i]]
+            ann = self._ann(r["sample_id"])
+            items.append({"erreur": "ajout raté" if y[i] else "fausse alerte", "video": r["sample_id"],
+                          "chaine": ann["channel"], "requete": ann.get("query"), "t": r["t"],
+                          "p": round(float(probs[i]), 3), "description": res["descriptions"].get(frames[i])})
+        return {"erreurs": items, "cost_usd": res["cost_usd"], "nouvelles_descriptions": res["nouvelles"],
+                "echecs": res["echecs"]}
 
     def list_experiments(self) -> list[dict]:
         """Tout ce qu'on sait de chaque expérience : config, métriques val, volume de données,

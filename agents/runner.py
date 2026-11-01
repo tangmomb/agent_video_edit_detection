@@ -52,7 +52,8 @@ DEFAULT_MODEL = "mistral/mistral-large-4-0"
 # d'entrée servis depuis le cache, quand l'API les signale et que le fournisseur publie un prix.
 PRICES = {f"{provider}/{model}": p for model, _, _, p, provider in MODELS}
 # Effort de raisonnement des modèles qui ne prennent pas celui de l'agent (None : aucun).
-REASONING_BY_MODEL = {"mistral/mistral-large-2512": None}  # Mistral Large 3 : pas de raisonnement
+REASONING_BY_MODEL = {"mistral/mistral-large-2512": None,  # Mistral Large 3 : pas de raisonnement
+                      "mistral/mistral-large-4-0": None}  # Large 4 : son raisonnement par défaut
 
 
 def _next_run_number() -> int:
@@ -165,6 +166,7 @@ class Session:
         self.run_dir = run_dir or RUNS_DIR / f"{_next_run_number():03d}_{time.strftime('%Y%m%d-%H%M%S')}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self._stack: list[int] = []  # appels d'agent en cours (le dernier est le plus profond)
+        self._models: list[str] = []  # leurs modèles, dans le même ordre
         self.trace = {
             "run": {"status": "running", "started": _now(), "ended": None,
                     "budget_usd": budget_usd, "reserve_rapport_usd": round(self.reserve_usd, 4),
@@ -237,6 +239,7 @@ class Session:
 
         model = self.model or agent.model
         price(model)  # tarif inconnu : erreur avant le premier appel
+        self._models.append(model)  # pour look : le modèle de l'agent en cours
         effort = REASONING_BY_MODEL.get(model, agent.reasoning)
         reasoning = {"reasoning_effort": effort} if effort else {}
         if effort and not _supports_reasoning(model):
@@ -393,7 +396,35 @@ class Session:
                  duration_s=round(time.perf_counter() - t_agent, 2))
         finally:
             self._stack.pop()
+            self._models.pop()
         return final
+
+    def add_cost(self, usd: float) -> None:
+        """Dépense faite hors des appels de modèle de la session (descriptions d'images en batch)."""
+        self.spent += usd
+        self._save()
+
+    def look(self, content: list[dict]) -> tuple[str, float]:
+        """Un appel de vision hors boucle d'agent, sans outils (analyze_errors avec
+        analyse_visuelle) : blocs texte et image des outils, envoyés au modèle de l'agent en cours.
+        Coût compté dans le budget de session ; renvoie le texte de la réponse et son coût."""
+        model = self._models[-1] if self._models else (self.model or DEFAULT_MODEL)
+        parts = [{"type": "image_url", "image_url": {
+                     "url": f"data:{b['source']['media_type']};base64,{b['source']['data']}"}}
+                 if b["type"] == "image" else {"type": "text", "text": b["text"]} for b in content]
+        # Raisonnement par défaut du modèle, qui compte dans max_tokens : à 16 000, Large 4 les
+        # épuisait à compter les erreurs sans écrire le rapport (run 004), d'où 32 000.
+        response = self.completion(model=model, max_tokens=32000, messages=[{"role": "user", "content": parts}])
+        tokens = _tokens(response.usage)
+        cost = self._cost(model, tokens)
+        self.spent += cost
+        for k, v in tokens.items():
+            self.trace["run"]["tokens"][k] += v
+        self._save()
+        text = "\n\n".join(_split(response.choices[0].message)[1])
+        if response.choices[0].finish_reason == "length":
+            text += "\n\n[réponse tronquée : limite de tokens atteinte]"
+        return text, cost
 
 
 def _failure(content, result, tb) -> str | None:
