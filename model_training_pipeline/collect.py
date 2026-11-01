@@ -19,6 +19,7 @@ import random
 import time
 
 from video_source import youtube
+from video_source.annotators import ANNOTATORS, DIRECT_ANNOTATORS
 from video_source.config import SAMPLES_DIR
 
 from . import batch
@@ -54,8 +55,10 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
     factor = 1 / batch.DISCOUNT if direct else 1.0  # estimations au tarif batch ; direct : prix plein
 
     def annotate_now(d) -> None:
+        """Appels directs : tous les annotateurs (--direct), sinon ceux dont le batch est trop lent
+        (annotators.DIRECT_ANNOTATORS) ; le batch final n'envoie que les votes manquants."""
         nonlocal cost
-        res = annotate(d, max_usd=max_usd - cost)
+        res = annotate(d, max_usd=max_usd - cost, models=ANNOTATORS if direct else DIRECT_ANNOTATORS)
         cost += res["cost_usd"]
         print(f"[collect] {d.name} annotée : {res['images_avec_accord']}/{res['images_annotees']} avec accord, "
               f"{res['cost_usd']:.3f} $ (total {cost:.2f} $)", flush=True)
@@ -66,8 +69,7 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
             if e and est + e <= max_usd:
                 est += e
                 got.append((youtube.load_meta(p.parent).get("query"), None, p.parent))
-                if direct:
-                    annotate_now(p.parent)
+                annotate_now(p.parent)
         if got:
             print(f"[collect] reprise de {len(got)} vidéo(s) déjà téléchargée(s) (≈ {est:.2f} $)", flush=True)
     for query, orientation in queries or QUERIES:
@@ -100,8 +102,7 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
             est += e
             got.append((query, orientation, d))
             print(f"[collect] {len(got)}/{target} {d.name} (≈ {e:.3f} $, total ≈ {est:.2f} $)", flush=True)
-            if direct:
-                annotate_now(d)
+            annotate_now(d)
         if stopped:
             break
     if dry_run:

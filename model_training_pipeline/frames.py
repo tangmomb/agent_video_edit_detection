@@ -154,20 +154,20 @@ def to_annotate(sdir: Path, out_dir: Path = FRAMES_DIR, votes: dict | None = Non
     return [f for i, f in enumerate(frames) if refs[i] == i]
 
 
-def pending(sdir: Path, out_dir: Path = FRAMES_DIR) -> list[Path]:
-    """Images à annoter (to_annotate) auxquelles il manque au moins un vote."""
+def pending(sdir: Path, out_dir: Path = FRAMES_DIR, models=annotators.ANNOTATORS) -> list[Path]:
+    """Images à annoter (to_annotate) auxquelles il manque au moins un vote (de l'un de models)."""
     votes = load_votes(sdir)
-    return [f for f in to_annotate(sdir, out_dir, votes) if missing(votes, f.name)]
+    return [f for f in to_annotate(sdir, out_dir, votes) if set(missing(votes, f.name)) & set(models)]
 
 
 def annotate(sdir: Path, max_usd: float | None = None, apis: dict | None = None,
-             out_dir: Path = FRAMES_DIR) -> dict:
-    """Fait voter les annotateurs sur les images pas encore annotées de la vidéo (appels payants,
-    un par image et par modèle manquant). S'arrête avant de dépasser max_usd ; reprend là où il
-    s'était arrêté. Renvoie le bilan."""
+             out_dir: Path = FRAMES_DIR, models=annotators.ANNOTATORS) -> dict:
+    """Fait voter les annotateurs (ou seulement models) sur les images pas encore annotées de la
+    vidéo (appels payants, un par image et par modèle manquant). S'arrête avant de dépasser
+    max_usd ; reprend là où il s'était arrêté. Renvoie le bilan."""
     sdir = Path(sdir)
     votes = load_votes(sdir)
-    todo = pending(sdir, out_dir)
+    todo = pending(sdir, out_dir, models)
     apis = apis if apis is not None else {}
     spent, done, stopped = 0.0, 0, False
     with ThreadPoolExecutor(WORKERS) as pool:
@@ -177,7 +177,8 @@ def annotate(sdir: Path, max_usd: float | None = None, apis: dict | None = None,
             if max_usd is not None and done and spent + spent / done * len(chunk) > max_usd:
                 stopped = True
                 break
-            asked = pool.map(lambda f: annotators.vote(f, apis, models=missing(votes, f.name)), chunk)
+            asked = pool.map(lambda f: annotators.vote(
+                f, apis, models=[m for m in missing(votes, f.name) if m in models]), chunk)
             for f, v in zip(chunk, asked):
                 add_votes(votes, f.name, v["votes"], v["cost_usd"])
                 spent += v["cost_usd"]

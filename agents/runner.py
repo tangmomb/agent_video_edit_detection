@@ -46,10 +46,11 @@ RUNS_DIR = LAB_DIR / "runs"
 # cachés, et de loin le plus régulier (trouve et règle CLIP + DINOv2 presque à chaque run) ;
 # ~0,40 $ par run contre 0,02 à 0,05 $ pour les suivants, plus lent. GPT-6 Luna, en tête de b1
 # avec l'ancien labo, y finit dernier (garde CLIP seul).
-# DeepSeek V4 Flash, modèle par défaut depuis le 01/11/2026 : même qualité que Large 4 sur le banc b3
-# (AP cachée 0,962 contre 0,961, 3 runs chacun), deux fois moins cher et plus rapide ; en préversion
-# chez Mistral, d'où les relances (Session._call).
-DEFAULT_MODEL = "mistral/deepseek-v4-1-flash-1017"
+# DeepSeek V4 Flash fait jeu égal avec Large 4 sur le banc b3 (AP cachée 0,962 contre 0,961, 3 runs
+# chacun) pour deux fois moins cher, mais son service chez Mistral, en préversion, tombait trop
+# souvent : 7 délégations sur 13 en 503 sur b3, une perdue au run 006 malgré les relances
+# (01/11/2026). À retester quand il sortira de préversion.
+DEFAULT_MODEL = "mistral/mistral-large-4-0"
 # Attentes avant chaque relance d'un appel en erreur passagère (Session._call).
 RETRY_WAITS_S = (5, 20, 60)
 # $/million de tokens : tarifs relevés à la main (table des modèles du banc des annotateurs,
