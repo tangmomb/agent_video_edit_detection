@@ -874,7 +874,8 @@ class Lab:
         expériences du plus gros split (le plus de clips ; à égalité, le plus récent) : celle de
         meilleure AP par chaîne sur val parmi celles qui ont réussi leur test final (précision
         visée tenue sur test). À défaut, la meilleure non testée, puis la meilleure tout court,
-        marquées comme non vérifiées. Égalités départagées par le rappel val à la précision
+        marquées comme non vérifiées, sauf si la production actuelle a réussi son test : elle est
+        alors conservée (production_conservee), même sur un plus petit split. Égalités départagées par le rappel val à la précision
         visée, l'AP, l'AUC puis le temps de calcul. L'AP par chaîne choisit bien mieux que le
         rappel val le modèle qui tient sur des chaînes nouvelles (metrics.py). Écrit
         production.json (via save_model) et renvoie le classement."""
@@ -901,6 +902,13 @@ class Lab:
         order = {"réussi": 0, "non testé": 1, "échoué": 2}
         best = min(ranked, key=lambda r: order[r["test"]["statut"]])  # min garde l'ordre val à égalité
         verifie = best["test"]["statut"] == "réussi"
+        current_path = EXP_DIR / "production.json"
+        current = json.loads(current_path.read_text(encoding="utf-8")) if current_path.exists() else None
+        if not verifie and current and current["test"].get("statut") == "réussi":
+            # Un modèle vérifié sur son test n'est jamais remplacé par un modèle qui ne l'est pas
+            # (run 007 : exp_045, vérifié sur split_002, avait cédé la place à exp_081, non testé).
+            return _jsonable({"split_id": big, "production": current, "verifie_sur_test": True,
+                              "production_conservee": True, "classement": ranked})
         prod = self.save_model(best["experiment_id"], precision,
                                f"choix automatique de fin de run sur {big} (le plus gros split) : "
                                + ("meilleure AP par chaîne sur val parmi les modèles qui ont réussi leur "
@@ -908,7 +916,7 @@ class Lab:
                                   f"son test final), meilleure AP par chaîne sur val ({best['test']['statut']})"),
                                test=best["test"])
         return _jsonable({"split_id": big, "production": prod, "verifie_sur_test": verifie,
-                          "classement": ranked})
+                          "production_conservee": False, "classement": ranked})
 
     def _group_ap(self, e: dict) -> float | None:
         """AP par chaîne sur val d'une expérience ; recalculée depuis val_preds.json pour celles

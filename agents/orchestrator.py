@@ -147,6 +147,13 @@ def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annota
     choice = lab.select_production()
     report += "\n\n---\n\n## Modèle de production (choix automatique du code)\n\n" + (
         f"Erreur : {choice['error']}" if "error" in choice else
+        f"`{choice['production']['experiment_id']}` sur `{choice['production']['split_id']}` conservé : "
+        f"il a réussi son test final, et aucun modèle de `{choice['split_id']}` (le plus gros split) "
+        "n'a réussi le sien. Classement de ce split :\n\n"
+        + "\n".join(f"- {r['experiment_id']} : AP par chaîne {r['ap_par_chaine']}, rappel val "
+                    f"{r['val_recall']}, AP {r['ap']}, AUC {r['auc']}, "
+                    f"test {r['test']['statut']}" for r in choice["classement"])
+        if choice["production_conservee"] else
         f"`{choice['production']['experiment_id']}` sur `{choice['split_id']}` (le plus gros split), seuil "
         f"{choice['production']['threshold']} : "
         + ("meilleure AP par chaîne sur val parmi les modèles qui ont réussi leur test final."

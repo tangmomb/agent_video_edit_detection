@@ -1,6 +1,6 @@
 """Model Researcher : choisit les représentations et les modèles, entraîne, mène les expériences."""
 
-from model_training_pipeline.features import EXTRACTORS
+from model_training_pipeline.features import EXTRACTORS, VIEWS
 from model_training_pipeline.lab import BALANCE_GROUPS, MODELS, STRATIFY_KEYS, Lab
 
 from .common import CONTEXT, analyze_errors_tool, dataset_info_tool, list_experiments_tool
@@ -91,11 +91,15 @@ def make(lab: Lab, session=None) -> Agent:
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "embeddings": {"type": "array", "items": {"type": "string"},
-                                     "description": "Liste 'extracteur:vue', extracteurs " + ", ".join(EXTRACTORS)
+                        "embeddings": {"type": "array",
+                                     "items": {"type": "string",
+                                               "enum": [f"{e}:{v}" for e in EXTRACTORS for v in VIEWS]},
+                                     "description": "Liste 'extracteur:vue' (valeurs de l'enum uniquement), "
+                                                    "extracteurs " + ", ".join(EXTRACTORS)
                                                     + " ; vues full (image entière), grid2 (image + 4 quadrants : "
-                                                    "logos, petits overlays) ou bands (image + tiers bas + tiers "
-                                                    "haut : bandeaux de nom, sous-titres, titres). "
+                                                    "logos, petits overlays ; chaque quadrant contient un coin, il "
+                                                    "n'y a pas d'autre vue de coins) ou bands (image + tiers bas + "
+                                                    "tiers haut : bandeaux de nom, sous-titres, titres). "
                                                     "Un seul élément = CLIP seul ou DINOv2 seul ; plusieurs = "
                                                     "embeddings concaténés, ex. ['clip_b32:full', "
                                                     "'dinov2_s:full'] pour CLIP + DINOv2."},

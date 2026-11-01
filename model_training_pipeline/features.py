@@ -103,7 +103,8 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
     ajoutées (en pratique les images étiquetées, sauf pour le saut d'images, qui demande toute la
     vidéo en clip_b32:full)."""
     if extractor not in EXTRACTORS or view not in VIEWS:
-        raise ValueError(f"extracteur/vue inconnus : {extractor}/{view}")
+        raise ValueError(f"embedding inconnu : {extractor}:{view} ; extracteurs {', '.join(EXTRACTORS)}, "
+                         f"vues {', '.join(VIEWS)} (grid2 couvre les coins)")
     cdir = _cache_dir(frames_dir, extractor, view)
     cdir.mkdir(parents=True, exist_ok=True)
     by_sample: dict[str, list[int]] = defaultdict(list)
