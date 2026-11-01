@@ -66,6 +66,11 @@ HISTORY_QUERIES = 30  # data_requested_history : requêtes listées, les plus pr
 LISTED_BEST = 5  # les meilleures en AP par chaîne
 LISTED_RECENT = 3  # les dernières, sur lesquelles le Model Researcher enchaîne
 BRIEF_BEST = 3  # version de l'orchestrateur : les meilleures seulement
+# Choix du modèle de production : deux AP par chaîne à moins de AP_TIE l'une de l'autre comptent
+# comme égales, et le meilleur rappel val à la précision visée l'emporte. Sur split_003, exp_072
+# (AP 0.9358, rappel 0.850) passait devant exp_079 (0.9351, 0.863) pour un écart d'AP sans portée.
+# Fixé à l'œil (01/11/2026), pas mesuré sur le banc.
+AP_TIE = 0.005
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
 STRATIFY_KEYS = ("orientation", "clip_vide")
 # hgb (HistGradientBoosting) retiré le 26/10/2026 : sur les 20 essais du banc b2, jamais le meilleur
@@ -172,6 +177,16 @@ def _split_line(split_id: str, exps: list[dict], test_status) -> dict:
     best = max(exps, key=_score)
     return {"split_id": split_id, "experiences": len(exps),
             "meilleure": {best["id"]: _one_line(best, test_status(best["id"]))}}
+
+
+def _best_by_rule(rows: list[dict]) -> dict | None:
+    """Règle de choix du meilleur modèle (lignes de Lab._ranked) : parmi ceux dont l'AP par chaîne
+    est à moins de AP_TIE de la meilleure, celui de meilleur rappel val ; None sans ligne."""
+    if not rows:
+        return None
+    top = max(r["ap_par_chaine"] or 0.0 for r in rows)
+    return max((r for r in rows if (r["ap_par_chaine"] or 0.0) >= top - AP_TIE),
+               key=lambda r: (r["val_recall"], r["ap_par_chaine"] or 0.0, r["ap"], r["auc"], -r["ms_par_frame"]))
 
 
 class FoldEnsemble:
@@ -752,8 +767,10 @@ class Lab:
         ne se comparent pas à celles du récent). Sur le split récent, seules celles qui comptent
         pour décider tiennent chacune en une ligne (les LISTED_BEST meilleures, celles passées au
         test final ou en production, les LISTED_RECENT dernières), les autres en un total, pour que
-        la réponse ne grandisse pas avec le nombre d'expériences. En tête, le modèle en production. brief (orchestrateur) : du split récent, les vidéos hors
-        split, la note et les BRIEF_BEST meilleures en une ligne."""
+        la réponse ne grandisse pas avec le nombre d'expériences. En tête, le modèle en production ;
+        sur le split récent, candidat_a_tester, la prochaine expérience à passer au test final
+        (candidate_to_test). brief (orchestrateur) : du split récent, les vidéos hors split, la
+        note, candidat_a_tester et les BRIEF_BEST meilleures en une ligne."""
         exps = self.list_experiments()
         summaries = self._split_summaries()
         latest = summaries[-1]["split_id"] if summaries else None
@@ -772,7 +789,7 @@ class Lab:
             ranked = sorted(mine, key=_score, reverse=True)
             if brief:
                 entry = {"split_id": sid, "clips_hors_split": sp["clips_hors_split"], "note": note,
-                         "experiences": len(mine),
+                         "candidat_a_tester": self.candidate_to_test(sid), "experiences": len(mine),
                          "meilleures": {e["id"]: _one_line(e) for e in ranked[:BRIEF_BEST]}}
                 out.append(entry)
                 continue
@@ -795,6 +812,7 @@ class Lab:
             if shared:  # impossible par construction : test fuirait dans dev
                 entry["anomalie_chaines_dans_dev_et_test"] = shared
             entry["note"] = note
+            entry["candidat_a_tester"] = self.candidate_to_test(sid)
             entry["experiences"] = len(mine)
             listed = {}
             for name, group in (("meilleures", ranked[:LISTED_BEST]),
@@ -852,23 +870,12 @@ class Lab:
         (EXP_DIR / "production.json").write_text(json.dumps(_jsonable(prod), indent=2), encoding="utf-8")
         return _jsonable(prod)
 
-    def select_production(self, precision: float = metrics.DEFAULT_PRECISION) -> dict:
-        """Choix automatique du modèle de production, fait par le code en fin de run, parmi les
-        expériences du plus gros split (le plus de clips ; à égalité, le plus récent) : celle de
-        meilleure AP par chaîne sur val parmi celles qui ont réussi leur test final (précision
-        visée tenue sur test). À défaut, la meilleure non testée, puis la meilleure tout court,
-        marquées comme non vérifiées, sauf si la production actuelle a réussi son test : elle est
-        alors conservée (production_conservee), même sur un plus petit split. Égalités départagées par le rappel val à la précision
-        visée, l'AP, l'AUC puis le temps de calcul. L'AP par chaîne choisit bien mieux que le
-        rappel val le modèle qui tient sur des chaînes nouvelles (metrics.py). Écrit
-        production.json (via save_model) et renvoie le classement."""
-        splits = self._split_summaries()
-        if not splits:
-            return {"error": "aucun split figé : rien à mettre en production"}
-        big = max(splits, key=lambda s: (sum(s[k] for k in SPLITS), s["split_id"]))["split_id"]
+    def _ranked(self, split_id: str, precision: float = metrics.DEFAULT_PRECISION) -> list[dict]:
+        """Expériences d'un split avec ce que regarde la règle de choix (_best_by_rule) et le statut
+        de leur test final, triées par AP par chaîne sur val."""
         ranked = []
         for e in self.list_experiments():
-            if e.get("split_id") != big:
+            if e.get("split_id") != split_id:
                 continue
             try:
                 op = self._val_at(e["id"], precision)[3]
@@ -878,12 +885,42 @@ class Lab:
                            "val_recall": op["recall"] if op else 0.0,
                            "ap": e["val"]["ap"] or 0.0, "auc": e["val"]["auc"] or 0.0,
                            "ms_par_frame": e["ms_par_frame"], "test": self._test_status(e["id"], precision)})
-        if not ranked:
-            return {"error": f"aucune expérience sur le plus gros split ({big})"}
         ranked.sort(key=lambda r: (-(r["ap_par_chaine"] or 0.0), -r["val_recall"], -r["ap"], -r["auc"],
                                    r["ms_par_frame"]))
+        return ranked
+
+    def candidate_to_test(self, split_id: str, precision: float = metrics.DEFAULT_PRECISION) -> str | None:
+        """Prochaine expérience à passer au test final : la règle de choix (_best_by_rule) appliquée
+        aux non testées du split. Un test échoué la retire, et la suivante prend sa place : les
+        tests se font dans l'ordre où select_production choisirait. None une fois un test réussi
+        (aucune non testée ne passerait devant) ou sans non testée."""
+        ranked = self._ranked(split_id, precision)
+        if any(r["test"]["statut"] == "réussi" for r in ranked):
+            return None
+        best = _best_by_rule([r for r in ranked if r["test"]["statut"] == "non testé"])
+        return best["experiment_id"] if best else None
+
+    def select_production(self, precision: float = metrics.DEFAULT_PRECISION) -> dict:
+        """Choix automatique du modèle de production, fait par le code en fin de run, parmi les
+        expériences du plus gros split (le plus de clips ; à égalité, le plus récent) qui ont
+        réussi leur test final (précision visée tenue sur test) : parmi celles dont l'AP par
+        chaîne sur val est à moins de AP_TIE de la meilleure, celle de meilleur rappel val. À
+        défaut de test réussi, même règle sur les non testées, puis sur toutes, marquées comme non
+        vérifiées, sauf si la production actuelle a réussi son test : elle est alors conservée
+        (production_conservee), même sur un plus petit split. L'AP par chaîne choisit bien mieux
+        que le rappel val le modèle qui tient sur des chaînes nouvelles (metrics.py) ; le rappel ne
+        départage que des AP équivalentes. Écrit production.json (via save_model) et renvoie le
+        classement (par AP par chaîne)."""
+        splits = self._split_summaries()
+        if not splits:
+            return {"error": "aucun split figé : rien à mettre en production"}
+        big = max(splits, key=lambda s: (sum(s[k] for k in SPLITS), s["split_id"]))["split_id"]
+        ranked = self._ranked(big, precision)
+        if not ranked:
+            return {"error": f"aucune expérience sur le plus gros split ({big})"}
         order = {"réussi": 0, "non testé": 1, "échoué": 2}
-        best = min(ranked, key=lambda r: order[r["test"]["statut"]])  # min garde l'ordre val à égalité
+        status = min(order[r["test"]["statut"]] for r in ranked)
+        best = _best_by_rule([r for r in ranked if order[r["test"]["statut"]] == status])
         verifie = best["test"]["statut"] == "réussi"
         current_path = EXP_DIR / "production.json"
         current = json.loads(current_path.read_text(encoding="utf-8")) if current_path.exists() else None
@@ -894,9 +931,11 @@ class Lab:
                               "production_conservee": True, "classement": ranked})
         prod = self.save_model(best["experiment_id"], precision,
                                f"choix automatique de fin de run sur {big} (le plus gros split) : "
-                               + ("meilleure AP par chaîne sur val parmi les modèles qui ont réussi leur "
-                                  "test final" if verifie else "NON VÉRIFIÉ sur test (aucun modèle n'a réussi "
-                                  f"son test final), meilleure AP par chaîne sur val ({best['test']['statut']})"),
+                               + (f"meilleur rappel val parmi les AP par chaîne à {AP_TIE} près de la "
+                                  "meilleure, chez les modèles qui ont réussi leur test final" if verifie else
+                                  "NON VÉRIFIÉ sur test (aucun modèle n'a réussi son test final), meilleur "
+                                  f"rappel val parmi les AP par chaîne à {AP_TIE} près de la meilleure "
+                                  f"({best['test']['statut']})"),
                                test=best["test"])
         return _jsonable({"split_id": big, "production": prod, "verifie_sur_test": verifie,
                           "production_conservee": False, "classement": ranked})

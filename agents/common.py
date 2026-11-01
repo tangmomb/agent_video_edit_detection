@@ -8,13 +8,13 @@ from .runner import Tool
 # Contexte de tous les agents ; MEASURE s'y ajoute pour ceux qui entraînent, mesurent ou décident.
 CONTEXT = """Projet : un classifieur qui dit si une image de vidéo YouTube contient un ajout de montage \
 (texte, sous-titres, logo, bandeau, image incrustée, cadre, effet graphique : tout ce qui ne vient \
-pas de la caméra). Une image par seconde de vidéo.
+pas de la caméra). Une image par seconde de vidéo. Partout, « chaîne » veut dire chaîne YouTube, et \
+chaque vidéo vient d'une chaîne différente.
 
-Objectif : le meilleur rappel à 95 % de précision (au plus 5 % de fausses alertes), sur des chaînes \
+Objectif : le meilleur rappel à 95 % de précision, sur des chaînes \
 YouTube que le modèle n'a jamais vues. Le temps de calcul ne compte pas.
 
-Données : chaque image est étiquetée par trois LLM de vision, seulement s'ils sont d'accord. \
-Quelques étiquettes peuvent donc être fausses.
+Données : chaque image est étiquetée par trois LLM de vision, seulement s'ils sont d'accord.
 
 Règles, sans exception :
 - Tu n'agis qu'avec tes outils : ni terminal, ni fichier, ni code. N'écris jamais de commande ou \
@@ -32,12 +32,14 @@ propre test.
 - val est une validation croisée par chaîne sur dev : chaque image est prédite par un modèle qui \
 n'a jamais vu sa chaîne. On décide sur val ; test sert seulement à vérifier un candidat à la fin.
 - Le seuil est fixé par le code sur val, prudemment, puis appliqué tel quel sur test.
-- Pour comparer des modèles : l'AP par chaîne sur val d'abord (c'est elle qui choisit la \
-production), le rappel à 95 % ensuite.
+- AP par chaîne : l'AP (qualité du classement, tous seuils confondus) calculée sur les images de \
+val de chaque chaîne, puis moyennée. Elle dit si le modèle reconnaît les ajouts sur des chaînes \
+jamais vues.
+- Meilleur modèle : parmi ceux dont l'AP par chaîne est à moins de 0,005 de la meilleure, celui \
+de meilleur rappel à 95 %. Le code choisit la production ainsi.
 - Deux expériences ne se comparent que sur le même split : n'écris jamais d'écart de score entre \
 deux splits. Pour mesurer ce qu'apporte un nouveau split, on y réentraîne la meilleure config \
-d'avant.
-- Il y a peu de chaînes : quelques points d'écart peuvent être du bruit."""
+d'avant."""
 
 
 # Ce que chaque agent lit de dataset_info : le Dataset Builder les budgets de collecte, le Model
@@ -86,7 +88,9 @@ def list_experiments_tool(lab: Lab, brief: bool = False) -> Tool:
     """brief : version de l'orchestrateur, qui ne choisit pas les configs (lab.experiments_overview)."""
     shown = ("les 3 meilleures" if brief else
              "les 5 meilleures, celles testées ou en production et les 3 dernières, le reste en un total")
-    description = ("Le modèle en production, puis les expériences du dernier split : " + shown + ". "
+    description = ("Le modèle en production, puis le dernier split : candidat_a_tester (la prochaine "
+                   "expérience à passer au test final, choisie par la règle du meilleur modèle) et ses "
+                   "expériences : " + shown + ". "
                    "Une ligne par expérience : config → AP par chaîne, rappel à 95 % (FP, FN), test "
                    "final. Pour chaque ancien split, sa meilleure expérience.")
     return Tool(

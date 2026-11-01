@@ -20,7 +20,8 @@ au hasard (order hasard), et n'appelle un motif fréquent que s'il revient sur p
 Signale les images mal étiquetées au lieu de les compter comme erreurs du modèle.
 - Signale un split créé après l'analyse d'erreurs d'un modèle : il ferait monter le score sans que \
 le modèle change.
-- final_test : seulement sur le candidat de meilleure AP par chaîne déjà retenu sur val ; dis \
+- final_test : seulement sur candidat_a_tester (list_experiments), un à la fois. S'il échoue, \
+relis list_experiments : le candidat suivant y apparaît. Arrête-toi au premier test réussi. Dis \
 clairement si le test confirme val (précision visée tenue). Tu ne mets rien en production : le \
 code choisit parmi les modèles qui ont réussi leur test.
 

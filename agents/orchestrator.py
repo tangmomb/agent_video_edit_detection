@@ -7,7 +7,7 @@ Chaque délégation lance le sous-agent sur une consigne autonome ; son rapport 
 résultat d'outil. Journaux dans runs/<NNN>_<horodatage>/.
 """
 
-from model_training_pipeline.lab import Lab
+from model_training_pipeline.lab import AP_TIE, Lab
 
 from . import dataset_builder, evaluator, model_researcher
 from .common import CONTEXT, MEASURE, list_experiments_tool
@@ -32,7 +32,9 @@ appelés : elle fait foi, et ce qu'elle ne confirme pas est faux. Relis global_s
 délégation.
 - Une étape impossible (budget à 0, test final épuisé…) : ne la redemande pas autrement, conclus.
 
-Données : demande-en quand l'analyse d'erreurs montre qu'elles manquent, en disant lesquelles. Si \
+Données : demande-en quand l'analyse d'erreurs montre qu'elles manquent, en donnant au Dataset \
+Builder les types de montage à viser, tels que l'analyse les décrit (ex. « sous-titres blancs en \
+bas », « petit logo en coin »). Si \
 c'est le cas et que global_status annonce des vidéos annotables, fais-les collecter avant de \
 conclure, même peu : chaque chaîne compte. Fais ensuite créer un nouveau split et réentraîner la \
 meilleure config dessus.
@@ -40,10 +42,10 @@ meilleure config dessus.
 Budget : une réserve (reserve_rapport_usd) est gardée pour ton rapport ; une fois le reste \
 dépensé, les délégations sont refusées. Planifie le test final avant.
 
-Pour conclure (objectif atteint, gains qui plafonnent ou budget) : fais tester par l'Evaluator le \
-meilleur candidat du split le plus récent. Aucun agent ne met de modèle en production : le code \
-choisit ensuite la meilleure AP par chaîne parmi les modèles qui ont réussi leur test (à défaut, \
-la meilleure, marquée non vérifiée) et l'ajoute à ton rapport.
+Pour conclure (objectif atteint, gains qui plafonnent ou budget) : fais tester par l'Evaluator \
+candidat_a_tester (list_experiments). S'il échoue et qu'il reste un test, le suivant. Aucun agent ne met de modèle en production : le code \
+choisit ensuite le meilleur parmi les modèles qui ont réussi leur test (à défaut, le meilleur, \
+marqué non vérifié) et l'ajoute à ton rapport.
 
 Rapport final, en français : modèle recommandé (id, seuil, split) et pourquoi, verdict du test, \
 chiffres val et test, déroulé, ce qui a marché ou non, recommandations. Le gain de la session se \
@@ -138,10 +140,11 @@ def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annota
         if choice["production_conservee"] else
         f"`{choice['production']['experiment_id']}` sur `{choice['split_id']}` (le plus gros split), seuil "
         f"{choice['production']['threshold']} : "
-        + ("meilleure AP par chaîne sur val parmi les modèles qui ont réussi leur test final."
+        + (f"meilleur rappel val parmi les AP par chaîne à {AP_TIE} près de la meilleure, chez les "
+           "modèles qui ont réussi leur test final."
            if choice["verifie_sur_test"] else
-           "**NON VÉRIFIÉ sur test** : aucun modèle de ce split n'a réussi son test final, c'est la "
-           "meilleure AP par chaîne sur val parmi les modèles "
+           "**NON VÉRIFIÉ sur test** : aucun modèle de ce split n'a réussi son test final, c'est le "
+           f"meilleur rappel val parmi les AP par chaîne à {AP_TIE} près de la meilleure, chez les modèles "
            + ("non testés." if choice["production"]["test"]["statut"] == "non testé"
               else "testés, tous en échec."))
         + " Classement :\n\n"

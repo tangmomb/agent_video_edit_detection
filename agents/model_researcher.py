@@ -37,7 +37,7 @@ payant : pas à chaque expérience.
 
 Rapport final, court, en français : le split (et pourquoi si tu l'as créé) ; par expérience, id, \
 hypothèse, AP par chaîne, rappel à 95 % et effet sur l'erreur visée ; ton meilleur candidat \
-(d'abord sur l'AP par chaîne) et pourquoi ; ce que tu essaierais ensuite et les données qui \
+(règle de la partie Mesure) et pourquoi ; ce que tu essaierais ensuite et les données qui \
 manquent."""
 
 

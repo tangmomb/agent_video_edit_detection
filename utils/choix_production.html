@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Choix de la production</title>
+<style>
+:root{--bg:#f7f6f3;--panel:#fff;--fg:#1d1d1f;--muted:#6b6b70;--line:#cfccc4;--agent:#2f5bd3;--code:#9a5200;
+--ok:#1f7a45;--ko:#b3261e;--warn:#8a6d00;--soft:#f0eee9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151517;--panel:#1e1e21;--fg:#ececee;
+--muted:#9a9aa0;--line:#3a3a40;--agent:#7d9cff;--code:#f2b36b;--ok:#8fe0b0;--ko:#ff8a80;--warn:#f0d36b;--soft:#2a2a2f}}
+:root[data-theme="dark"]{--bg:#151517;--panel:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#3a3a40;--agent:#7d9cff;
+--code:#f2b36b;--ok:#8fe0b0;--ko:#ff8a80;--warn:#f0d36b;--soft:#2a2a2f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 24px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;margin:28px 0 10px;color:var(--muted)}
+h2 .who{font-weight:700}
+h2 .who.agent{color:var(--agent)}h2 .who.code{color:var(--code)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.box.agent{border-left:4px solid var(--agent)}
+.box.code{border-left:4px solid var(--code)}
+.box h3{margin:0 0 4px;font-size:15px}
+.box p{margin:0;color:var(--muted);font-size:14px}
+.box code,.ex code{font:13px ui-monospace,Consolas,monospace;background:var(--soft);padding:1px 5px;border-radius:4px;color:var(--fg)}
+.num{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--code);color:var(--panel);
+font-size:12px;font-weight:700;text-align:center;line-height:22px;margin-right:6px}
+.arrow{text-align:center;color:var(--muted);font-size:18px;line-height:1;margin:6px 0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ladder{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ladder span{font-size:13px;padding:3px 9px;border-radius:12px;border:1px solid currentColor}
+.ok{color:var(--ok)}.ko{color:var(--ko)}.warn{color:var(--warn)}
+.ladder .sep{border:none;color:var(--muted);padding:3px 0}
+.q{background:var(--panel);border:2px dashed var(--code);border-radius:10px;padding:10px 14px;text-align:center;font-weight:600}
+.branches{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+.branch .lab{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:center;margin-bottom:4px}
+.end{border-radius:10px;padding:10px 14px;font-size:14px;border:1px solid currentColor;background:var(--panel)}
+.end b{display:block;font-size:15px;margin-bottom:2px}
+.ex{margin-top:28px;background:var(--soft);border-radius:10px;padding:14px 16px;font-size:14px}
+.ex h3{margin:0 0 6px;font-size:15px}
+.ex ol{margin:0;padding-left:20px}.ex li{margin:3px 0}
+.out{margin-top:6px;font-size:14px;color:var(--muted)}
+@media (max-width:620px){.row,.branches{grid-template-columns:1fr}}
+</style></head>
+<body><main>
+<h1>Choix du modèle de production</h1>
+<p class="sub">Fait par le code à la fin de chaque run (<code>lab.select_production</code>), jamais par un agent. Les agents préparent les candidats ; le code applique toujours la même règle.</p>
+
+<h2><span class="who agent">Pendant le run</span> · les agents préparent les candidats</h2>
+<div class="row">
+  <div class="box agent"><h3>Model Researcher · <code>train_model</code></h3>
+    <p>Entraîne une expérience sur le dernier split et la mesure sur <b>val</b> (validation croisée par chaîne : chaque image est prédite par un modèle qui n'a jamais vu sa chaîne). Le code y fixe le <b>seuil</b> prudent qui tient 95 % de précision (200 tirages de chaînes, 80<sup>e</sup> centile), enregistré avec l'expérience.</p></div>
+  <div class="box agent"><h3>Evaluator · <code>final_test</code></h3>
+    <p>Teste <code>candidat_a_tester</code> (donné par <code>list_experiments</code> : la règle de l’étape 3 appliquée aux non testés), un à la fois, 2 par run au plus : <b>ce même seuil</b> sur le <b>test</b> du split, des chaînes jamais vues. Précision ≥ 95 % → <span class="ok">réussi</span>, on s'arrête ; sinon <span class="ko">échoué</span>, et le candidat suivant prend sa place. Sans test → <span class="warn">non testé</span>.</p></div>
+</div>
+
+<h2><span class="who code">Fin du run</span> · le code choisit</h2>
+<div class="box code"><h3><span class="num">1</span>Le plus gros split</h3>
+  <p>Seules comptent les expériences du split qui a le plus de vidéos (le plus récent, en pratique).</p></div>
+<div class="arrow">↓</div>
+<div class="box code"><h3><span class="num">2</span>Le meilleur groupe de candidats</h3>
+  <p>On prend le premier groupe qui n'est pas vide :</p>
+  <div class="ladder"><span class="ok">test réussi</span><span class="sep">sinon</span><span class="warn">non testé</span><span class="sep">sinon</span><span class="ko">test échoué</span></div></div>
+<div class="arrow">↓</div>
+<div class="box code"><h3><span class="num">3</span>Le meilleur du groupe</h3>
+  <p>On garde ceux dont l'<b>AP par chaîne</b> sur val est à moins de <b>0,005</b> de la meilleure (ils reconnaissent aussi bien les ajouts sur des chaînes nouvelles), puis on prend celui de <b>meilleur rappel</b> val à 95 %.</p></div>
+<div class="arrow">↓</div>
+<div class="q"><span class="num">4</span>Ce candidat a-t-il réussi son test ?</div>
+<div class="branches">
+  <div class="branch"><div class="lab ok">oui</div>
+    <div class="end ok"><b>Il passe en production</b>Vérifié sur test.</div></div>
+  <div class="branch"><div class="lab ko">non</div>
+    <div class="q" style="font-weight:500">La production actuelle a-t-elle réussi le sien ?</div>
+    <div class="branches">
+      <div class="branch"><div class="lab ok">oui</div>
+        <div class="end ok"><b>On la garde</b>Un modèle vérifié n'est jamais remplacé par un modèle qui ne l'est pas, même s'il vient d'un plus petit split.</div></div>
+      <div class="branch"><div class="lab ko">non</div>
+        <div class="end warn"><b>Le candidat passe</b>marqué <strong>NON VÉRIFIÉ</strong>.</div></div>
+    </div></div>
+</div>
+<p class="out">Résultat : <code>model_results/production.json</code> (expérience, split, seuil, statut du test), ajouté en fin de rapport du run. Le seuil mis en production est celui choisi sur val.</p>
+
+<div class="ex"><h3>Exemple : l'état actuel (après le run 007)</h3>
+<ol>
+  <li>Plus gros split : <code>split_003</code> (44 expériences).</li>
+  <li>Aucun test réussi : exp_072 (précision test 0,940) et exp_066 (0,923) ont échoué → groupe des <span class="warn">non testés</span>.</li>
+  <li>Meilleure AP par chaîne : exp_081 (0,9355). Dans les 0,005 : exp_081, 082, 080, 079, 083 → meilleur rappel : <b>exp_079</b> (0,862).</li>
+  <li>exp_079 est aussi le <code>candidat_a_tester</code> que verra l'Evaluator au prochain run. Pour l'instant il n'est pas testé ; la production actuelle, <b>exp_045</b> (<code>split_002</code>), a réussi son test (précision 0,980) → <span class="ok">exp_045 est gardée</span>.</li>
+</ol></div>
+</main></body></html>
