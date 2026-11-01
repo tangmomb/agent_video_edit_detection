@@ -10,57 +10,44 @@ résultat d'outil. Journaux dans runs/<NNN>_<horodatage>/.
 from model_training_pipeline.lab import Lab
 
 from . import dataset_builder, evaluator, model_researcher
-from .common import CONTEXT, list_experiments_tool
+from .common import CONTEXT, MEASURE, list_experiments_tool
 from .runner import Agent, Session, Tool
 
-SYSTEM = CONTEXT + """
+SYSTEM = CONTEXT + MEASURE + """
 
-Ton rôle : Orchestrateur. Tu pilotes l'amélioration du classifieur d'ajouts de montage en coordonnant trois \
-agents, que tu sollicites avec les outils ask_* :
-- Dataset Builder : collecte de vraies vidéos YouTube annotées par trois LLM, sans se soucier des splits ;
-- Model Researcher : constitue les splits dev/test, entraîne des modèles et mène des \
-expériences mesurées sur val (validation croisée par chaîne) ;
-- Evaluator : mesure, analyse les erreurs, vérifie les améliorations et accède au test.
+Ton rôle : Orchestrateur. Tu ne fais rien toi-même : tu lis l'état (global_status, \
+list_experiments), tu délègues à trois agents avec les outils ask_* et tu décides de la suite.
+- Dataset Builder : collecte de vidéos.
+- Model Researcher : splits et entraînements, mesurés sur val.
+- Evaluator : analyse des erreurs, seul accès au test.
+Cycle type : données si besoin → nouveau split → expériences → évaluation → décision.
 
-Tu ne fais rien toi-même : tu lis l'état (global_status, list_experiments), tu choisis la prochaine \
-expérience la plus utile, tu délègues, tu lis le rapport et tu décides de la suite. Cycle type : \
-données si nécessaire → split si le dataset a changé → expériences → évaluation → décision. Les agents ne voient pas ta \
-conversation : chaque consigne doit être autonome (objectif, contraintes, ids d'expériences \
-concernés, ce qu'on attend dans le rapport). Ne demande des données que si l'analyse d'erreurs \
-montre qu'elles manquent, en précisant lesquelles. Mais si c'est le cas et que global_status \
-annonce des vidéos annotables (videos_annotables_estimees), fais-les collecter avant de conclure, \
-même peu : avec une soixantaine de chaînes, chaque chaîne de plus compte, et une session qui finit \
-en disant que les données manquent sans en avoir demandé laisse le problème entier. Pour qu'elles \
-comptent, fais ensuite créer un nouveau split (la plupart vont en dev, une part en test) et \
-ré-entraîner la meilleure config dessus.
+Délégation :
+- Les agents ne voient pas ta conversation : chaque consigne est autonome (objectif, contraintes, \
+ids d'expériences, contenu attendu du rapport).
+- Ne leur demande que ce que leurs outils permettent (liste en bas) : jamais de script, de \
+commande ou de fichier.
+- Chaque rapport finit par une « Vérification automatique » qui liste les outils réellement \
+appelés : elle fait foi, et ce qu'elle ne confirme pas est faux. Relis global_status après chaque \
+délégation.
+- Une étape impossible (budget à 0, test final épuisé…) : ne la redemande pas autrement, conclus.
 
-Les agents ne peuvent faire que ce que leurs outils permettent (liste plus bas) : ne leur demande \
-jamais d'écrire ou d'exécuter un script, de lancer une commande ou de lire des fichiers. Chaque \
-rapport se termine par une « Vérification automatique » produite par le code, qui liste les outils \
-réellement appelés et leurs erreurs : elle fait foi. Toute affirmation du rapport qu'elle ne \
-confirme pas (données collectées, modèle entraîné, chiffres) est à considérer comme fausse. Relis \
-global_status après chaque délégation plutôt que de croire le rapport sur parole.
+Données : demande-en quand l'analyse d'erreurs montre qu'elles manquent, en disant lesquelles. Si \
+c'est le cas et que global_status annonce des vidéos annotables, fais-les collecter avant de \
+conclure, même peu : chaque chaîne compte. Fais ensuite créer un nouveau split et réentraîner la \
+meilleure config dessus.
 
-Si une étape est impossible (dataset vide et budget de vidéos ou d'annotation à 0, test final épuisé, etc.), \
-ne la redemande pas sous une autre forme : rédige directement le rapport final en expliquant ce \
-qui bloque.
+Budget : une réserve (reserve_rapport_usd) est gardée pour ton rapport ; une fois le reste \
+dépensé, les délégations sont refusées. Planifie le test final avant.
 
-Budget : une part du budget de session (reserve_rapport_usd dans global_status) t'est réservée \
-pour rédiger le rapport final. Une fois le reste dépensé, les délégations sont refusées : planifie \
-le test final avant. Un sous-agent à court de budget rend quand même un \
-rapport, signalé comme tel.
+Pour conclure (objectif atteint, gains qui plafonnent ou budget) : fais tester par l'Evaluator le \
+meilleur candidat du split le plus récent. Aucun agent ne met de modèle en production : le code \
+choisit ensuite la meilleure AP par chaîne parmi les modèles qui ont réussi leur test (à défaut, \
+la meilleure, marquée non vérifiée) et l'ajoute à ton rapport.
 
-Pour conclure, quand l'objectif est atteint, que les gains plafonnent ou que le budget l'impose : \
-fais vérifier le meilleur candidat sur test par l'Evaluator. Aucun agent ne met de modèle en \
-production : à la fin du run, le code y met, sur le plus gros split (le plus de clips), \
-l'expérience de meilleure AP par chaîne sur val parmi celles qui ont réussi leur test final ; \
-s'il n'y en a aucune, il prend la meilleure sur val et la marque comme non vérifiée. Il l'ajoute à \
-ton rapport. Pour que ce choix soit le bon, fais entraîner les meilleures configs sur le split le \
-plus récent et fais tester le meilleur candidat de ce split. Rédige ton rapport en \
-français : modèle recommandé (id d'expérience, seuil, split) et pourquoi, verdict du test, chiffres val et test, déroulé des cycles, ce qui a marché ou non, recommandations. \
-Les chiffres et les gains ne comparent que des expériences du même split : le gain d'une session \
-se mesure contre la meilleure config d'avant ré-entraînée sur le split final, jamais contre les \
-scores d'un ancien split (autre dev, autre test)."""
+Rapport final, en français : modèle recommandé (id, seuil, split) et pourquoi, verdict du test, \
+chiffres val et test, déroulé, ce qui a marché ou non, recommandations. Le gain de la session se \
+mesure contre la meilleure config d'avant réentraînée sur le split final."""
 
 TASK = {"type": "object",
         "properties": {"task": {"type": "string", "description": "Consigne autonome pour l'agent."}},
@@ -88,12 +75,12 @@ def make(lab: Lab, session: Session) -> Agent:
         if info.get("dataset_vide"):
             dataset = info
         else:
-            d = info["dataset"]
+            d = info["dataset_total_disponible"]
             dataset = {k: d[k] for k in ("chaines_distinctes", "videos", "moyenne_videos_par_chaine",
                                          "images_etiquetees", "videos_sans_ajout",
                                          "pourcentage_images_avec_ajout")}
             dataset["budgets"] = info["budgets"]
-        return {"dataset": dataset,
+        return {"dataset_total_disponible": dataset,
                 "budget_session_usd": {"depense": round(session.spent, 2), "total": session.budget_usd,
                                        "reserve_rapport_usd": round(session.reserve_usd, 2),
                                        "disponible_pour_deleguer": round(max(
@@ -107,13 +94,8 @@ def make(lab: Lab, session: Session) -> Agent:
         max_turns=30,
         tools=[
             Tool(name="global_status",
-                 description="État global : volumes du dataset (chaînes YouTube distinctes dont proviennent "
-                             "les vidéos, vidéos, moyenne de vidéos par chaîne, images étiquetées, vidéos "
-                             "sans ajout, pourcentage d'images avec ajout), budgets restants (vidéos, "
-                             "annotation en $ et nombre estimé de vidéos qu'elle permet d'annoter, tests "
-                             "finaux), budget de session. "
-                             "Les splits sont dans list_experiments ; le détail de composition "
-                             "(orientation, chaînes) n'est visible que des sous-agents.",
+                 description="Volumes du dataset, budgets restants (vidéos, annotation, tests finaux) et "
+                             "budget de session.",
                  input_schema={"type": "object", "properties": {}}, fn=global_status),
             list_experiments_tool(lab, brief=True),
             Tool(name="ask_dataset_builder",

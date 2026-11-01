@@ -61,9 +61,11 @@ TOP_GROUPS = 15
 # Au-delà, le test ne gagne guère en précision : le reste va en dev.
 TEST_MAX_CHAINS = 150
 HISTORY_QUERIES = 30  # data_requested_history : requêtes listées, les plus productives
-# list_experiments : expériences du split récent en format court (les autres en une ligne)
-DETAILED_BEST = 8  # les meilleures en AP par chaîne
-DETAILED_RECENT = 5  # les dernières, sur lesquelles le Model Researcher enchaîne
+# list_experiments : une ligne par expérience qui compte sur le split récent, les autres en un
+# total, pour que la réponse ne grandisse pas avec leur nombre
+LISTED_BEST = 5  # les meilleures en AP par chaîne
+LISTED_RECENT = 3  # les dernières, sur lesquelles le Model Researcher enchaîne
+BRIEF_BEST = 3  # version de l'orchestrateur : les meilleures seulement
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
 STRATIFY_KEYS = ("orientation", "clip_vide")
 # hgb (HistGradientBoosting) retiré le 26/10/2026 : sur les 20 essais du banc b2, jamais le meilleur
@@ -119,12 +121,12 @@ def _image_blocks(path: Path, caption: str) -> list[dict]:
 
 
 def _compact_val(val: dict) -> dict:
-    """Val pour les agents : AP, AP par chaîne (choix du modèle de production), rappel et erreurs au
-    point de précision par défaut (95 %). Ni la précision (au moins 95 % par construction), ni l'AUC
-    et le seuil, qui ne décident de rien ; les volumes du val sont ceux du split."""
-    out = {"ap": val["ap"]}
-    if val.get("ap_par_chaine") is not None:
-        out["ap_par_chaine"] = val["ap_par_chaine"]
+    """Val pour les agents : AP par chaîne (choix du modèle de production ; l'AP globale à défaut),
+    rappel et erreurs au point de précision par défaut (95 %). Ni la précision (au moins 95 % par
+    construction), ni l'AUC et le seuil, qui ne décident de rien ; les volumes du val sont ceux du
+    split."""
+    out = ({"ap_par_chaine": val["ap_par_chaine"]} if val.get("ap_par_chaine") is not None
+           else {"ap": val["ap"]})
     op = val[f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"]
     if not isinstance(op, dict):
         return {**out, "p95": op}  # "précision non atteinte"
@@ -139,57 +141,37 @@ def _config(e: dict) -> dict:
     return out
 
 
-def _compact(e: dict) -> dict:
-    """Expérience en format court pour les agents, sans son split (elle est rangée dessous) :
-    config, hypothèse, val à 95 %, test final. Le détail (90/99 %, AUC, volumes, durées) reste dans
-    model_results/, les erreurs dans analyze_errors."""
-    out = {"id": e["id"]} if "id" in e else {}
-    out.update(_config(e))
-    out["hypothese"] = e.get("note", "")
-    out["val"] = _compact_val(e["val"])
-    if "final_test" in e:
-        t = e["final_test"]["test"]
-        out["test"] = {"recall": t["recall"], "precision": t["precision"], "fp": t["fp"], "fn": t["fn"]}
-    if e.get("en_production"):
-        out["en_production"] = True
-    return out
-
-
 def _score(e: dict) -> float:
     """AP par chaîne en val (le critère du modèle de production), à défaut l'AP."""
     v = e["val"]
     return v.get("ap_par_chaine") if v.get("ap_par_chaine") is not None else v["ap"]
 
 
-def _one_line(e: dict) -> str:
-    """Expérience en une ligne, sans hypothèse : de quoi ne pas refaire une config déjà essayée."""
+def _one_line(e: dict, test: str | None = None) -> str:
+    """Expérience en une ligne, sans hypothèse : sa config (de quoi la refaire ou ne pas la
+    refaire), son résultat val à 95 % de précision et son test final (test : statut, pour une
+    expérience d'un ancien split dont seul le statut compte)."""
     c = _config(e)
     parts = ["+".join(c["embeddings"]), " ".join([c["model"], *(f"{k}={v}" for k, v in c.get("params", {}).items())])]
     parts += [f"{k} " + " ".join(f"{g}×{x}" for g, x in c[k].items()) for k in ("balance", "weights") if k in c]
     v = _compact_val(e["val"])
-    res = f"AP/chaîne {_score(e)}, " + (f"rappel {v['recall']}" if "recall" in v else f"95 % : {v['p95']}")
+    res = f"AP/chaîne {_score(e)}, " + (f"rappel {v['recall']} (FP {v['fp']}, FN {v['fn']})"
+                                         if "recall" in v else f"95 % : {v['p95']}")
+    if test:
+        res += f" ; test {test}"
+    elif "final_test" in e:
+        t = e["final_test"]["test"]
+        res += f" ; test : rappel {round(t['recall'], 4)}, précision {round(t['precision'], 4)}"
     return ", ".join(parts) + " → " + res
 
 
 def _split_line(split_id: str, exps: list[dict], test_status) -> dict:
-    """Ancien split en une ligne : nombre d'expériences, la meilleure (AP par chaîne en val, le
-    critère du modèle de production) et le modèle en production s'il en vient, chacun avec sa
-    config pour être refait sur le split récent et le statut de son test final (test_status : id ->
-    réussi / échoué / non testé) : la production passe d'abord par un test réussi, d'où l'écart
-    possible avec la meilleure en val."""
+    """Ancien split : nombre d'expériences et la meilleure (AP par chaîne en val, le critère du modèle
+    de production), en une ligne avec sa config pour être refaite sur le split récent et le statut
+    de son test final (test_status : id -> réussi / échoué / non testé)."""
     best = max(exps, key=_score)
-    op = best["val"][f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"]
-    score = "ap_par_chaine" if best["val"].get("ap_par_chaine") is not None else "ap"
-    out = {"split_id": split_id, "experiences": len(exps),
-           "meilleure": {"id": best["id"], score: _score(best),
-                         "recall": op["recall"] if isinstance(op, dict) else op,
-                         "test": test_status(best["id"]), **_config(best)}}
-    prod = next((e for e in exps if e.get("en_production")), None)
-    if prod is best:
-        out["meilleure"]["en_production"] = True
-    elif prod:
-        out["en_production"] = {"id": prod["id"], "test": test_status(prod["id"]), **_config(prod)}
-    return out
+    return {"split_id": split_id, "experiences": len(exps),
+            "meilleure": {best["id"]: _one_line(best, test_status(best["id"]))}}
 
 
 class FoldEnsemble:
@@ -421,13 +403,16 @@ class Lab:
             return {"dataset_vide": True, "budgets": budgets,
                     "message": "Aucune vidéo : le dataset est à constituer (generate_data)."}
         sids = sorted({r["sample_id"] for r in rows})
-        info = {"dataset": self._composition(set(sids)), "budgets": budgets}
+        info = {"dataset_total_disponible": self._composition(set(sids)), "budgets": budgets}
         if split_id:
             m = self._split_map(split_id)
-            info["composition_du_split"] = {
+            excluded = json.loads((SPLITS_DIR / f"{split_id}.json").read_text(encoding="utf-8"))["excluded"]
+            info["composition_du_dernier_split"] = {
                 "split_id": split_id,
                 **{s: self._composition({k for k, v in m.items() if v == s}, with_positives=s != "test")
-                   for s in SPLITS}}
+                   for s in SPLITS},
+                # vidéos collectées depuis : un nouveau split les ferait compter
+                "videos_hors_split": len(set(sids) - set(m) - set(excluded))}
         # Plusieurs vidéos d'une même chaîne partagent son habillage : elles diversifient peu.
         chains = Counter(source_key(self._ann(s)) for s in sids)
         several = {c: n for c, n in chains.most_common(TOP_GROUPS) if n >= 2}
@@ -435,7 +420,7 @@ class Lab:
         if rest:  # au plus TOP_GROUPS chaînes, le reste en un total
             several["autres"] = f"{len(rest)} autres chaînes, {sum(rest)} vidéos"
         if several:
-            info["dataset"]["chaines_avec_plusieurs_videos"] = several
+            info["dataset_total_disponible"]["chaines_avec_plusieurs_videos"] = several
         return _jsonable(info)
 
     def generate_data(self, n: int, reason: str, query: str, orientation: str | None = None) -> dict:
@@ -646,12 +631,17 @@ class Lab:
              "probs": [round(float(p), 5) for p in probs], "groups": groups.tolist()}), encoding="utf-8")
         with open(d / "model.pkl", "wb") as fh:
             pickle.dump(clf, fh)
-        # Format court : la config est celle de l'appel, le détail reste dans metrics.json.
+        return self.train_summary(exp_id)
+
+    def train_summary(self, experiment_id: str) -> dict:
+        """Réponse de train_model, relue dans metrics.json : format court, la config est celle de
+        l'appel et le détail reste dans le fichier."""
+        result = json.loads((EXP_DIR / experiment_id / "metrics.json").read_text(encoding="utf-8"))
         short = {"val": _compact_val(result["val"])}
         for k in ("reequilibrage_train", "ponderation_train"):
             if k in result:
                 short[k] = result[k]
-        return _jsonable({"experiment_id": exp_id, **short})
+        return _jsonable({"experiment_id": experiment_id, **short})
 
     def analyze_errors(self, experiment_id: str, precision: float = metrics.DEFAULT_PRECISION) -> dict:
         frames, y, probs, op = self._val_at(experiment_id, precision)
@@ -756,13 +746,14 @@ class Lab:
             out.append(e)
         return out
 
-    def experiments_overview(self) -> dict:
+    def experiments_overview(self, brief: bool = False) -> dict:
         """Ce que renvoie l'outil list_experiments : le split le plus récent (celui sur lequel
         entraîner) avec ses expériences, et une ligne par ancien split ayant des expériences (elles
         ne se comparent pas à celles du récent). Sur le split récent, seules celles qui comptent
-        pour décider sont en format court (les DETAILED_BEST meilleures, la production, celles
-        passées au test final, les DETAILED_RECENT dernières) ; les autres tiennent en une ligne,
-        pour que la réponse ne grandisse pas avec le nombre d'expériences."""
+        pour décider tiennent chacune en une ligne (les LISTED_BEST meilleures, celles passées au
+        test final ou en production, les LISTED_RECENT dernières), les autres en un total, pour que
+        la réponse ne grandisse pas avec le nombre d'expériences. En tête, le modèle en production. brief (orchestrateur) : du split récent, les vidéos hors
+        split, la note et les BRIEF_BEST meilleures en une ligne."""
         exps = self.list_experiments()
         summaries = self._split_summaries()
         latest = summaries[-1]["split_id"] if summaries else None
@@ -775,6 +766,15 @@ class Lab:
                 if mine:
                     out.append(_split_line(
                         sid, mine, lambda i: self._test_status(i, metrics.DEFAULT_PRECISION)["statut"]))
+                continue
+            note = sp["note"]
+            note = note if len(note) <= 120 else note[:120].rstrip() + "…"
+            ranked = sorted(mine, key=_score, reverse=True)
+            if brief:
+                entry = {"split_id": sid, "clips_hors_split": sp["clips_hors_split"], "note": note,
+                         "experiences": len(mine),
+                         "meilleures": {e["id"]: _one_line(e) for e in ranked[:BRIEF_BEST]}}
+                out.append(entry)
                 continue
             dev = self._idx("dev", sid)
             # Chaînes par partie, recomptées sur les clips réellement assignés : chaines_shared
@@ -794,17 +794,28 @@ class Lab:
             shared = sum(len(ps) > 1 for ps in parts.values())
             if shared:  # impossible par construction : test fuirait dans dev
                 entry["anomalie_chaines_dans_dev_et_test"] = shared
-            note = sp["note"]
-            entry["note"] = note if len(note) <= 120 else note[:120].rstrip() + "…"
-            keep = ({e["id"] for e in sorted(mine, key=_score, reverse=True)[:DETAILED_BEST]}
-                    | {e["id"] for e in mine[-DETAILED_RECENT:]}
-                    | {e["id"] for e in mine if e.get("en_production") or "final_test" in e})
-            entry["experiences"] = [_compact(e) for e in mine if e["id"] in keep]
-            others = {e["id"]: _one_line(e) for e in mine if e["id"] not in keep}
-            if others:
-                entry["autres_experiences"] = others
+            entry["note"] = note
+            entry["experiences"] = len(mine)
+            listed = {}
+            for name, group in (("meilleures", ranked[:LISTED_BEST]),
+                                ("testees_ou_en_production",
+                                 [e for e in mine if e.get("en_production") or "final_test" in e]),
+                                ("dernieres", mine[-LISTED_RECENT:])):
+                group = {e["id"]: _one_line(e) for e in group if e["id"] not in listed}
+                if group:
+                    entry[name] = group
+                    listed.update(group)
+            rest = [_score(e) for e in mine if e["id"] not in listed]
+            if rest:
+                entry["autres"] = f"{len(rest)} expériences, AP par chaîne de {min(rest)} à {max(rest)}"
             out.append(entry)
-        return {"splits": out}
+        # En tête : le modèle en production, quel que soit son split (la production passe d'abord par
+        # un test réussi, d'où l'écart possible avec la meilleure en val).
+        prod = next((e for e in exps if e.get("en_production")), None)
+        head = ({"en_production": {prod["id"]: f"{prod['split_id']}, " + _one_line(
+                     prod, self._test_status(prod["id"], metrics.DEFAULT_PRECISION)["statut"])}}
+                if prod else {"en_production": None})
+        return {**head, "splits": out}
 
     def final_test(self, experiment_id: str, precision: float = metrics.DEFAULT_PRECISION) -> dict:
         if self.final_tests_left <= 0:

@@ -1,5 +1,5 @@
 """Génère utils/agents_tree.html : l'arbre des agents et de leurs outils, lu dans le code de agents/
-(descriptions, paramètres, modèle, tours), pour que la page suive le code.
+(modèle, tours, outils), avec pour chaque outil un exemple d'appel et de réponse.
 
     .venv/Scripts/python.exe utils/agents_tree.py [--from-run runs/<NNN>_…] [--examples exemples.json]
 
@@ -28,12 +28,14 @@ from model_training_pipeline.lab import Lab  # noqa: E402
 
 CSS = """
 :root{--bg:#f7f6f3;--panel:#fff;--fg:#1d1d1f;--muted:#6b6b70;--line:#d9d7d1;--code:#f0eee9;
---agent:#2f5bd3;--tool:#2e7d4f;--deleg:#b35c00;--req:#c0392b}
+--agent:#2f5bd3;--tool:#2e7d4f;--deleg:#b35c00;--req:#c0392b;
+--sys-fg:#5b35b0;--user-fg:#1f7a45;--tools-fg:#9a5200}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151517;--panel:#1e1e21;
 --fg:#ececee;--muted:#9a9aa0;--line:#34343a;--code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;
---deleg:#f0a24a;--req:#ff7a6b}}
+--deleg:#f0a24a;--req:#ff7a6b;--sys-fg:#c4adff;--user-fg:#8fe0b0;--tools-fg:#f2b36b}}
 :root[data-theme="dark"]{--bg:#151517;--panel:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#34343a;
---code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;--deleg:#f0a24a;--req:#ff7a6b}
+--code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;--deleg:#f0a24a;--req:#ff7a6b;--sys-fg:#c4adff;
+--user-fg:#8fe0b0;--tools-fg:#f2b36b}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:1000px;margin:0 auto;padding:32px 16px 64px}
@@ -60,30 +62,17 @@ border:1px solid currentColor;font-weight:600}
 .tname{font-weight:600}
 .meta{color:var(--muted);font-size:13px;margin-left:auto}
 .body{padding:6px 12px 2px 30px}
-.desc{margin:0 0 6px}
 code{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px}
 summary code{background:none;padding:0;font-size:14px}
-ul.params{margin:0 0 6px;padding-left:18px;font-size:14px}
-ul.params li{margin:3px 0}
-.ptype{color:var(--muted);font-size:13px}
-.penum{color:var(--muted);font-size:13px}
-.req{color:var(--req);font-size:11px;margin-left:6px;text-transform:uppercase}
-.pdesc{color:var(--muted)}
-.noparam{color:var(--muted);font-size:13px;font-style:italic;margin-bottom:6px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:12px}
-details.ex{margin:0 0 8px}
-details.ex>summary{background:none;border:none;padding:2px 0;font-size:13px;color:var(--tool);font-weight:600}
 .exnote{color:var(--muted);font-size:13px;margin:4px 0}
-details.ex pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding:10px 12px;background:var(--code);border-radius:6px;overflow-x:auto;font:12px/1.45 ui-monospace,Consolas,monospace;max-height:480px}
+.body pre{margin:0 0 4px;white-space:pre-wrap;word-break:break-word;padding:10px 12px;background:var(--code);border-radius:6px;overflow-x:auto;font:12px/1.45 ui-monospace,Consolas,monospace;max-height:480px}
+.sys{color:var(--sys-fg)}.user{color:var(--user-fg)}.tools{color:var(--tools-fg)}
+.body pre.llm{max-height:640px}
+.llm b{display:block;margin:10px 0 2px;font-weight:700}.llm b:first-child{margin-top:0}
+.legend2{font-size:12px;margin:6px 0 2px}.legend2 span{font-weight:600}
 .exlabel{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px}
 """
-
-DESC = {"orchestrator": "Orchestrateur : décide de la prochaine expérience et délègue aux trois autres agents.",
-        "dataset_builder": "Dataset Builder : collecte de vraies vidéos YouTube, annotées image par image "
-                           "par trois LLM (étiquette seulement s'ils sont d'accord).",
-        "model_researcher": "Model Researcher : constitue les splits, choisit les représentations et les "
-                            "modèles, entraîne, mène les expériences sur val.",
-        "evaluator": "Evaluator : mesure, analyse les erreurs, vérifie les améliorations, seul accès au test."}
 
 e = html.escape
 
@@ -96,46 +85,54 @@ class _Session:
         raise RuntimeError("non utilisé")
 
 
-def _param(name: str, spec: dict, required: bool) -> str:
-    kind = spec.get("type", "")
-    if kind == "array" and "items" in spec:
-        kind += f" de {spec['items'].get('type', '')}"
-    extra = ""
-    enum = spec.get("enum") or spec.get("items", {}).get("enum")
-    if enum:
-        extra = " · " + " | ".join(enum)
-    elif "minimum" in spec or "maximum" in spec:
-        extra = f" · {spec.get('minimum', '')}…{spec.get('maximum', '')}"
-    out = f'<li><code class="pname">{e(name)}</code>' + ('<span class=req>requis</span>' if required else "")
-    out += f' <span class="ptype">{e(kind)}</span>' + (f'<span class="penum">{e(extra)}</span>' if extra else "")
-    if spec.get("description"):
-        out += f'<div class=pdesc>{e(spec["description"])}</div>'
-    return out + "</li>"
-
-
 def _example(ex: dict | None, note: str) -> str:
     if not ex:
-        return ""
+        return "<p class=\"exnote\">Pas d'exemple.</p>"
     if ex.get("missing"):  # outil non appelé pendant le run dont viennent les exemples
         return f'<p class="exnote">{e(ex["missing"])}</p>'
-    out = f'<details class="ex"><summary>Exemple</summary><p class="exnote">{e(ex.get("note") or note)}</p>'
+    out = ""  # d'où vient l'exemple (note) : gardé dans le JSON embarqué, pas affiché
     if ex.get("call") is not None:
         out += f'<div class="exlabel">Appel</div><pre>{e(json.dumps(ex["call"], ensure_ascii=False, indent=2))}</pre>'
     resp = ex["response"] if isinstance(ex["response"], str) else json.dumps(ex["response"], ensure_ascii=False, indent=2)
-    return out + f'<div class="exlabel">Réponse</div><pre>{e(resp)}</pre></details>'
+    return out + f'<div class="exlabel">Réponse</div><pre>{e(resp)}</pre>'
 
 
-def _tool(tool, kind: str, examples: dict, note: str, child: str = "", agent: str = "") -> str:
-    props = tool.input_schema.get("properties", {})
-    req = set(tool.input_schema.get("required", []))
-    params = ('<ul class="params">' + "".join(_param(n, s, n in req) for n, s in props.items()) + "</ul>"
-              if props else '<div class="noparam">aucun paramètre</div>')
+def _llm_input(agent, user: str | None, user_origin: str) -> str:
+    """Tout ce que reçoit le modèle de l'agent, dans un seul encart en trois couleurs : prompt
+    système (code), prompt utilisateur (user_origin) et outils (paramètre tools de la requête,
+    envoyé à chaque tour à part des messages)."""
+    tools = json.dumps([t.schema() for t in agent.tools], ensure_ascii=False, indent=2)
+    body = f'<b>SYSTÈME</b>{e(agent.system)}'
+    if user is not None:
+        body += f'</span><span class="user"><b>UTILISATEUR</b>{e(user)}'
+    return ('<div class="exlabel">Ce que reçoit le modèle</div><div class="legend2">'
+            '<span class="sys">système</span> : fixe, écrit dans le code · '
+            f'<span class="user">utilisateur</span> : {e(user_origin)} · '
+            '<span class="tools">outils</span> : schémas envoyés à chaque tour, hors des messages</div>'
+            f'<pre class="llm"><span class="sys">{body}</span>'
+            f'<span class="tools"><b>OUTILS</b>{e(tools)}</span></pre>')
+
+
+def _delegation(ex: dict | None, sub) -> str:
+    """Délégation : ce que reçoit le sous-agent (son prompt système, la consigne de l'orchestrateur,
+    son seul message utilisateur, et ses outils) puis le rapport qu'il renvoie."""
+    real = ex and not ex.get("missing") and ex.get("call")
+    out = _llm_input(sub, ex["call"].get("task", "") if real else None,
+                     "consigne rédigée par l’orchestrateur à chaque délégation")
+    if not real:
+        return out + _example(ex, "")
+    resp = ex["response"] if isinstance(ex["response"], str) else json.dumps(ex["response"], ensure_ascii=False, indent=2)
+    return out + f'<div class="exlabel">Réponse</div><pre>{e(resp)}</pre>'
+
+
+def _tool(tool, kind: str, examples: dict, note: str, child: str = "", agent: str = "",
+          sub=None) -> str:
     badge = "délègue" if kind == "delegate" else "outil"
-    return (f'<li class="node {kind}"><details{" open" if kind == "delegate" else ""}><summary>'
+    ex = examples.get(f"{agent}.{tool.name}") or examples.get(tool.name)
+    body = _delegation(ex, sub) if kind == "delegate" else _example(ex, note)
+    return (f'<li class="node {kind}"><details><summary>'
             f'<span class="badge {kind}">{badge}</span><code class="tname">{e(tool.name)}</code></summary>'
-            f'<div class="body"><p class="desc">{e(tool.description)}</p>{params}'
-            f'{_example(examples.get(f"{agent}.{tool.name}") or examples.get(tool.name), note)}'
-            f'</div></details>{child}</li>')
+            f'<div class="body">{body}</div></details>{child}</li>')
 
 
 def _agent(agent, examples: dict, note: str, subagents: dict, open_: bool = False) -> str:
@@ -143,15 +140,25 @@ def _agent(agent, examples: dict, note: str, subagents: dict, open_: bool = Fals
     for t in agent.tools:
         sub = t.name.removeprefix("ask_")
         if sub in subagents:
-            child = '<ul class="tree">' + _agent(subagents[sub], examples, note, {}) + "</ul>"
-            items.append(_tool(t, "delegate", examples, note, child, agent.name))
+            child = '<ul class="tree">' + _agent(subagents[sub], examples, note, {}, open_=True) + "</ul>"
+            items.append(_tool(t, "delegate", examples, note, child, agent.name, subagents[sub]))
         else:
             items.append(_tool(t, "tool", examples, note, agent=agent.name))
     meta = f"{agent.model} · {agent.max_turns} tours max · {len(agent.tools)} outils"
+    # Racine (orchestrateur) : ses prompts ici, ceux des sous-agents sont dans leur délégation.
+    prompts = "" if subagents == {} else f'<div class="body">{_root_prompts(agent, examples)}</div>'
     return (f'<li class="node agent"><details{" open" if open_ else ""}><summary><span class="badge agent">agent</span>'
             f'<span class="aname">{e(agent.name)}</span><span class="meta">{e(meta)}</span></summary>'
-            f'<div class="body"><p class="desc">{e(DESC.get(agent.name, ""))}</p></div>'
-            f'<ul class="tree">{"".join(items)}</ul></details></li>')
+            f'{prompts}<ul class="tree">{"".join(items)}</ul></details></li>')
+
+
+def _root_prompts(agent, examples: dict) -> str:
+    """Ce que reçoit l'orchestrateur, replié : système, objectif du run, outils."""
+    goal = examples.get(f"{agent.name}.goal")
+    return ('<details class="prompts"><summary>Prompts</summary>'
+            + _llm_input(agent, goal["response"] if goal else None,
+                         "objectif du run, option --goal de python -m agents (sinon sa valeur par défaut)")
+            + "</details>")
 
 
 def _agents() -> list:
@@ -169,7 +176,7 @@ def render(examples: dict, note: str) -> str:
 <title>Agents et outils</title><style>{CSS}</style></head>
 <body><main>
 <h1>Agents et outils</h1>
-<p class="sub">Généré depuis le code de <code>agents/</code> par <code>utils/agents_tree.py</code> : l'orchestrateur délègue aux trois sous-agents via ses outils <code>ask_*</code>. Les données sont de vraies vidéos YouTube, chaque image étiquetée par l'accord de trois LLM.</p>
+<p class="sub">Exemples d'appel et de réponse de chaque outil, et prompts des agents, générés par <code>utils/agents_tree.py</code>.</p>
 <div class="toolbar"><button id="open">Tout déplier</button><button id="close">Tout replier</button></div>
 <div class="legend"><span><span class="badge agent">agent</span> agent LLM (via LiteLLM)</span>
 <span><span class="badge tool">outil</span> appel au labo</span>
@@ -212,6 +219,9 @@ def examples_from_run(run_dir: Path) -> dict:
     log = json.loads((run_dir / "pipeline.json").read_text(encoding="utf-8"))
     out = {}
     for s in log["steps"]:
+        if s["type"] == "start" and s["parent"] is None:  # objectif donné à l'agent racine
+            out.setdefault(f"{s['agent']}.goal", {"call": None, "response": s["task"]})
+            continue
         key = f"{s['agent']}.{s.get('tool')}"
         if s["type"] != "tool" or (key in out and not _empty(out[key]["response"])) or s["error"]:
             continue
@@ -238,9 +248,12 @@ def examples_from_run(run_dir: Path) -> dict:
 
 # Outils sans effet (ils lisent l'état du labo) : leur exemple est recalculé à chaque génération,
 # avec le même appel, pour que la page suive le format de leurs réponses sans attendre un run.
-# Les autres (collecte, split, entraînement, test final, délégations) gardent leur appel réel.
+# Les autres (collecte, split, test final, délégations) gardent leur réponse réelle, sauf ceux de
+# REREAD.
 READ_ONLY = {"global_status", "list_experiments", "dataset_info", "data_requested_history",
              "analyze_errors", "show_examples"}
+# Outils à effet dont la réponse se relit dans ce qu'ils ont écrit : recalculée sans les rejouer.
+REREAD = {"train_model": lambda lab, ex: lab.train_summary(ex["response"]["experiment_id"])}
 
 
 def refresh(examples: dict, summary_usd: float = 0.0) -> list[str]:
@@ -262,10 +275,12 @@ def refresh(examples: dict, summary_usd: float = 0.0) -> list[str]:
         for t in agent.tools:
             key = f"{agent.name}.{t.name}"
             ex = examples.get(key)
-            if t.name not in READ_ONLY or not ex or ex.get("missing"):
+            if (t.name not in READ_ONLY and t.name not in REREAD) or not ex or ex.get("missing"):
                 continue
             call = ex.get("call") or {}
-            if t.name == "analyze_errors":
+            if t.name in REREAD:
+                response = REREAD[t.name](lab, ex)
+            elif t.name == "analyze_errors":
                 response = analyze_errors_tool(lab, session).fn(**call)
                 old = ex["response"] if isinstance(ex["response"], dict) else {}
                 if session is None and "analyse_visuelle" in old:
@@ -274,6 +289,12 @@ def refresh(examples: dict, summary_usd: float = 0.0) -> list[str]:
                                 "cout_analyse_visuelle_usd": old.get("cout_analyse_visuelle_usd"), **response}
             else:
                 response = t.fn(**call)
+            if t.name == "global_status" and isinstance(ex["response"], dict):
+                # budgets de session et de collecte : ceux d'un run, qu'un labo neuf n'a pas
+                old = ex["response"]
+                response["budget_session_usd"] = old.get("budget_session_usd")
+                if "budgets" in old.get("dataset_total_disponible", {}):
+                    response["dataset_total_disponible"]["budgets"] = old["dataset_total_disponible"]["budgets"]
             if isinstance(response, list):  # blocs texte et image (show_examples)
                 response = "\n".join(b["text"] if b["type"] == "text" else "<image>" for b in response)
             origin = ex.get("origin") or ex.get("note", "").rstrip(".")
