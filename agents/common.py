@@ -174,9 +174,10 @@ def analyze_errors_tool(lab: Lab, session=None) -> Tool:
         session.add_cost(d["cost_usd"])
         lines = "\n".join(f"{e['erreur']} | {e['video']} t={e['t']} | {e['chaine']} | « {e['requete']} » | "
                           f"p={e['p']} | {e['description'] or '(non décrite)'}" for e in d["erreurs"])
-        out["analyse_visuelle"], cost = session.look([{"type": "text", "text": SUMMARY_PROMPT + lines}])
-        out["cout_analyse_visuelle_usd"] = round(d["cost_usd"] + cost, 4)
-        return out
+        summary, cost = session.look([{"type": "text", "text": SUMMARY_PROMPT + lines}])
+        # en tête de la réponse : c'est la partie que l'agent a demandée, le reste est l'habituel
+        return {"experiment_id": out.pop("experiment_id"), "analyse_visuelle": summary,
+                "cout_analyse_visuelle_usd": round(d["cost_usd"] + cost, 4), **out}
 
     properties = {"experiment_id": {"type": "string"}, "precision": PRECISION}
     if session is not None:
