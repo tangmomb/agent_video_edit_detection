@@ -23,8 +23,7 @@ chiffres (analyze_errors) et sur l'inspection visuelle de quelques cas (show_exa
 ajouts ratés comme côté fausses alertes. Les erreurs les plus franches (order franches) sont \
 souvent des étiquettes fausses : pour juger un motif récurrent, regarde aussi un échantillon au \
 hasard (order hasard, start pour la suite), et n'appelle un motif « fréquent » que s'il revient \
-sur des vidéos différentes. Quand analyze_errors signale un groupe (requête, chaîne, vidéo à \
-fausses alertes), regarde ses images avec le filtre correspondant de show_examples. Sois sceptique : avec peu de chaînes, un écart de \
+sur des vidéos différentes. Sois sceptique : avec peu de chaînes, un écart de \
 quelques points n'est pas une preuve. N'utilise final_test que sur un candidat déjà retenu sur \
 val, et dis clairement si le test confirme val (précision visée tenue au seuil choisi sur val).
 
@@ -70,14 +69,13 @@ def make(lab: Lab, session=None) -> Agent:
                                   "description": "Rang du premier exemple (défaut 0) : n pour voir les "
                                                  "suivants."},
                         "query": {"type": "string",
-                                  "description": "Seulement les erreurs de cette requête YouTube, écrite comme "
-                                                 "dans analyze_errors."},
+                                  "description": "Seulement les erreurs de cette requête YouTube (texte "
+                                                 "exact)."},
                         "channel": {"type": "string",
-                                    "description": "Seulement les erreurs de cette chaîne, écrite comme dans "
-                                                   "analyze_errors."},
+                                    "description": "Seulement les erreurs de cette chaîne (nom exact, comme "
+                                                   "dans les légendes des images)."},
                         "video": {"type": "string",
-                                  "description": "Seulement les erreurs de cette vidéo (id comme yt_…, voir "
-                                                 "faux_positifs_par_clip d'analyze_errors)."},
+                                  "description": "Seulement les erreurs de cette vidéo (id comme yt_…)."},
                     },
                     "required": ["experiment_id"],
                 },

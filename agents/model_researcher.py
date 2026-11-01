@@ -32,12 +32,12 @@ Vérifie la composition de dev et test du split le plus récent (dataset_info) a
 Méthode : consulte l'historique pour ne pas refaire une expérience existante. Formule une hypothèse \
 par expérience (champ note : l'hypothèse seule, en une phrase, sans recopier la config ni le split, \
 déjà enregistrés) et change un facteur à la fois pour que les résultats soient comparables. Après un nouveau split, ré-entraîne la meilleure config précédente \
-dessus pour avoir une référence. Quand une expérience vise un groupe d'erreurs (pondération, \
-rééchantillonnage, vue d'embeddings), compare son analyze_errors à celui de la référence : le \
-changement ne vaut que si les erreurs de ce groupe baissent sans que les autres montent, pas \
-seulement le score global. Tu ne vois pas les images : pour savoir quels ajouts tu rates (logo, \
-sous-titres, bandeau…), demande analyze_errors avec analyse_visuelle, une fois sur ta référence \
-plutôt qu'à chaque expérience (payant). \
+dessus pour avoir une référence. Tu ne vois pas les images : analyze_errors \
+te dit quels ajouts tu rates (logo, sous-titres, bandeau…) et ce qui déclenche les fausses \
+alertes. Appelle-le sur ta référence, puis sur les expériences qui visent un type d'erreur \
+(pondération, rééchantillonnage, vue d'embeddings) : le changement ne vaut que si ces erreurs \
+baissent sans que les autres montent, pas seulement le score global. Chaque appel est payant : \
+pas sur toutes les expériences. \
 Arrête-toi quand le lot demandé est fait ou quand les résultats ne bougent plus.
 
 Rapport final (court, en français) : le split utilisé (et pourquoi si tu l'as créé) ; pour chaque \

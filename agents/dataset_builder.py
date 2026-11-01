@@ -16,7 +16,7 @@ sous-titrées, sobres), des vidéos portrait (Shorts) et paysage, et des images 
 autant que des images avec ajout.
 
 Méthode : commence par dataset_info (composition globale, chaînes ayant plusieurs vidéos, budgets) \
-et l'historique des collectes, puis collecte exactement ce qui est demandé (volume, thèmes, \
+et les requêtes qui ont déjà amené des vidéos (data_requested_history), puis collecte exactement ce qui est demandé (volume, thèmes, \
 orientation) sans dépasser les budgets. Préfère plusieurs petites collectes ciblées à une grosse \
 générique, et comble en priorité les cas rares. Une vidéo n'est jamais reprise, et une collecte ne \
 garde qu'une vidéo par chaîne absente du dataset : une requête déjà très exploitée (voir data_requested_history) finit par ne plus rien donner, et l'erreur « aucune \
@@ -41,9 +41,10 @@ def make(lab: Lab) -> Agent:
             dataset_info_tool(lab, "dataset_builder"),
             Tool(
                 name="data_requested_history",
-                description="Historique des collectes passées, une ligne par requête YouTube : "
-                            "« vidéos obtenues/demandées orientation » par orientation essayée. Moins de vidéos obtenues que "
-                            "demandées : la requête s'épuise dans cette orientation.",
+                description="Requêtes YouTube qui ont amené des vidéos au dataset, avec le nombre de vidéos "
+                            "par orientation (paysage, portrait), des plus productives aux moins productives. "
+                            "Une requête absente n'a encore rien apporté : à toi d'en lancer de nouvelles "
+                            "pour les thèmes et orientations peu représentés.",
                 input_schema={"type": "object", "properties": {}},
                 fn=lab.data_requested_history,
             ),

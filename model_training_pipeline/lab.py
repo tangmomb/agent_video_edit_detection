@@ -29,7 +29,7 @@ import io
 import json
 import pickle
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -48,7 +48,6 @@ from .features import extraction_cost, get_features
 from .frames import FPS, FRAMES_DIR, SKIPPED_SHARE, annotate, build, load_index, source_key, to_annotate
 
 EXP_DIR = LAB_DIR / "model_results"
-DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
 SPLITS_DIR = DATA_DIR / "splits"
 # Clips retirés des splits créés ensuite (vidéo défectueuse, doublon) : exclude_clips, à la main (CLI exclude).
 EXCLUDED = DATA_DIR / "excluded.json"
@@ -56,11 +55,12 @@ EXCLUDED = DATA_DIR / "excluded.json"
 LEGACY_SPLIT = "hash"
 SPLITS = ("dev", "test")
 FOLDS = 5  # plis de la validation croisée sur dev
-# Listes par chaîne ou par requête des outils (analyze_errors, dataset_info) : au plus TOP_GROUPS
+# Listes par chaîne des outils (dataset_info) : au plus TOP_GROUPS
 # entrées, le reste en un total, pour que les réponses ne grandissent pas avec le dataset.
 TOP_GROUPS = 15
 # Au-delà, le test ne gagne guère en précision : le reste va en dev.
 TEST_MAX_CHAINS = 150
+HISTORY_QUERIES = 30  # data_requested_history : requêtes listées, les plus productives
 # list_experiments : expériences du split récent en format court (les autres en une ligne)
 DETAILED_BEST = 8  # les meilleures en AP par chaîne
 DETAILED_RECENT = 5  # les dernières, sur lesquelles le Model Researcher enchaîne
@@ -500,10 +500,6 @@ class Lab:
         self._rows = None
         sids = {d.name for d in chosen}
         mine = [r for r in self.rows if r["sample_id"] in sids]
-        with open(DATA_REQUESTS, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"n": n, "ok": len(got["dirs"]), "query": query, "orientation": orientation,
-                                 "cost_usd": round(self.annotation_spent - before, 4),
-                                 "cost_usd_estime": round(est, 4), "reason": reason, "time": time.time()}) + "\n")
         return _jsonable({
             "videos_collectees": len(got["dirs"]),  # autant de chaînes nouvelles (une vidéo chacune)
             "echecs": len(errors), "exemples_erreurs": errors[:3], "arret": stopped,
@@ -518,22 +514,21 @@ class Lab:
             "videos_collectables_restantes": self.data_budget - self.generated,
             "budget_annotation_restant_usd": round(self.annotation_budget_usd - self.annotation_spent, 3)})
 
-    def data_requests(self) -> list[dict]:
-        path = DATA_REQUESTS
-        if not path.exists():
-            return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
-
     def data_requested_history(self) -> dict:
-        """Historique des collectes, une ligne par requête YouTube : « obtenues/demandées
-        orientation » pour chaque orientation essayée. Une requête où on obtient moins de vidéos que
-        demandé s'épuise dans cette orientation (une vidéo n'est prise qu'une fois)."""
-        tally: dict[str, dict[str, list[int]]] = {}
-        for r in self.data_requests():
-            t = tally.setdefault(r["query"], {}).setdefault(r.get("orientation") or "toutes", [0, 0])
-            t[0] += r["ok"]
-            t[1] += r["n"]
-        return {q: ", ".join(f"{ok}/{n} {o}" for o, (ok, n) in t.items()) for q, t in tally.items()}
+        """Requêtes YouTube qui ont amené des vidéos au dataset, avec leur nombre par orientation (lu
+        dans les meta.json des vidéos), de la plus productive à la moins productive ; au plus
+        HISTORY_QUERIES, le reste en un total. Les collectes sans résultat n'y sont pas : leur échec
+        peut venir d'un blocage YouTube autant que de la requête."""
+        tally: dict[str, Counter] = defaultdict(Counter)
+        for sid in {r["sample_id"] for r in self.rows}:
+            meta = self._ann(sid)
+            tally[meta.get("query") or "(requête non notée)"][_orient(meta)] += 1
+        ranked = sorted(tally.items(), key=lambda kv: (-sum(kv[1].values()), kv[0]))
+        out = {q: ", ".join(f"{n} {o}" for o, n in sorted(c.items())) for q, c in ranked[:HISTORY_QUERIES]}
+        rest = ranked[HISTORY_QUERIES:]
+        if rest:
+            out["(autres requêtes)"] = f"{len(rest)} requêtes, {sum(sum(c.values()) for _, c in rest)} vidéos"
+        return out
 
     def exclude_clips(self, clips: dict) -> dict:
         """Retire des clips des splits créés ensuite : {sample_id: raison}. Les splits existants ne
@@ -666,40 +661,17 @@ class Lab:
         tp_rows = [by_frame[f] for f, yi, pi in zip(frames, y, pred) if yi and pi]
         fp_rows = [by_frame[f] for f, yi, pi in zip(frames, y, pred) if not yi and pi]
 
-        def rates(key, missed_only=False):
-            # missed_only : seulement les groupes ayant des ratés, les plus ratés d'abord, au plus
-            # TOP_GROUPS (le reste en un total) : la liste ne grandit pas avec le dataset
-            tot, miss = Counter(), Counter()
-            for r in tp_rows + fn_rows:
-                for k in key(r):
-                    tot[k] += 1
-            for r in fn_rows:
-                for k in key(r):
-                    miss[k] += 1
-            if not missed_only:
-                return {k: f"{miss[k]}/{tot[k]} ratées" for k in sorted(tot, key=str)}
-            ranked = [k for k, _ in miss.most_common()]
-            out = {k: f"{miss[k]}/{tot[k]} ratées" for k in ranked[:TOP_GROUPS]}
-            rest = ranked[TOP_GROUPS:]
-            if rest:
-                out["autres"] = (f"{len(rest)} autres, {sum(miss[k] for k in rest)}/"
-                                 f"{sum(tot[k] for k in rest)} ratées")
-            return out
+        def missed(key):
+            tot, miss = Counter(key(r) for r in tp_rows + fn_rows), Counter(key(r) for r in fn_rows)
+            return {k: f"{miss[k]}/{tot[k]} ratées" for k in sorted(tot)}
 
-        def query(r):
-            return self._ann(r["sample_id"]).get("query") or "inconnue"
-
-        # Pas d'exemples d'images ratées : l'agent ne peut pas ouvrir un chemin d'image ; il les
-        # voit avec show_examples. Par requête YouTube (le thème qui a amené la vidéo) : avec
-        # beaucoup de chaînes, c'est le regroupement qui dit quoi collecter ou viser.
+        # Seulement l'orientation : ce que le modèle rate et ce qui le trompe, l'outil le dit par
+        # l'analyse visuelle (agents.common.analyze_errors_tool), plus parlante que des comptes par
+        # requête ou par chaîne. Pas d'images : l'agent les voit avec show_examples.
         return _jsonable({
             "experiment_id": experiment_id, "precision_visee": precision, **op,
-            "positifs_rates_par_orientation": rates(lambda r: {self._orientation(r)}),
-            "positifs_rates_par_requete": rates(lambda r: {query(r)}, missed_only=True),
-            "positifs_rates_par_chaine": rates(lambda r: {self._ann(r["sample_id"])["channel"]}, missed_only=True),
+            "positifs_rates_par_orientation": missed(self._orientation),
             "faux_positifs_par_orientation": dict(Counter(self._orientation(r) for r in fp_rows)),
-            "faux_positifs_par_requete": dict(Counter(query(r) for r in fp_rows).most_common(8)),
-            "faux_positifs_par_clip": dict(Counter(r["sample_id"] for r in fp_rows).most_common(8)),
         })
 
     def show_examples(self, experiment_id: str, kind: str = "missed", n: int = 4,

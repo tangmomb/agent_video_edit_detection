@@ -133,23 +133,24 @@ def list_experiments_tool(lab: Lab, brief: bool = False) -> Tool:
 PRECISION = {"type": "number", "description": "Précision visée sur val, qui fixe le seuil (défaut 0.95)."}
 
 
-# analyze_errors avec analyse_visuelle : chaque erreur val est décrite par un LLM de vision
-# (lab.describe_errors, en batch, mis en cache par image), puis le modèle de l'agent résume ces
-# descriptions en points communs. L'agent qui appelle l'outil ne reçoit que le résumé.
+# Analyse visuelle d'analyze_errors, à chaque appel : chaque erreur val est décrite par un LLM de
+# vision (lab.describe_errors, en batch, mis en cache par image), puis le modèle de l'agent résume
+# ces descriptions en points communs. L'agent qui appelle l'outil ne reçoit que le résumé.
 SUMMARY_PROMPT = """Tu analyses les erreurs d'un classifieur d'images qui dit si une image extraite \
 d'une vidéo YouTube contient un ajout de montage (habillage, texte, titre, sous-titres, logo, \
 bandeau, image incrustée, cadre, effet graphique : tout ce qui ne vient pas de la caméra). Voici \
 toutes ses erreurs sur val, une par ligne : ajouts ratés et fausses alertes (images brutes prises \
-pour des images avec ajout), avec la vidéo, la chaîne, la requête YouTube, la probabilité donnée \
-par le modèle et la description de l'image par un LLM de vision.
+pour des images avec ajout), avec la description de l'image par un LLM de vision.
 
-Rédige un petit rapport en français, 10 lignes au plus, sous cette forme :
-Ajouts ratés : ils ont ces points communs : … (par exemple « logo en haut à droite, petit et \
-semi-transparent, 110 images sur 300, surtout sur yt_… »), du plus fréquent au moins fréquent.
-Fausses alertes : ce qui, dans ces images brutes, ressemble à un ajout : …
-Étiquettes douteuses : les erreurs dont la description contredit l'étiquette (ajout raté sans \
-ajout décrit, fausse alerte avec un ajout décrit), avec leur nombre, ou « aucune ».
-Pour chaque point commun, donne le nombre d'images concernées sur le total. Appuie-toi seulement \
+Réponds en français, en trois lignes, sans nommer de vidéo ni de chaîne :
+Ajouts ratés : les 1 à 3 types d'ajout qui reviennent très souvent (au moins un ajout raté sur \
+dix), chacun en quelques mots avec sa position et son nombre sur {fn}, du plus fréquent au moins \
+fréquent (exemple : « logo petit en coin haut droit (40/{fn}) ; sous-titres blancs en bas \
+(25/{fn}) »).
+Fausses alertes : de même, ce qui revient très souvent dans ces images brutes et ressemble à un \
+ajout, avec son nombre sur {fp}.
+Étiquettes douteuses : le nombre d'erreurs dont la description contredit l'étiquette.
+Ignore les cas isolés ; « aucun type fréquent » si rien ne revient souvent. Appuie-toi seulement \
 sur ces descriptions.
 
 Erreurs :
@@ -157,46 +158,39 @@ Erreurs :
 
 
 def analyze_errors_tool(lab: Lab, session=None) -> Tool:
-    """session : celle du run, pour analyse_visuelle (sans session, l'outil n'a pas ce paramètre)."""
-    def fn(experiment_id: str, precision: float = metrics.DEFAULT_PRECISION, analyse_visuelle: bool = False) -> dict:
+    """session : celle du run, pour l'analyse visuelle (sans session, l'outil s'en passe)."""
+    def fn(experiment_id: str, precision: float = metrics.DEFAULT_PRECISION) -> dict:
         out = lab.analyze_errors(experiment_id, precision)
-        if not analyse_visuelle:
+        if session is None:
             return out
+        head = {"experiment_id": out.pop("experiment_id")}
         left = session.budget_usd - session.reserve_usd - session.spent
         if left <= 0:
-            out["analyse_visuelle"] = "refusée : budget de session épuisé"
-            return out
+            return {**head, "analyse_visuelle": "non faite : budget de session épuisé", **out}
         try:
             d = lab.describe_errors(experiment_id, precision, max_usd=left)
         except ValueError as e:
-            out["analyse_visuelle"] = f"refusée : {e}"
-            return out
+            return {**head, "analyse_visuelle": f"non faite : {e}", **out}
         session.add_cost(d["cost_usd"])
-        lines = "\n".join(f"{e['erreur']} | {e['video']} t={e['t']} | {e['chaine']} | « {e['requete']} » | "
-                          f"p={e['p']} | {e['description'] or '(non décrite)'}" for e in d["erreurs"])
-        summary, cost = session.look([{"type": "text", "text": SUMMARY_PROMPT + lines}])
-        # en tête de la réponse : c'est la partie que l'agent a demandée, le reste est l'habituel
-        return {"experiment_id": out.pop("experiment_id"), "analyse_visuelle": summary,
+        # sans vidéo ni chaîne : le résumé doit dire quels ajouts reviennent, pas où
+        lines = "\n".join(f"{e['erreur']} | {e['description'] or '(non décrite)'}" for e in d["erreurs"])
+        prompt = SUMMARY_PROMPT.format(fn=out["fn"], fp=out["fp"])
+        summary, cost = session.look([{"type": "text", "text": prompt + lines}])
+        # en tête de la réponse : c'est ce qui dit quoi corriger, les chiffres suivent
+        return {**head, "analyse_visuelle": summary,
                 "cout_analyse_visuelle_usd": round(d["cost_usd"] + cost, 4), **out}
 
-    properties = {"experiment_id": {"type": "string"}, "precision": PRECISION}
-    if session is not None:
-        properties["analyse_visuelle"] = {
-            "type": "boolean",
-            "description": "Ajoute un petit rapport sur les points communs des erreurs : chaque erreur val "
-                           "est décrite par un LLM de vision (ce qu'on voit sur l'image, gardé pour les "
-                           "analyses suivantes), puis ces descriptions sont résumées (types et positions "
-                           "des ajouts ratés, ce qui déclenche les fausses alertes, étiquettes douteuses). "
-                           "Payant (jusqu'à quelques dizaines de centimes la première fois, sur le budget de "
-                           "session ; peut attendre plusieurs minutes) : pour comprendre les erreurs d'un "
-                           "candidat, pas pour comparer des expériences (défaut false)."}
     return Tool(
         name="analyze_errors",
-        description="Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux "
-                    "d'images positives ratées par orientation, par requête YouTube (le thème qui a amené "
-                    "la vidéo) et par chaîne (seulement celles ayant des ratés, les plus ratées d'abord, "
-                    "15 au plus et un total pour le reste) ; fausses alertes par orientation, requête et vidéo"
-                    + (" ; sur demande, analyse visuelle des erreurs typiques par un LLM." if session else "."),
-        input_schema={"type": "object", "properties": properties, "required": ["experiment_id"]},
+        description="Au seuil qui atteint la précision visée sur val : rappel, précision, TP/FP/FN et "
+                    "erreurs par orientation (paysage, portrait)"
+                    + (", précédés d'une analyse visuelle des erreurs typiques : chaque erreur val est "
+                       "décrite par un LLM de vision (description gardée pour les appels suivants), puis "
+                       "ces descriptions sont résumées (types et positions des ajouts ratés, ce qui "
+                       "déclenche les fausses alertes, étiquettes douteuses). Payant à chaque appel "
+                       "(quelques centimes sur le budget de session ; la première fois sur une "
+                       "expérience, peut attendre quelques minutes)." if session else "."),
+        input_schema={"type": "object", "properties": {"experiment_id": {"type": "string"}, "precision": PRECISION},
+                      "required": ["experiment_id"]},
         fn=fn,
     )

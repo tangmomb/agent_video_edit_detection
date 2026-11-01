@@ -7,7 +7,9 @@
 réels). exemples.json (facultatif) : {nom d'outil: {"call": {...}, "response": ..., "note": "…"}},
 pour les outils que le run n'a pas appelés ; --examples-note s'affiche quand un exemple n'a pas de note.
 Sans --from-run ni --examples, la page garde les exemples qu'elle contient déjà (embarqués en JSON) :
-on la régénère après chaque changement du code des agents sans avoir besoin d'un run.
+on la régénère après chaque changement du code des agents sans avoir besoin d'un run. Les exemples
+des outils sans effet (READ_ONLY) sont recalculés sur l'état actuel à chaque génération (gratuit,
+sauf l'analyse visuelle d'analyze_errors : --summary-usd) ; --no-refresh les laisse tels quels.
 """
 
 import argparse
@@ -15,6 +17,7 @@ import html
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -233,12 +236,66 @@ def examples_from_run(run_dir: Path) -> dict:
     return out
 
 
+# Outils sans effet (ils lisent l'état du labo) : leur exemple est recalculé à chaque génération,
+# avec le même appel, pour que la page suive le format de leurs réponses sans attendre un run.
+# Les autres (collecte, split, entraînement, test final, délégations) gardent leur appel réel.
+READ_ONLY = {"global_status", "list_experiments", "dataset_info", "data_requested_history",
+             "analyze_errors", "show_examples"}
+
+
+def refresh(examples: dict, summary_usd: float = 0.0) -> list[str]:
+    """Recalcule sur l'état actuel la réponse des exemples d'outils READ_ONLY. analyze_errors :
+    son analyse visuelle est payante (résumé par le modèle des agents) ; refaite seulement si
+    summary_usd > 0, sinon celle de l'exemple est gardée. Renvoie les exemples recalculés."""
+    from agents.common import analyze_errors_tool
+
+    day = time.strftime("%d/%m/%Y")
+    lab, session, done = Lab(), None, []
+    if summary_usd > 0:
+        import tempfile
+
+        from agents.runner import Session
+        # journal hors de runs/ : ce n'est pas un run
+        session = Session(summary_usd, run_dir=Path(tempfile.mkdtemp(prefix="agents_tree_")),
+                          report_reserve_usd=0.0, verbose=False)
+    for agent in _agents():
+        for t in agent.tools:
+            key = f"{agent.name}.{t.name}"
+            ex = examples.get(key)
+            if t.name not in READ_ONLY or not ex or ex.get("missing"):
+                continue
+            call = ex.get("call") or {}
+            if t.name == "analyze_errors":
+                response = analyze_errors_tool(lab, session).fn(**call)
+                old = ex["response"] if isinstance(ex["response"], dict) else {}
+                if session is None and "analyse_visuelle" in old:
+                    response = {"experiment_id": response.pop("experiment_id"),
+                                "analyse_visuelle": old["analyse_visuelle"],
+                                "cout_analyse_visuelle_usd": old.get("cout_analyse_visuelle_usd"), **response}
+            else:
+                response = t.fn(**call)
+            if isinstance(response, list):  # blocs texte et image (show_examples)
+                response = "\n".join(b["text"] if b["type"] == "text" else "<image>" for b in response)
+            origin = ex.get("origin") or ex.get("note", "").rstrip(".")
+            examples[key] = {"call": ex.get("call"), "response": response, "origin": origin,
+                             "note": f"Réponse recalculée le {day} sur l'état actuel"
+                                     + (" (analyse visuelle de l'exemple d'origine)"
+                                        if t.name == "analyze_errors" and session is None else "")
+                                     + f" ; appel d'origine : {origin[0].lower() + origin[1:]}."}
+            done.append(key)
+    return done
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="utils/agents_tree.py")
     p.add_argument("--from-run", type=Path, help="tire les exemples du journal de ce run (runs/<NNN>_…)")
     p.add_argument("--examples", type=Path, help="exemples d'appels et de réponses par outil (JSON)")
     p.add_argument("--examples-note", default="", help="d'où viennent les exemples")
     p.add_argument("--out", type=Path, default=HERE / "agents_tree.html")
+    p.add_argument("--no-refresh", action="store_true",
+                   help="ne recalcule pas les exemples des outils sans effet (READ_ONLY)")
+    p.add_argument("--summary-usd", type=float, default=0.0,
+                   help="plafond pour refaire l'analyse visuelle des exemples analyze_errors (payant ; 0 : gardée)")
     a = p.parse_args()
     if a.examples:
         examples = json.loads(a.examples.read_text(encoding="utf-8"))
@@ -252,6 +309,8 @@ def main() -> None:
             for t in agent.tools:
                 examples.setdefault(f"{agent.name}.{t.name}",
                                     {"missing": f"Pas d'exemple : outil non appelé pendant le run {run}."})
+    if not a.no_refresh:
+        print("recalculés :", ", ".join(refresh(examples, a.summary_usd)))
     a.out.write_text(render(examples, a.examples_note), encoding="utf-8")
     print(a.out)
 

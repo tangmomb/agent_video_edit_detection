@@ -128,5 +128,4 @@ Organisation :
 
 Journaux : `runs/<NNN>_<horodatage>/pipeline.json` (toutes les étapes de tous les agents, dans
 l'ordre, réécrit à chaque étape) + `report.md`. Expériences :
-`model_results/` (un dossier `<exp_id>/` par entraînement, `production.json`). Historique des
-collectes de vidéos : `data/data_requests.jsonl`.
+`model_results/` (un dossier `<exp_id>/` par entraînement, `production.json`).

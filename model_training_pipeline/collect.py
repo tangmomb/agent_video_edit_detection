@@ -14,7 +14,6 @@ plus cher, mais résultats immédiats : un batch peut attendre des heures).
 Les vidéos déjà téléchargées mais sans tous leurs votes (collecte interrompue) sont reprises.
 """
 
-import json
 import random
 import time
 
@@ -131,18 +130,7 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
             break
     build()
 
-    # Historique des collectes (data_requests.jsonl) : coût réparti au prorata des estimations
-    per_query = {}
-    for q, o, d in got:
-        per_query.setdefault((q, o), []).append(d)
     incomplete = [d.name for d in dirs if batch.estimate([d])["total_usd_estime"]]  # votes manquants
-    with open(SAMPLES_DIR.parent / "data_requests.jsonl", "a", encoding="utf-8") as fh:
-        for (q, o), n in asked.items():
-            ds = per_query.get((q, o), [])
-            fh.write(json.dumps({"n": n, "ok": len(ds), "query": q, "orientation": o,
-                                 "cost_usd": round(cost * len(ds) / max(1, len(dirs)), 4),
-                                 "reason": "collecte directe (python -m model_training_pipeline collect)",
-                                 "time": time.time()}) + "\n")
     return {"videos_collectees": len(dirs), "cout_annotation_usd": round(cost, 4),
             "cout_estime_usd": round(est, 4), "requetes_en_echec": failed, "batchs": jobs_all,
             "videos_avec_votes_manquants": incomplete, "arret": stopped,
