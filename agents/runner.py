@@ -46,7 +46,12 @@ RUNS_DIR = LAB_DIR / "runs"
 # cachés, et de loin le plus régulier (trouve et règle CLIP + DINOv2 presque à chaque run) ;
 # ~0,40 $ par run contre 0,02 à 0,05 $ pour les suivants, plus lent. GPT-6 Luna, en tête de b1
 # avec l'ancien labo, y finit dernier (garde CLIP seul).
-DEFAULT_MODEL = "mistral/mistral-large-4-0"
+# DeepSeek V4 Flash, modèle par défaut depuis le 01/11/2026 : même qualité que Large 4 sur le banc b3
+# (AP cachée 0,962 contre 0,961, 3 runs chacun), deux fois moins cher et plus rapide ; en préversion
+# chez Mistral, d'où les relances (Session._call).
+DEFAULT_MODEL = "mistral/deepseek-v4-1-flash-1017"
+# Attentes avant chaque relance d'un appel en erreur passagère (Session._call).
+RETRY_WAITS_S = (5, 20, 60)
 # $/million de tokens : tarifs relevés à la main (table des modèles du banc des annotateurs,
 # octobre 2026), prioritaires sur ceux de LiteLLM, parfois en retard. cached_input : tokens
 # d'entrée servis depuis le cache, quand l'API les signale et que le fournisseur publie un prix.
@@ -265,7 +270,7 @@ class Session:
         def complete(turn: int, tool_choice: str):
             nonlocal last_cost
             t0 = time.perf_counter()
-            response = self.completion(
+            response = self._call(
                 model=model,
                 max_tokens=16000,
                 messages=messages,
@@ -399,6 +404,21 @@ class Session:
             self._models.pop()
         return final
 
+    def _call(self, **kwargs):
+        """Appel au modèle, relancé après une erreur passagère du fournisseur (service indisponible,
+        trop de requêtes, coupure, délai dépassé) : DeepSeek V4 Flash, en préversion chez Mistral,
+        a refusé 7 délégations sur 13 en 503 sur le banc b3. Les autres erreurs remontent."""
+        import litellm
+        transient = (litellm.ServiceUnavailableError, litellm.RateLimitError, litellm.Timeout,
+                     litellm.APIConnectionError, litellm.InternalServerError)
+        for wait in RETRY_WAITS_S:
+            try:
+                return self.completion(**kwargs)
+            except transient as e:
+                self._say(f"[relance dans {wait} s] {type(e).__name__}")
+                time.sleep(wait)
+        return self.completion(**kwargs)
+
     def add_cost(self, usd: float) -> None:
         """Dépense faite hors des appels de modèle de la session (descriptions d'images en batch)."""
         self.spent += usd
@@ -414,7 +434,7 @@ class Session:
                  if b["type"] == "image" else {"type": "text", "text": b["text"]} for b in content]
         # Raisonnement par défaut du modèle, qui compte dans max_tokens : à 16 000, Large 4 les
         # épuisait à compter les erreurs sans écrire le rapport (run 004), d'où 32 000.
-        response = self.completion(model=model, max_tokens=32000, messages=[{"role": "user", "content": parts}])
+        response = self._call(model=model, max_tokens=32000, messages=[{"role": "user", "content": parts}])
         tokens = _tokens(response.usage)
         cost = self._cost(model, tokens)
         self.spent += cost

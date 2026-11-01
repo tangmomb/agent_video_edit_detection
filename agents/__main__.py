@@ -15,7 +15,7 @@ def main() -> None:
     p.add_argument("--final-tests", type=int, default=2, help="appels à final_test autorisés")
     p.add_argument("--agent-model",
                    help="même modèle pour les 4 agents, au format LiteLLM « fournisseur/identifiant » "
-                        "(ex. openai/gpt-5.6-luna, anthropic/claude-haiku-5-5) ; défaut : mistral/mistral-large-4-0")
+                        "(ex. openai/gpt-5.6-luna, mistral/mistral-large-4-0) ; défaut : mistral/deepseek-v4-1-flash-1017")
     p.add_argument("--direct-annotation", action="store_true",
                    help="annotation en appels directs (prix plein, sans attente) au lieu des batchs (-50 %%)")
     a = p.parse_args()

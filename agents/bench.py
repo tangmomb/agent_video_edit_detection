@@ -34,7 +34,7 @@ from pathlib import Path
 from video_source.config import ROOT
 
 BENCH_DIR = ROOT / "bench"
-MODELS = ["anthropic/claude-haiku-5-5", "mistral/mistral-large-4-0", "mistral/mistral-large-2512",
+MODELS = ["anthropic/claude-haiku-5-5", "mistral/deepseek-v4-1-flash-1017", "mistral/mistral-large-4-0", "mistral/mistral-large-2512",
           "mistral/zai-glm-5-3-flash", "openai/gpt-5.6-luna", "openai/gpt-6-luna"]
 GOAL = "Lance une session d'amélioration du classifieur d'ajouts de montage."
 TARGET = 0.95  # précision visée (metrics.DEFAULT_PRECISION, sans importer sklearn ici)
@@ -88,15 +88,9 @@ def snapshot(name: str, hidden: float = 0.25, seed: int = 0, src: Path = ROOT / 
     rows = [json.loads(l) for l in (src / "videos_samples_frames" / "index.jsonl").read_text(encoding="utf-8").splitlines()]
     samples = {r["sample_id"] for r in rows}
     # Vidéos à qui il manque des votes (encore en annotation…) : écartées, étiquettes incomplètes.
-    # Lecture seule : rien n'est extrait ni écrit dans le dataset source.
-    incomplete = set()
-    for s in samples:
-        votes = frames.load_votes(src / "videos_samples" / s)
-        duration = json.loads((src / "videos_samples" / s / "meta.json").read_text(encoding="utf-8"))["video"]["duration"]
-        imgs = sorted((src / "videos_samples_frames" / "img" / s).glob("*.jpg"))
-        imgs = [f for i, f in enumerate(imgs) if not duration or i / frames.FPS < duration]  # comme frames_of
-        if any(frames.missing(votes, f.name) for f in imgs):
-            incomplete.add(s)
+    # Même règle que l'annotation (frames.pending) : les images sautées comme quasi identiques ne sont
+    # jamais votées, elles ne rendent pas une vidéo incomplète.
+    incomplete = {s for s in samples if frames.pending(src / "videos_samples" / s, src / "videos_samples_frames")}
     samples -= incomplete
     by_channel: dict[str, set[str]] = defaultdict(set)
     orient: dict[str, str] = {}
