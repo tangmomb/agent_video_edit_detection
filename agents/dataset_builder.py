@@ -41,9 +41,9 @@ def make(lab: Lab) -> Agent:
             dataset_info_tool(lab, "dataset_builder"),
             Tool(
                 name="data_requested_history",
-                description="Historique des collectes passées, regroupé par requête YouTube : "
-                            "appels, vidéos demandées, vidéos obtenues, orientations, coût d'annotation. "
-                            "Moins de vidéos obtenues que demandées : la requête s'épuise.",
+                description="Historique des collectes passées, une ligne par requête YouTube : "
+                            "« vidéos obtenues/demandées orientation » par orientation essayée. Moins de vidéos obtenues que "
+                            "demandées : la requête s'épuise dans cette orientation.",
                 input_schema={"type": "object", "properties": {}},
                 fn=lab.data_requested_history,
             ),

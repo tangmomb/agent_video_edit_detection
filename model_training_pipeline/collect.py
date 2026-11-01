@@ -130,7 +130,7 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
             break
     build()
 
-    # Historique des collectes (data_requested_history) : coût réparti au prorata des estimations
+    # Historique des collectes (data_requests.jsonl) : coût réparti au prorata des estimations
     per_query = {}
     for q, o, d in got:
         per_query.setdefault((q, o), []).append(d)

@@ -203,8 +203,10 @@ def _empty(result) -> bool:
 def examples_from_run(run_dir: Path) -> dict:
     """Premier appel réussi de chaque outil, par agent, dans le journal d'un run
     (runs/<NNN>_…/pipeline.json) : appel et réponse réels, tels que l'agent les a reçus ; une
-    réponse vide n'est gardée que faute d'un appel suivant qui renvoie quelque chose. Clés
-    « agent.outil » (un même outil, comme dataset_info, ne renvoie pas la même chose à chaque agent)."""
+    réponse vide n'est gardée que faute d'un appel suivant qui renvoie quelque chose, ou d'une
+    réponse du même outil reçue par un autre agent (list_experiments, appelé par l'orchestrateur
+    avant le premier split). Clés « agent.outil » (un même outil, comme dataset_info, ne renvoie
+    pas la même chose à chaque agent)."""
     log = json.loads((run_dir / "pipeline.json").read_text(encoding="utf-8"))
     out = {}
     for s in log["steps"]:
@@ -221,6 +223,14 @@ def examples_from_run(run_dir: Path) -> dict:
                           "response": "\n".join(result) if isinstance(result, list) else result,
                           "note": f"Appel et réponse réels (run {run_dir.name.split('_')[0]} du "
                                   f"{s['time'][8:10]}/{s['time'][5:7]}/{s['time'][:4]}, agent {s['agent']})."}
+    for key, ex in out.items():
+        if not _empty(ex["response"]):
+            continue
+        agent, tool = key.split(".", 1)
+        other = next((o for k, o in out.items() if k.split(".", 1)[1] == tool and not _empty(o["response"])), None)
+        if other:
+            out[key] = {**other, "note": other["note"].rstrip(".") + f" ; {agent} n'a reçu de cet outil "
+                                                                     "qu'une réponse vide."}
     return out
 
 

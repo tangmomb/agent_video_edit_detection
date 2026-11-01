@@ -18,20 +18,20 @@ val (meilleur rappel à 95 % de précision, choisi prudemment) : pondérer toute
 surtout à le déplacer ; vise plutôt un groupe précis. Tu ne collectes pas de données et tu ne mesures jamais sur test : \
 seul l'Evaluator y accède.
 
-Splits : les splits existants sont dans list_experiments ; décide-les à partir de la composition du \
+Splits : list_experiments donne le split le plus récent, le seul sur lequel tu entraînes, et une \
+ligne par ancien split ayant des expériences ; décide-les à partir de la composition du \
 dataset (dataset_info), jamais des erreurs d'un \
 modèle. Crée un split quand aucun n'existe ou quand le dataset a nettement grossi \
 (clips_hors_split) ; garde la stratification par défaut (toutes les caractéristiques) sauf \
-raison précise. Le test est figé au premier split : les suivants mettent tout le reste en dev \
-(nouvelles vidéos comprises). Ne refais jamais \
+raison précise. Chaque split tire son propre test : les tests finaux de deux splits ne se \
+comparent donc pas. Ne refais jamais \
 un split pour améliorer un score val : les plis de validation suivent la graine du split, et un \
 découpage choisi pour être facile ne mesure plus rien. \
 Vérifie la composition de dev et test du split le plus récent (dataset_info) avant d'entraîner.
 
 Méthode : consulte l'historique pour ne pas refaire une expérience existante. Formule une hypothèse \
 par expérience (champ note : l'hypothèse seule, en une phrase, sans recopier la config ni le split, \
-déjà enregistrés) et change un facteur à la fois, sur le même split, pour que les \
-résultats soient comparables. Après un nouveau split, ré-entraîne la meilleure config précédente \
+déjà enregistrés) et change un facteur à la fois pour que les résultats soient comparables. Après un nouveau split, ré-entraîne la meilleure config précédente \
 dessus pour avoir une référence. Quand une expérience vise un groupe d'erreurs (pondération, \
 rééchantillonnage, vue d'embeddings), compare son analyze_errors à celui de la référence : le \
 changement ne vaut que si les erreurs de ce groupe baissent sans que les autres montent, pas \
@@ -57,19 +57,18 @@ def make(lab: Lab) -> Agent:
                 name="make_split",
                 description="Crée un split dev/test figé sur toutes les vidéos actuelles (les vidéos "
                             "collectées ensuite n'y entrent pas). Les vidéos d'une même chaîne YouTube restent "
-                            "du même côté. Le test est commun à tous les splits (figé au premier) : tout le "
-                            "reste va en dev, découpé par chaîne en plis de validation croisée. Renvoie l'id "
+                            "du même côté. Chaque split tire son propre test (150 chaînes au plus) ; le reste va "
+                            "en dev, découpé par chaîne en plis de validation croisée. Renvoie l'id "
                             "du split, le nombre de plis et la composition de dev et test.",
                 input_schema={
                     "type": "object",
                     "properties": {
                         "note": {"type": "string", "description": "Pourquoi ce split (ce qu'il corrige ou couvre)."},
                         "test_ratio": {"type": "number", "minimum": 0.05, "maximum": 0.4,
-                                       "description": "Part des clips en test (défaut 0.2), pour le premier "
-                                                      "split seulement : ignoré ensuite (test figé)."},
+                                       "description": "Part des chaînes en test (défaut 0.2)."},
                         "stratify": {"type": "array", "items": {"type": "string", "enum": list(STRATIFY_KEYS)},
                                      "description": "Caractéristiques à répartir au plus près des proportions "
-                                                    "visées entre dev et test (premier split) et entre les plis "
+                                                    "visées entre dev et test et entre les plis "
                                                     "de dev : orientation, clip_vide (vidéo sans aucune image "
                                                     "avec ajout). Par défaut toutes ; [] = tirage purement "
                                                     "aléatoire."},
@@ -84,7 +83,7 @@ def make(lab: Lab) -> Agent:
                 description="Entraîne un classifieur binaire (ajout de montage visible ou non) sur des "
                             "embeddings figés, avec un rééchantillonnage (balance) et une pondération "
                             "(weights) optionnels des images d'entraînement, et l'évalue par validation "
-                            "croisée par chaîne sur le dev du split (val) ; le modèle gardé est la moyenne des modèles de plis. "
+                            "croisée par chaîne sur le dev du split le plus récent (val) ; le modèle gardé est la moyenne des modèles de plis. "
                             "Renvoie l'id d'expérience, AUC, AP, AP par chaîne, le rappel au seuil de précision 95 % "
                             "(avec FP/FN) et l'effet du rééchantillonnage et de la pondération. Les embeddings absents du cache sont calculés à la volée (GPU).",
                 input_schema={
@@ -123,11 +122,8 @@ def make(lab: Lab) -> Agent:
                                                    "Ex. {'clip_vide': 3}."},
                         "note": {"type": "string",
                                  "description": "Hypothèse testée, en une phrase, sans recopier la config."},
-                        "split_id": {"type": "string",
-                                     "description": "Split dont le dev sert à entraîner et à mesurer (val) : "
-                                                    "un id renvoyé par make_split (voir list_experiments)."},
                     },
-                    "required": ["embeddings", "split_id"],
+                    "required": ["embeddings"],
                 },
                 fn=lab.train_model,
             ),

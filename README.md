@@ -108,8 +108,8 @@ Organisation :
   splits dev/test nommés et figés (`make_split`, fichiers `data/splits/split_XXX.json`, par
   chaîne YouTube, stratifiés par défaut sur orientation et vidéos sans ajout, comme les plis de
   dev ; l'ancien découpage `hash`, non figé, est refusé ; les anciens splits train/val/test se
-  lisent comme dev/test). Le test est figé au premier split (`data/splits/test_set.json`) : les
-  splits suivants mettent tout le reste en dev. Le Dataset
+  lisent comme dev/test). Chaque split tire son propre test (20 % des chaînes, 150 au plus) : ses
+  expériences y sont testées, et les tests de deux splits ne se comparent pas. Le Dataset
   Builder ne fait qu'ajouter des données ; un clip défectueux (vidéo cassée, doublon) s'exclut à la
   main (`python -m model_training_pipeline exclude <sample_id> "<raison>"`, `data/excluded.json`),
   ce qui ne vaut que pour les splits créés ensuite. Seul l'Evaluator mesure sur test.

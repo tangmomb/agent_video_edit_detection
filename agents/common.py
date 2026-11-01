@@ -85,28 +85,44 @@ def dataset_info_tool(lab: Lab, agent: str) -> Tool:
         description="État du dataset : composition globale (chaînes YouTube, vidéos, images "
                     "étiquetées et sans étiquette faute d'accord des annotateurs, pourcentage "
                     "d'images avec ajout, vidéos sans aucun ajout, répartition des vidéos par "
-                    "orientation, chaînes ayant plusieurs vidéos)"
+                    "orientation, chaînes ayant plusieurs vidéos : 15 au plus et un total pour le reste)"
                     + contenu + ".",
         input_schema={"type": "object", "properties": {}},
         fn=fn,
     )
 
 
-def list_experiments_tool(lab: Lab) -> Tool:
+# Construction du split le plus récent : sert à qui fait les splits (Model Researcher) et à qui
+# mesure (Evaluator), pas à l'orchestrateur, qui n'en retient que clips_hors_split (faut-il un
+# nouveau split ?), la note et les expériences.
+SPLIT_DETAIL = ("chaines_dev", "chaines_test", "clips_dev", "clips_test", "images_dev",
+                "images_dev_positives", "clips_exclus", "anomalie_chaines_dans_dev_et_test")
+
+
+def list_experiments_tool(lab: Lab, brief: bool = False) -> Tool:
+    def fn() -> dict:
+        out = lab.experiments_overview()
+        if brief:
+            out["splits"] = [{k: v for k, v in sp.items() if k not in SPLIT_DETAIL} for sp in out["splits"]]
+        return out
+
+    split = ("vidéos collectées après le split, note" if brief else
+             "chaînes YouTube et vidéos (clips) en dev/test, images étiquetées et positives de dev, "
+             "vidéos collectées après le split, note")
     return Tool(
         name="list_experiments",
         description="Le split le plus récent (celui sur lequel entraîner) et ses expériences (toutes "
-                    "sessions), puis une ligne par ancien split : nombre d'expériences, la meilleure "
+                    "sessions : les 8 meilleures en AP par chaîne, la production, celles passées au test "
+                    "final et les 5 dernières en détail, les autres en une ligne dans autres_experiences : "
+                    "config et résultat val), puis une ligne par ancien split : nombre d'expériences, la meilleure "
                     "(AP par chaîne en val) et le modèle en production s'il en vient, avec leur config pour "
                     "les refaire sur le split récent et le statut de leur test final (la production "
-                    "passe d'abord par un test réussi). Split : chaînes "
-                    "YouTube et vidéos (clips) en dev/test, images étiquetées et positives de dev, "
-                    "vidéos collectées après le split, note. Expérience : config (embeddings, modèle, "
+                    "passe d'abord par un test réussi). Split : " + split + ". Expérience : config (embeddings, modèle, "
                     "hyperparamètres, rééchantillonnage, pondération), hypothèse, val (AP, AP par "
                     "chaîne, rappel à 95 % de précision, FP/FN), test final, en_production si c'est "
                     "le modèle en production.",
         input_schema={"type": "object", "properties": {}},
-        fn=lab.experiments_overview,
+        fn=fn,
     )
 
 
@@ -117,8 +133,9 @@ def analyze_errors_tool(lab: Lab) -> Tool:
     return Tool(
         name="analyze_errors",
         description="Au seuil qui atteint la précision visée sur val : rappel, TP/FP/FN, taux "
-                    "d'images positives ratées par orientation et par chaîne ; "
-                    "répartition des fausses alertes ; exemples d'images ratées.",
+                    "d'images positives ratées par orientation, par requête YouTube (le thème qui a amené "
+                    "la vidéo) et par chaîne (seulement celles ayant des ratés, les plus ratées d'abord, "
+                    "15 au plus et un total pour le reste) ; fausses alertes par orientation, requête et vidéo.",
         input_schema={
             "type": "object",
             "properties": {"experiment_id": {"type": "string"}, "precision": PRECISION},

@@ -31,7 +31,7 @@ montre qu'elles manquent, en précisant lesquelles. Mais si c'est le cas et que 
 annonce des vidéos annotables (videos_annotables_estimees), fais-les collecter avant de conclure, \
 même peu : avec une soixantaine de chaînes, chaque chaîne de plus compte, et une session qui finit \
 en disant que les données manquent sans en avoir demandé laisse le problème entier. Pour qu'elles \
-comptent, fais ensuite créer un nouveau split (le test ne change pas, elles vont en dev) et \
+comptent, fais ensuite créer un nouveau split (la plupart vont en dev, une part en test) et \
 ré-entraîner la meilleure config dessus.
 
 Les agents ne peuvent faire que ce que leurs outils permettent (liste plus bas) : ne leur demande \
@@ -112,7 +112,7 @@ def make(lab: Lab, session: Session) -> Agent:
                              "Les splits sont dans list_experiments ; le détail de composition "
                              "(orientation, chaînes) n'est visible que des sous-agents.",
                  input_schema={"type": "object", "properties": {}}, fn=global_status),
-            list_experiments_tool(lab),
+            list_experiments_tool(lab, brief=True),
             Tool(name="ask_dataset_builder",
                  description="Délègue une collecte de données au Dataset Builder ; renvoie son rapport.",
                  input_schema=TASK, fn=delegate("dataset_builder")),

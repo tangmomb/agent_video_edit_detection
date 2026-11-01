@@ -50,15 +50,20 @@ from .frames import FPS, FRAMES_DIR, SKIPPED_SHARE, annotate, build, load_index,
 EXP_DIR = LAB_DIR / "model_results"
 DATA_REQUESTS = DATA_DIR / "data_requests.jsonl"  # historique des collectes, à côté des vidéos
 SPLITS_DIR = DATA_DIR / "splits"
-# Chaînes du test, figées au premier split : les splits suivants mettent tout le reste en dev, et les
-# vidéos collectées ensuite n'entrent jamais en test (le Model Researcher ne peut pas l'influencer).
-TEST_SET = SPLITS_DIR / "test_set.json"
 # Clips retirés des splits créés ensuite (vidéo défectueuse, doublon) : exclude_clips, à la main (CLI exclude).
 EXCLUDED = DATA_DIR / "excluded.json"
 # Découpage d'avant make_split, non figé : refusé pour entraîner et tester.
 LEGACY_SPLIT = "hash"
 SPLITS = ("dev", "test")
 FOLDS = 5  # plis de la validation croisée sur dev
+# Listes par chaîne ou par requête des outils (analyze_errors, dataset_info) : au plus TOP_GROUPS
+# entrées, le reste en un total, pour que les réponses ne grandissent pas avec le dataset.
+TOP_GROUPS = 15
+# Au-delà, le test ne gagne guère en précision : le reste va en dev.
+TEST_MAX_CHAINS = 150
+# list_experiments : expériences du split récent en format court (les autres en une ligne)
+DETAILED_BEST = 8  # les meilleures en AP par chaîne
+DETAILED_RECENT = 5  # les dernières, sur lesquelles le Model Researcher enchaîne
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
 STRATIFY_KEYS = ("orientation", "clip_vide")
 # hgb (HistGradientBoosting) retiré le 26/10/2026 : sur les 20 essais du banc b2, jamais le meilleur
@@ -150,20 +155,33 @@ def _compact(e: dict) -> dict:
     return out
 
 
+def _score(e: dict) -> float:
+    """AP par chaîne en val (le critère du modèle de production), à défaut l'AP."""
+    v = e["val"]
+    return v.get("ap_par_chaine") if v.get("ap_par_chaine") is not None else v["ap"]
+
+
+def _one_line(e: dict) -> str:
+    """Expérience en une ligne, sans hypothèse : de quoi ne pas refaire une config déjà essayée."""
+    c = _config(e)
+    parts = ["+".join(c["embeddings"]), " ".join([c["model"], *(f"{k}={v}" for k, v in c.get("params", {}).items())])]
+    parts += [f"{k} " + " ".join(f"{g}×{x}" for g, x in c[k].items()) for k in ("balance", "weights") if k in c]
+    v = _compact_val(e["val"])
+    res = f"AP/chaîne {_score(e)}, " + (f"rappel {v['recall']}" if "recall" in v else f"95 % : {v['p95']}")
+    return ", ".join(parts) + " → " + res
+
+
 def _split_line(split_id: str, exps: list[dict], test_status) -> dict:
     """Ancien split en une ligne : nombre d'expériences, la meilleure (AP par chaîne en val, le
     critère du modèle de production) et le modèle en production s'il en vient, chacun avec sa
     config pour être refait sur le split récent et le statut de son test final (test_status : id ->
     réussi / échoué / non testé) : la production passe d'abord par un test réussi, d'où l'écart
     possible avec la meilleure en val."""
-    def key(e):
-        v = e["val"]
-        return v.get("ap_par_chaine") if v.get("ap_par_chaine") is not None else v["ap"]
-    best = max(exps, key=key)
+    best = max(exps, key=_score)
     op = best["val"][f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"]
     score = "ap_par_chaine" if best["val"].get("ap_par_chaine") is not None else "ap"
     out = {"split_id": split_id, "experiences": len(exps),
-           "meilleure": {"id": best["id"], score: key(best),
+           "meilleure": {"id": best["id"], score: _score(best),
                          "recall": op["recall"] if isinstance(op, dict) else op,
                          "test": test_status(best["id"]), **_config(best)}}
     prod = next((e for e in exps if e.get("en_production")), None)
@@ -295,18 +313,6 @@ class Lab:
     def _excluded(self) -> dict[str, str]:
         return json.loads(EXCLUDED.read_text(encoding="utf-8")) if EXCLUDED.exists() else {}
 
-    def _test_clips(self) -> set[str] | None:
-        """Clips du test figé ; à défaut, ceux du premier split existant (splits d'avant test_set)."""
-        if TEST_SET.exists():
-            return set(json.loads(TEST_SET.read_text(encoding="utf-8"))["clips"])
-        first = sorted(SPLITS_DIR.glob("split_*.json"))
-        if not first:
-            return None
-        sp = json.loads(first[0].read_text(encoding="utf-8"))
-        clips = sorted(c for c, v in sp["clips"].items() if v == "test")
-        TEST_SET.write_text(json.dumps({"from": sp["split_id"], "clips": clips}, indent=2), encoding="utf-8")
-        return set(clips)
-
     def _idx(self, split: str, split_id: str) -> np.ndarray:
         """Images étiquetées du split (celles sur lesquelles on entraîne et on mesure) : les images
         sans accord des annotateurs n'y sont jamais."""
@@ -424,7 +430,10 @@ class Lab:
                    for s in SPLITS}}
         # Plusieurs vidéos d'une même chaîne partagent son habillage : elles diversifient peu.
         chains = Counter(source_key(self._ann(s)) for s in sids)
-        several = {c: n for c, n in chains.most_common() if n >= 2}
+        several = {c: n for c, n in chains.most_common(TOP_GROUPS) if n >= 2}
+        rest = [n for _, n in chains.most_common()[TOP_GROUPS:] if n >= 2]
+        if rest:  # au plus TOP_GROUPS chaînes, le reste en un total
+            several["autres"] = f"{len(rest)} autres chaînes, {sum(rest)} vidéos"
         if several:
             info["dataset"]["chaines_avec_plusieurs_videos"] = several
         return _jsonable(info)
@@ -501,7 +510,7 @@ class Lab:
             "total_images_annotees": sum(r["label_any"] is not None for r in mine),
             "requetes_en_echec": failed,
             "cout_annotation_usd": round(self.annotation_spent - before, 4),
-            "images_etiquetees_total": sum(r["label_any"] is not None for r in self.rows),
+            "nouveau_total_global_images_etiquetees": sum(r["label_any"] is not None for r in self.rows),
             "videos_collectables_restantes": self.data_budget - self.generated,
             "budget_annotation_restant_usd": round(self.annotation_budget_usd - self.annotation_spent, 3)})
 
@@ -512,20 +521,15 @@ class Lab:
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
     def data_requested_history(self) -> dict:
-        """Historique des collectes regroupé par requête YouTube : une requête où on obtient moins
-        de vidéos que demandé s'épuise (une vidéo n'est prise qu'une fois)."""
-        out: dict[str, dict] = {}
+        """Historique des collectes, une ligne par requête YouTube : « obtenues/demandées
+        orientation » pour chaque orientation essayée. Une requête où on obtient moins de vidéos que
+        demandé s'épuise dans cette orientation (une vidéo n'est prise qu'une fois)."""
+        tally: dict[str, dict[str, list[int]]] = {}
         for r in self.data_requests():
-            t = out.setdefault(r["query"], {"appels": 0, "videos_demandees": 0, "videos_obtenues": 0,
-                                            "orientations": [], "cout_annotation_usd": 0.0})
-            t["appels"] += 1
-            t["videos_demandees"] += r["n"]
-            t["videos_obtenues"] += r["ok"]
-            t["cout_annotation_usd"] = round(t["cout_annotation_usd"] + r.get("cost_usd", 0.0), 4)
-            o = r.get("orientation") or "toutes"
-            if o not in t["orientations"]:
-                t["orientations"].append(o)
-        return out
+            t = tally.setdefault(r["query"], {}).setdefault(r.get("orientation") or "toutes", [0, 0])
+            t[0] += r["ok"]
+            t[1] += r["n"]
+        return {q: ", ".join(f"{ok}/{n} {o}" for o, (ok, n) in t.items()) for q, t in tally.items()}
 
     def exclude_clips(self, clips: dict) -> dict:
         """Retire des clips des splits créés ensuite : {sample_id: raison}. Les splits existants ne
@@ -547,10 +551,11 @@ class Lab:
     def make_split(self, note: str, test_ratio: float = 0.2, stratify: list[str] | None = None,
                    seed: int = 0) -> dict:
         """Crée un split dev/test figé. Toutes les vidéos d'une même chaîne YouTube vont du même
-        côté. Le test est tiré au premier split en répartissant chaque caractéristique de stratify
-        (orientation, clip vide) au plus près de test_ratio, puis figé (TEST_SET) : ensuite
-        test_ratio est ignoré et toutes les autres vidéos vont en dev. stratify (par défaut toutes,
-        [] pour un tirage purement aléatoire) et seed fixent aussi les plis de dev (_folds)."""
+        côté. Chaque split tire son propre test, test_ratio des chaînes (au plus TEST_MAX_CHAINS),
+        en répartissant chaque caractéristique de stratify (orientation, clip vide) au plus près ;
+        ses expériences sont testées sur ce test, qui ne se compare pas à celui d'un autre split.
+        stratify (par défaut toutes, [] pour un tirage purement aléatoire) et seed fixent aussi
+        les plis de dev (_folds)."""
         # Par défaut tout est stratifié : sans ça, un cas rare peut tomber entièrement en test et
         # jamais en dev (run 004).
         stratify = list(STRATIFY_KEYS) if stratify is None else list(stratify)
@@ -561,24 +566,17 @@ class Lab:
             raise ValueError("test_ratio doit être > 0 et au plus 0.4")
         if set(stratify) - set(STRATIFY_KEYS):
             raise ValueError(f"stratify parmi {STRATIFY_KEYS}")
-        frozen = self._test_clips()
         clips = self._channel_traits({r["sample_id"] for r in self.rows} - set(exclude), stratify)
         if len(clips) < 3:
             raise ValueError("il faut au moins 3 chaînes YouTube pour faire un split")
-        if frozen is None:
-            assign = _stratified(clips, {"dev": 1 - test_ratio, "test": test_ratio}, seed)
-        else:  # test imposé : ses chaînes en test, tout le reste en dev
-            assign = {c: "test" if c in frozen else "dev" for c in clips}
-
+        ratio = min(test_ratio, TEST_MAX_CHAINS / len(clips))
+        assign = _stratified(clips, {"dev": 1 - ratio, "test": ratio}, seed)
         SPLITS_DIR.mkdir(parents=True, exist_ok=True)
         split_id = f"split_{len(list(SPLITS_DIR.glob('split_*.json'))) + 1:03d}"
-        params = {"test_ratio": None if frozen is not None else test_ratio,
-                  "test_fige": frozen is not None, "stratify": stratify, "seed": seed}
+        params = {"test_ratio": test_ratio, "stratify": stratify, "seed": seed}
         (SPLITS_DIR / f"{split_id}.json").write_text(json.dumps(
             {"split_id": split_id, "note": note, "date": time.strftime("%Y-%m-%d %H:%M"), "params": params,
              "excluded": exclude, "clips": assign}, ensure_ascii=False, indent=2), encoding="utf-8")
-        if frozen is None:
-            self._test_clips()  # fige le test de ce premier split
         m = self._split_map(split_id)
         return _jsonable({"split_id": split_id, "params": params, "clips_exclus": len(exclude),
                           "plis_de_validation": len(set(self._folds(split_id).values())),
@@ -590,9 +588,11 @@ class Lab:
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     def train_model(self, embeddings: list[str], model: str = "logreg", params: dict | None = None, balance: dict | None = None,
-                    weights: dict | None = None, note: str = "", split_id: str | None = None) -> dict:
+                    weights: dict | None = None, note: str = "") -> dict:
+        # Toujours sur le split le plus récent : un ancien split ne se compare plus à rien de récent.
+        split_id = self.latest_split()
         if not split_id:
-            raise ValueError("split_id obligatoire : un split créé par make_split (voir list_experiments)")
+            raise ValueError("aucun split : crée-en un avec make_split avant d'entraîner")
         if model not in MODELS:
             raise ValueError(f"model dans {MODELS}")
         dev = self._idx("dev", split_id)
@@ -662,7 +662,9 @@ class Lab:
         tp_rows = [by_frame[f] for f, yi, pi in zip(frames, y, pred) if yi and pi]
         fp_rows = [by_frame[f] for f, yi, pi in zip(frames, y, pred) if not yi and pi]
 
-        def rates(key):
+        def rates(key, missed_only=False):
+            # missed_only : seulement les groupes ayant des ratés, les plus ratés d'abord, au plus
+            # TOP_GROUPS (le reste en un total) : la liste ne grandit pas avec le dataset
             tot, miss = Counter(), Counter()
             for r in tp_rows + fn_rows:
                 for k in key(r):
@@ -670,16 +672,30 @@ class Lab:
             for r in fn_rows:
                 for k in key(r):
                     miss[k] += 1
-            return {k: f"{miss[k]}/{tot[k]} ratées" for k in sorted(tot, key=str)}
+            if not missed_only:
+                return {k: f"{miss[k]}/{tot[k]} ratées" for k in sorted(tot, key=str)}
+            ranked = [k for k, _ in miss.most_common()]
+            out = {k: f"{miss[k]}/{tot[k]} ratées" for k in ranked[:TOP_GROUPS]}
+            rest = ranked[TOP_GROUPS:]
+            if rest:
+                out["autres"] = (f"{len(rest)} autres, {sum(miss[k] for k in rest)}/"
+                                 f"{sum(tot[k] for k in rest)} ratées")
+            return out
 
+        def query(r):
+            return self._ann(r["sample_id"]).get("query") or "inconnue"
+
+        # Pas d'exemples d'images ratées : l'agent ne peut pas ouvrir un chemin d'image ; il les
+        # voit avec show_examples. Par requête YouTube (le thème qui a amené la vidéo) : avec
+        # beaucoup de chaînes, c'est le regroupement qui dit quoi collecter ou viser.
         return _jsonable({
             "experiment_id": experiment_id, "precision_visee": precision, **op,
             "positifs_rates_par_orientation": rates(lambda r: {self._orientation(r)}),
-            "positifs_rates_par_chaine": rates(lambda r: {self._ann(r["sample_id"])["channel"]}),
+            "positifs_rates_par_requete": rates(lambda r: {query(r)}, missed_only=True),
+            "positifs_rates_par_chaine": rates(lambda r: {self._ann(r["sample_id"])["channel"]}, missed_only=True),
             "faux_positifs_par_orientation": dict(Counter(self._orientation(r) for r in fp_rows)),
+            "faux_positifs_par_requete": dict(Counter(query(r) for r in fp_rows).most_common(8)),
             "faux_positifs_par_clip": dict(Counter(r["sample_id"] for r in fp_rows).most_common(8)),
-            "exemples_rates": [{"image": r["frame"], "t": r["t"], "video": self._ann(r["sample_id"])["title"]}
-                               for r in fn_rows[:10]],
         })
 
     def show_examples(self, experiment_id: str, kind: str = "missed", n: int = 4,
@@ -735,8 +751,11 @@ class Lab:
 
     def experiments_overview(self) -> dict:
         """Ce que renvoie l'outil list_experiments : le split le plus récent (celui sur lequel
-        entraîner) avec ses expériences en format court, et une ligne par ancien split ayant des
-        expériences (elles ne se comparent pas à celles du récent)."""
+        entraîner) avec ses expériences, et une ligne par ancien split ayant des expériences (elles
+        ne se comparent pas à celles du récent). Sur le split récent, seules celles qui comptent
+        pour décider sont en format court (les DETAILED_BEST meilleures, la production, celles
+        passées au test final, les DETAILED_RECENT dernières) ; les autres tiennent en une ligne,
+        pour que la réponse ne grandisse pas avec le nombre d'expériences."""
         exps = self.list_experiments()
         summaries = self._split_summaries()
         latest = summaries[-1]["split_id"] if summaries else None
@@ -770,7 +789,13 @@ class Lab:
                 entry["anomalie_chaines_dans_dev_et_test"] = shared
             note = sp["note"]
             entry["note"] = note if len(note) <= 120 else note[:120].rstrip() + "…"
-            entry["experiences"] = [_compact(e) for e in mine]
+            keep = ({e["id"] for e in sorted(mine, key=_score, reverse=True)[:DETAILED_BEST]}
+                    | {e["id"] for e in mine[-DETAILED_RECENT:]}
+                    | {e["id"] for e in mine if e.get("en_production") or "final_test" in e})
+            entry["experiences"] = [_compact(e) for e in mine if e["id"] in keep]
+            others = {e["id"]: _one_line(e) for e in mine if e["id"] not in keep}
+            if others:
+                entry["autres_experiences"] = others
             out.append(entry)
         return {"splits": out}
 
