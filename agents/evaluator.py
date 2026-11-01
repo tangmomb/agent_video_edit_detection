@@ -34,7 +34,8 @@ erreurs du modèle.
 
 Rapport final (court, en français) : chiffres clés par expérience évaluée, erreurs dominantes \
 (sortes d'ajouts ratés vues sur les images, orientation, chaînes, vidéos à fausses alertes) avec \
-leur cause probable, verdict sur l'amélioration, et recommandations concrètes : quelles vidéos \
+leur cause probable, verdict sur l'amélioration (contre une référence du même split), et \
+recommandations concrètes : quelles vidéos \
 collecter (thèmes, styles de montage, orientation), quelles pistes de modèle tester."""
 
 

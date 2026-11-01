@@ -30,6 +30,9 @@ MODELS = [
     # tarif baissé le 01/11/2026 (1.36 / 0.14 / 4.18 avant)
     ("mistral-large-4-0", "Mistral Large 4", True, {"input": 0.70, "cached_input": 0.07, "output": 2.10}, "mistral"),
     ("mistral-large-2512", "Mistral Large 3", True, {"input": 0.50, "output": 1.50}, "mistral"),
+    # descripteur des erreurs (model_training_pipeline.describe), servi par Mistral (01/11/2026)
+    ("deepseek-v4-1-flash-1017", "DeepSeek V4 Flash", True,
+     {"input": 0.30, "cached_input": 0.007, "output": 1.20}, "mistral"),
     ("mistral-small-2603", "Mistral Small 4", True, {"input": 0.15, "output": 0.60}, "mistral"),
     ("ministral-14b-2512", "Ministral 3 14B", True, {"input": 0.20, "output": 0.20}, "mistral"),
     ("zai-glm-5-3-flash", "Z.ai GLM 5.3 Flash", True, {"input": 0.15, "cached_input": 0.03, "output": 0.50}, "mistral"),

@@ -43,7 +43,7 @@ Arrête-toi quand le lot demandé est fait ou quand les résultats ne bougent pl
 Rapport final (court, en français) : le split utilisé (et pourquoi si tu l'as créé) ; pour chaque \
 expérience, son id, l'hypothèse et le résultat (AP par chaîne, rappel à 95 % de précision, AP, et \
 l'effet sur le groupe visé) ; le meilleur candidat selon toi (d'abord sur l'AP par chaîne) et pourquoi ; ce que tu essaierais ensuite et les données qui te \
-manquent, le cas échéant."""
+manquent, le cas échéant. Ne compare que des expériences du même split."""
 
 
 def make(lab: Lab, session=None) -> Agent:
@@ -57,7 +57,7 @@ def make(lab: Lab, session=None) -> Agent:
             list_experiments_tool(lab),
             Tool(
                 name="make_split",
-                description="Crée un split dev/test figé sur toutes les vidéos actuelles (les vidéos "
+                description="Crée un split dev/test, qui ne change plus, sur toutes les vidéos actuelles (les vidéos "
                             "collectées ensuite n'y entrent pas). Les vidéos d'une même chaîne YouTube restent "
                             "du même côté. Chaque split tire son propre test (150 chaînes au plus) ; le reste va "
                             "en dev, découpé par chaîne en plis de validation croisée. Renvoie l'id "

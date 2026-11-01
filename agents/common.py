@@ -23,10 +23,13 @@ Données : vraies vidéos YouTube. Chaque image est annotée par trois LLM de vi
 d'étiquette que s'ils sont tous d'accord, sinon elle est écartée (ni entraînée ni mesurée). Les \
 étiquettes peuvent donc contenir quelques erreurs communes aux trois LLM, et les cas ambigus \
 manquent. Le Dataset Builder collecte les vidéos sans se soucier des splits ; le Model Researcher \
-découpe ensuite le dataset en dev/test (make_split) : un split est nommé, figé, fait par \
-chaîne YouTube (une chaîne garde le même habillage d'une vidéo à l'autre), et les vidéos \
-collectées après sa création n'y entrent pas. Sans split, on ne peut ni entraîner ni tester. Chaque expérience retient son split : deux \
-expériences ne se comparent que si elles ont le même split. val est une validation croisée par \
+découpe ensuite le dataset en dev/test (make_split) : un split est nommé, fait par \
+chaîne YouTube (une chaîne garde le même habillage d'une vidéo à l'autre) et ne change plus ; les \
+vidéos collectées après sa création n'y entrent pas. Chaque split tire son propre test. Sans split, \
+on ne peut ni entraîner ni tester. Chaque expérience retient son split : deux expériences ne se \
+comparent que si elles ont le même split, en val comme en test. Pour savoir si un nouveau split \
+apporte un gain, on ré-entraîne la meilleure config de l'ancien split sur le nouveau et on compare \
+sur celui-ci : n'écris jamais d'écart de score entre deux splits. val est une validation croisée par \
 chaîne sur dev : chaque image de dev est prédite par un modèle qui n'a vu aucune vidéo de sa \
 chaîne, ce qui mesure le comportement sur des chaînes nouvelles. Le seuil y est choisi prudemment \
 (il doit tenir la précision visée sur la plupart des tirages de chaînes) ; le modèle gardé est \

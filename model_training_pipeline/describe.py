@@ -17,15 +17,18 @@ from video_source import annotators
 from . import batch
 from .frames import FRAMES_DIR
 
-DESCRIBER = "mistral-large-4-0"
+# DeepSeek V4 Flash plutôt que Large 4 : environ 10 fois moins cher, type et position des ajouts
+# aussi bien vus sur 20 erreurs d'exp_008, texte lu moins fidèlement (01/11/2026). Les descriptions
+# déjà en cache, faites par Large 4, sont gardées.
+DESCRIBER = "deepseek-v4-1-flash-1017"
 PROMPT = """Décris les ajouts de montage visibles sur cette image (tout ce qui ne vient pas de la \
 caméra : texte, titre, sous-titres, logo, bandeau, image incrustée, cadre, effet graphique…) : pour \
 chacun, sa nature, sa position, sa taille et son contraste, en une phrase courte. S'il n'y en a \
 aucun, dis ce qui dans l'image pourrait y faire penser, ou « aucun ».
 Réponds uniquement en JSON : {"description": "…"}"""
-# Tokens d'une requête (image de 768 px au plus, consigne, réponse) : estimation avant envoi, calée
-# sur la première analyse d'exp_008 (329 images, 0,27 $ en batch, 01/11/2026).
-TOKENS_IN, TOKENS_OUT = 1900, 150
+# Tokens d'une requête (image de 768 px au plus, consigne, réponse) : estimation avant envoi, un peu
+# au-dessus de la moyenne mesurée avec DeepSeek V4 Flash (311 / 54 sur 20 images, 01/11/2026).
+TOKENS_IN, TOKENS_OUT = 400, 80
 
 
 def _path(sample_id: str) -> Path:

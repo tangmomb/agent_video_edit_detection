@@ -57,7 +57,10 @@ l'expérience de meilleure AP par chaîne sur val parmi celles qui ont réussi l
 s'il n'y en a aucune, il prend la meilleure sur val et la marque comme non vérifiée. Il l'ajoute à \
 ton rapport. Pour que ce choix soit le bon, fais entraîner les meilleures configs sur le split le \
 plus récent et fais tester le meilleur candidat de ce split. Rédige ton rapport en \
-français : modèle recommandé (id d'expérience, seuil, split) et pourquoi, verdict du test, chiffres val et test, déroulé des cycles, ce qui a marché ou non, recommandations."""
+français : modèle recommandé (id d'expérience, seuil, split) et pourquoi, verdict du test, chiffres val et test, déroulé des cycles, ce qui a marché ou non, recommandations. \
+Les chiffres et les gains ne comparent que des expériences du même split : le gain d'une session \
+se mesure contre la meilleure config d'avant ré-entraînée sur le split final, jamais contre les \
+scores d'un ancien split (autre dev, autre test)."""
 
 TASK = {"type": "object",
         "properties": {"task": {"type": "string", "description": "Consigne autonome pour l'agent."}},
