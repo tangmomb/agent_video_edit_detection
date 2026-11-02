@@ -21,18 +21,18 @@ if not exist ".venv\Scripts\python.exe" (
 
 rem Arret des serveurs d'un lancement precedent : leurs fenetres (avec dev_reload et le serveur),
 rem puis tout ce qui ecoute encore sur leurs ports (serveur lance a la main, par exemple).
-for %%t in ("Accueil (8770)" "Interface du modele (8780)" "Banc des annotateurs (8790)" "Visionneuse du dataset (8800)" "Saut d'images (8810)" "Conversations des runs (8820)") do (
+for %%t in ("Panneau de controle (8770)" "Interface du modele (8780)" "Banc des annotateurs (8790)" "Visionneuse du dataset (8800)" "Saut d'images (8810)" "Conversations des runs (8820)") do (
     taskkill /FI "WINDOWTITLE eq %%~t*" /T /F >nul 2>&1
 )
 powershell -NoProfile -Command "Get-NetTCPConnection -State Listen -LocalPort 8770,8780,8790,8800,8810,8820 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
 
-start "Accueil (8770)" cmd /k ".venv\Scripts\python.exe interface\dev_reload.py interface\accueil\server.py"
+start "Panneau de controle (8770)" cmd /k ".venv\Scripts\python.exe interface\dev_reload.py interface\accueil\server.py"
 start "Interface du modele (8780)" cmd /k ".venv\Scripts\python.exe interface\dev_reload.py interface\modele\server.py %*"
 start "Banc des annotateurs (8790)" cmd /k ".venv\Scripts\python.exe interface\dev_reload.py interface\llm_bench\server.py"
 start "Visionneuse du dataset (8800)" cmd /k ".venv\Scripts\python.exe interface\dev_reload.py interface\dataset_viewer\server.py"
 start "Saut d'images (8810)" cmd /k ".venv\Scripts\python.exe interface\dev_reload.py interface\skip_tester\server.py"
 start "Conversations des runs (8820)" cmd /k ".venv\Scripts\python.exe interface\dev_reload.py interface\run_chat\server.py"
 
-rem L'accueil demarre tout de suite ; il indique quand les autres serveurs sont en ligne.
+rem Le panneau demarre tout de suite sur le modele en production ; son menu indique quand les autres serveurs sont en ligne.
 timeout /t 2 /nobreak >nul
 start http://localhost:8770

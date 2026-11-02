@@ -20,12 +20,10 @@ sys.path.insert(0, str(ROOT))
 from interface import dev_reload  # noqa: E402
 
 INTERFACE = HERE.parent
-# Les outils du menu, dans l'ordre : id de la page (/#/<id>), nom, description, adresse affichée dans
+# Les outils du menu, dans l'ordre (le premier s'ouvre à l'arrivée) : id de la page (/#/<id>), nom, description, adresse affichée dans
 # le cadre et, pour un outil à serveur, l'adresse dont on vérifie qu'elle répond (voyant du menu).
 TOOLS = [
-    {"id": "accueil", "name": "Accueil", "icon": "⌂", "url": "/outils.html",
-     "desc": "Tous les outils et leur état."},
-    {"id": "modele", "name": "Interface du modèle", "icon": "▶", "url": "http://localhost:8780/",
+    {"id": "modele", "name": "Modèle en production", "icon": "▶", "url": "http://localhost:8780/",
      "check": "http://localhost:8780/",
      "desc": "Envoie une vidéo et vois les images où le classifieur détecte un ajout de montage ; annotation "
              "par les trois LLM et correction à la main. Le modèle met quelques secondes à se charger."},
@@ -49,7 +47,7 @@ TOOLS = [
      "desc": "Les images que l'annotation enverrait aux annotateurs et celles sautées comme quasi identiques, "
              "avec le seuil réglable."},
 ]
-PAGES = {"/": HERE / "index.html", "/index.html": HERE / "index.html", "/outils.html": HERE / "outils.html",
+PAGES = {"/": HERE / "index.html", "/index.html": HERE / "index.html",
          "/agents_tree.html": INTERFACE / "agents_tree" / "agents_tree.html",
          "/choix_production.html": INTERFACE / "choix_production" / "index.html"}
 

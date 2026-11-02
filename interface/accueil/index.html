@@ -68,7 +68,8 @@ function menu() {
     `<div class="ds">${esc(t.desc)}</div></div></a>`).join("");
 }
 
-const current = () => (location.hash.match(/^#\/([\w-]+)/) || [])[1] || "accueil";
+// sans page demandée : le premier outil du menu (le modèle en production)
+const current = () => (location.hash.match(/^#\/([\w-]+)/) || [])[1] || (TOOLS[0] || {}).id;
 
 // Un cadre par outil, gardé en mémoire : revenir à un outil le retrouve dans l'état laissé
 function show() {
@@ -109,8 +110,6 @@ document.getElementById("burger").onclick = () => document.body.classList.toggle
 document.getElementById("scrim").onclick = () => document.body.classList.remove("open");
 addEventListener("keydown", e => { if (e.key === "Escape") document.body.classList.remove("open"); });
 addEventListener("hashchange", show);
-// la page d'accueil (dans son cadre) demande d'ouvrir un outil
-addEventListener("message", e => { if (e.data && e.data.open) location.hash = "#/" + e.data.open; });
 
 (async () => {
   TOOLS = await (await fetch("/api/tools", {cache: "no-store"})).json();
