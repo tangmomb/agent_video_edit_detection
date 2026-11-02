@@ -5,7 +5,7 @@
 Sans --exp, utilise le modèle désigné dans model_results/production.json (et son seuil). La vidéo
 est traitée exactement comme à l'entraînement : frames à FPS par seconde (frames.extract), mêmes
 embeddings (features, lab._X), même classifieur.
-Fichiers de travail dans interface/_jobs/<id>/ (frames + résultat), effaçables à tout moment.
+Fichiers de travail dans interface/modele/_jobs/<id>/ (frames + résultat), effaçables à tout moment.
 
 Une vidéo peut ensuite être annotée par les trois LLM annotateurs du dataset (bouton de la page,
 appels payants, plafonnés par vidéo ; une image n'a d'étiquette que s'ils sont d'accord) puis
@@ -28,14 +28,14 @@ from threading import Lock
 import numpy as np
 import torch
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from model_training_pipeline import metrics  # noqa: E402
 from model_training_pipeline.features import _encoder, embed_images  # noqa: E402
 from model_training_pipeline.frames import FPS, extract  # noqa: E402
 from model_training_pipeline.lab import EXP_DIR  # noqa: E402
-from utils import dev_reload  # noqa: E402
+from interface import dev_reload  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -130,7 +130,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if dev_reload.enabled():  # lancé par utils/dev_reload.py : la page se recharge toute seule
+        if dev_reload.enabled():  # lancé par interface/dev_reload.py : la page se recharge toute seule
             if self.path == "/__dev":
                 return self._json(HTTPStatus.OK, dev_reload.status(HERE / "index.html"))
             if self.path in ("/", "/index.html"):
@@ -194,7 +194,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="interface/server.py")
+    p = argparse.ArgumentParser(prog="interface/modele/server.py")
     p.add_argument("--exp", help="expérience à tester (défaut : celle de production.json)")
     p.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8780)))
     a = p.parse_args()

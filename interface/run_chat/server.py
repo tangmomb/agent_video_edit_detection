@@ -2,7 +2,7 @@
 (orchestrateur, sous-agents) et les outils du labo, à partir de son pipeline.json. Les journaux sont
 relus à chaque requête : un run en cours se suit en direct. Aucun appel payant.
 
-    .venv/Scripts/python.exe utils/run_chat/server.py [--port 8820]
+    .venv/Scripts/python.exe interface/run_chat/server.py [--port 8820]
 """
 
 import argparse
@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
-from utils import dev_reload  # noqa: E402
+from interface import dev_reload  # noqa: E402
 
 RUNS = ROOT / "runs"
 PAGE = HERE / "index.html"
@@ -276,7 +276,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="utils/run_chat/server.py")
+    p = argparse.ArgumentParser(prog="interface/run_chat/server.py")
     p.add_argument("--port", type=int, default=8820)
     a = p.parse_args()
     print(f"conversations des runs — http://localhost:{a.port}", flush=True)

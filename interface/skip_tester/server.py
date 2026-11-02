@@ -6,9 +6,9 @@ Les vidéos du dataset ont été annotées image par image avant ce mécanisme :
 sautées dont l'étiquette diffère de celle de leur référence (l'information que le saut aurait
 perdue). Aucun appel payant.
 
-    .venv/Scripts/python.exe utils/skip_tester/server.py [--port 8810]
+    .venv/Scripts/python.exe interface/skip_tester/server.py [--port 8810]
 
-Vidéos envoyées et leurs images dans utils/skip_tester/_jobs/, effaçables à tout moment.
+Vidéos envoyées et leurs images dans interface/skip_tester/_jobs/, effaçables à tout moment.
 """
 
 import argparse
@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 from model_training_pipeline.features import embed_images, get_features  # noqa: E402
 from model_training_pipeline.frames import (FPS, LONG_SIDE, SKIP_SIMILAR, extract, frames_of,  # noqa: E402
                                             load_votes, skip_refs)
-from utils import dev_reload  # noqa: E402
+from interface import dev_reload  # noqa: E402
 from video_source.config import FRAMES_DIR, SAMPLES_DIR, ffmpeg_bin  # noqa: E402
 from video_source.youtube import load_meta  # noqa: E402
 
@@ -212,7 +212,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="utils/skip_tester/server.py")
+    p = argparse.ArgumentParser(prog="interface/skip_tester/server.py")
     p.add_argument("--port", type=int, default=8810)
     a = p.parse_args()
     print(f"test du saut d'images — http://localhost:{a.port}", flush=True)

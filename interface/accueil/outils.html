@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Outils du projet</title>
+<style>
+:root{--bg:#f7f6f3;--panel:#fff;--fg:#1d1d1f;--muted:#6b6b70;--line:#d9d7d1;--code:#f0eee9;
+--accent:#2f5bd3;--ok:#2e7d4f;--off:#b0aea8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151517;--panel:#1e1e21;
+--fg:#ececee;--muted:#9a9aa0;--line:#34343a;--code:#2a2a2f;--accent:#7d9cff;--ok:#5fc58a;--off:#55555c}}
+:root[data-theme="dark"]{--bg:#151517;--panel:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#34343a;
+--code:#2a2a2f;--accent:#7d9cff;--ok:#5fc58a;--off:#55555c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:40px 16px 64px}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 24px}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--panel);border:1px solid var(--line);
+border-radius:10px;padding:16px 18px;margin-bottom:12px}
+a.card:hover{border-color:var(--accent)}
+.head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.name{font-weight:650;font-size:17px}
+.state{margin-left:auto;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--off)}
+.up .dot{background:var(--ok)}
+.desc{margin:6px 0 0;color:var(--muted)}
+code{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px}
+</style></head>
+<body><main>
+<h1>Outils du projet</h1>
+<p class="sub">Choisis un outil ici ou avec le menu en bas à gauche. Lancés par <code>lancer_interface.bat</code>, les serveurs redémarrent quand un fichier <code>.py</code> change et leurs pages se rechargent toutes seules.</p>
+<div id="cards"></div>
+</main>
+<script>
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+// Un serveur répond-il ? (requête sans CORS : on sait seulement s'il est joignable)
+async function check(card) {
+  let up = false;
+  try { await fetch(card.dataset.check, { mode: "no-cors", cache: "no-store" }); up = true; } catch (e) {}
+  card.classList.toggle("up", up);
+  card.querySelector(".label").textContent = up ? "en ligne" : "hors ligne";
+}
+(async () => {
+  // la même liste que le menu du panneau ; un clic ouvre l'outil dans le panneau
+  const tools = (await (await fetch("/api/tools", {cache: "no-store"})).json()).filter(t => t.id !== "accueil");
+  document.getElementById("cards").innerHTML = tools.map(t =>
+    `<a class="card" href="/#/${t.id}" target="_top"${t.check ? ` data-check="${esc(t.check)}"` : ""}>` +
+    `<div class="head"><span class="name">${t.icon || ""} ${esc(t.name)}</span>` +
+    (t.check ? '<span class="state"><span class="dot"></span><span class="label">…</span></span>' : "") +
+    `</div><p class="desc">${esc(t.desc)}</p></a>`).join("");
+  const cards = [...document.querySelectorAll("a.card[data-check]")];
+  const all = () => cards.forEach(check);
+  all();
+  setInterval(all, 3000);
+})();
+</script>
+</body></html>

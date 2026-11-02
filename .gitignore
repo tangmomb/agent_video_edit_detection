@@ -5,8 +5,8 @@ __pycache__/
 data/
 runs/
 model_results/
-interface/_jobs/
-utils/llm_bench/_videos/
-utils/skip_tester/_jobs/
+interface/modele/_jobs/
+interface/llm_bench/_videos/
+interface/skip_tester/_jobs/
 bench/
 utils/vps.txt

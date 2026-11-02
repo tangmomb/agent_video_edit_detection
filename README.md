@@ -13,7 +13,7 @@ vraies vidéos YouTube, annotées image par image par trois LLM de vision.
   YouTube bloque l'IP (VPS Contabo : tunnel SSH vers le VPS Infomaniak, `socks5://127.0.0.1:1080`).
 - `00_video_source/annotators.py` : une requête par image, réponse `{"ajout": true|false}`. Le
   dataset est annoté par `gpt-6-luna`, `gpt-5.6-luna` et `zai-glm-5-3-flash` (les meilleurs du banc
-  `utils/llm_bench`) : une image n'a d'étiquette que s'ils sont **tous d'accord**, sinon elle est
+  `interface/llm_bench`) : une image n'a d'étiquette que s'ils sont **tous d'accord**, sinon elle est
   écartée (ni entraînée ni mesurée), sans revue manuelle. Votes dans `votes.json`, avec les images
   de la vidéo (`data/videos_samples_frames/img/<sample_id>/`).
   Effort de raisonnement `medium` pour les GPT, aucun effort précisé pour `zai-glm-5-3-flash` (son
@@ -21,7 +21,7 @@ vraies vidéos YouTube, annotées image par image par trois LLM de vision.
   suivies dans `data/batches.json`. Une image presque identique à la dernière image annotée de sa
   vidéo (cosinus CLIP > 0.87) n'est pas annotée : environ 70 % des images en moins à payer, pour
   20 % des apparitions ou disparitions d'ajout manquées (`frames.to_annotate`, seuil réglable à l'œil
-  dans `utils/skip_tester`).
+  dans `interface/skip_tester`).
 
 ## Installation
 

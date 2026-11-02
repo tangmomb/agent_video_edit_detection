@@ -33,7 +33,7 @@ WORKERS = 8  # images annotées en parallèle
 # 0.87 saute 69 % des images, mais 20 % des 230 changements d'étiquette (apparition ou disparition
 # d'un ajout) tombent sur une image sautée et 2,5 % des images sautées ont une autre étiquette que
 # leur référence ; 0.97 n'en sautait que 24 %, pour 1 % des changements et 0,1 % des étiquettes.
-# Choisi à l'œil dans utils/skip_tester : à 0.97, trop d'images quasi identiques partaient encore.
+# Choisi à l'œil dans interface/skip_tester : à 0.97, trop d'images quasi identiques partaient encore.
 SKIP_SIMILAR = 0.87
 SKIPPED_SHARE = 0.69  # part des images sautées à ce seuil : estimation du coût d'une vidéo
 SKIP_FEATURES = ("clip_b32", "full")  # embeddings comparés : calculés pour toutes les images

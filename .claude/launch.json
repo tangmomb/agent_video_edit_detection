@@ -5,8 +5,8 @@
       "name": "home",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [
-        "utils/dev_reload.py",
-        "utils/home/server.py"
+        "interface/dev_reload.py",
+        "interface/accueil/server.py"
       ],
       "port": 8770
     },
@@ -14,7 +14,7 @@
       "name": "interface",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [
-        "interface/server.py"
+        "interface/modele/server.py"
       ],
       "port": 8780
     },
@@ -22,7 +22,7 @@
       "name": "llm-bench",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [
-        "utils/llm_bench/server.py"
+        "interface/llm_bench/server.py"
       ],
       "port": 8790
     },
@@ -30,7 +30,7 @@
       "name": "dataset-viewer",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [
-        "utils/dataset_viewer/server.py"
+        "interface/dataset_viewer/server.py"
       ],
       "port": 8800
     },
@@ -38,7 +38,7 @@
       "name": "skip-tester",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [
-        "utils/skip_tester/server.py"
+        "interface/skip_tester/server.py"
       ],
       "port": 8810
     },
@@ -46,8 +46,8 @@
       "name": "run-chat",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": [
-        "utils/dev_reload.py",
-        "utils/run_chat/server.py"
+        "interface/dev_reload.py",
+        "interface/run_chat/server.py"
       ],
       "port": 8820
     }

@@ -52,7 +52,9 @@ Pour conclure (gains qui plafonnent ou budget) : fais tester par l'Evaluator can
 (list_experiments). S'il échoue et qu'il reste un test, le suivant. Aucun agent ne met de modèle \
 en production : le code \
 choisit ensuite le meilleur parmi les modèles qui ont réussi leur test (à défaut, le meilleur, \
-marqué non vérifié) et l'ajoute à ton rapport.
+marqué non vérifié) et l'ajoute à ton rapport. Un test est réussi dès que la précision visée tient \
+sur test, même si le rappel baisse. N'annonce pas quel modèle sera en production : c'est le code \
+qui le décide, après ton rapport (run 010 : rapport « exp_045 reste en production », code : exp_151).
 
 Rapport final, en français : modèle recommandé (id, seuil, split) et pourquoi, verdict du test, \
 chiffres val et test, déroulé, ce qui a marché ou non, recommandations. Le gain de la session se \

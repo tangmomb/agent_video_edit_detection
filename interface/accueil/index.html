@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panneau de contrôle</title>
+<style>
+:root{--bg:#f7f6f3;--panel:#ffffff;--fg:#1d1d1f;--muted:#6b6b70;--line:#e2e0db;--hover:#f2f1ee;--active:#e8eefc;
+  --accent:#2f5bd3;--ok:#2e9d5b;--off:#b5b3ad;--shadow:0 8px 30px rgba(0,0,0,.18)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111214;--panel:#1c1d21;--fg:#ececee;
+  --muted:#9a9aa0;--line:#2e2f35;--hover:#26272c;--active:#26324f;--accent:#7d9cff;--ok:#4fd18b;--off:#55565c;
+  --shadow:0 8px 30px rgba(0,0,0,.5)}}
+:root[data-theme="dark"]{--bg:#111214;--panel:#1c1d21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2f35;--hover:#26272c;
+  --active:#26324f;--accent:#7d9cff;--ok:#4fd18b;--off:#55565c;--shadow:0 8px 30px rgba(0,0,0,.5)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--fg);font:14.5px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif}
+#frames{position:fixed;inset:0}
+#frames iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg)}
+#frames iframe[hidden]{display:none}
+.down{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;
+  color:var(--muted);text-align:center;padding:24px}
+.down b{color:var(--fg);font-size:16px}
+.down code{font:13px Consolas,ui-monospace,monospace;background:var(--hover);padding:2px 6px;border-radius:4px}
+
+#burger{position:fixed;left:16px;bottom:16px;z-index:20;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);
+  background:var(--panel);color:var(--fg);box-shadow:var(--shadow);cursor:pointer;display:flex;align-items:center;justify-content:center}
+#burger:hover{border-color:var(--accent)}
+#burger span,#burger span:before,#burger span:after{display:block;width:18px;height:2px;background:currentColor;border-radius:2px;
+  position:relative;transition:transform .15s,background .15s}
+#burger span:before,#burger span:after{content:"";position:absolute;left:0}
+#burger span:before{top:-6px}#burger span:after{top:6px}
+body.open #burger span{background:transparent}
+body.open #burger span:before{transform:translateY(6px) rotate(45deg)}
+body.open #burger span:after{transform:translateY(-6px) rotate(-45deg)}
+
+#menu{position:fixed;left:16px;bottom:72px;z-index:19;width:360px;max-height:calc(100vh - 100px);overflow-y:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px;
+  transform-origin:bottom left;transform:scale(.96);opacity:0;pointer-events:none;transition:opacity .12s,transform .12s}
+body.open #menu{opacity:1;transform:none;pointer-events:auto}
+#menu h1{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:6px 10px 8px;font-weight:600}
+.item{display:flex;gap:12px;align-items:flex-start;padding:9px 10px;border-radius:9px;text-decoration:none;color:inherit}
+.item:hover{background:var(--hover)}
+.item.on{background:var(--active)}
+.item .ic{width:32px;height:32px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;
+  background:var(--hover);font-size:16px}
+.item.on .ic{background:var(--accent);color:#fff}
+.item .tx{min-width:0;flex:1}
+.item .nm{font-weight:600;display:flex;align-items:center;gap:8px}
+.item .ds{font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--off);flex:none}
+.dot.up{background:var(--ok)}
+#scrim{position:fixed;inset:0;z-index:18;display:none}
+body.open #scrim{display:block}
+</style></head>
+<body>
+<div id="frames"></div>
+<div id="scrim"></div>
+<nav id="menu" aria-label="Outils"><h1>Panneau de contrôle</h1><div id="items"></div></nav>
+<button id="burger" aria-label="Menu" title="Changer d'outil"><span></span></button>
+<script>
+let TOOLS = [];
+const frames = document.getElementById("frames"), status = {};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+function menu() {
+  const id = current();
+  document.getElementById("items").innerHTML = TOOLS.map(t =>
+    `<a class="item${t.id === id ? " on" : ""}" href="#/${t.id}"><div class="ic">${t.icon || "•"}</div>` +
+    `<div class="tx"><div class="nm">${esc(t.name)}${t.check ? `<span class="dot${status[t.id] ? " up" : ""}" title="${status[t.id] ? "en ligne" : "hors ligne"}"></span>` : ""}</div>` +
+    `<div class="ds">${esc(t.desc)}</div></div></a>`).join("");
+}
+
+const current = () => (location.hash.match(/^#\/([\w-]+)/) || [])[1] || "accueil";
+
+// Un cadre par outil, gardé en mémoire : revenir à un outil le retrouve dans l'état laissé
+function show() {
+  const t = TOOLS.find(x => x.id === current()) || TOOLS[0];
+  if (!t) return;
+  let f = frames.querySelector(`[data-id="${t.id}"]`);
+  if (!f) {
+    f = document.createElement("div"); f.dataset.id = t.id;
+    if (t.check && status[t.id] === false) {
+      f.innerHTML = `<div class="down"><b>${esc(t.name)} ne répond pas</b>Son serveur n'est pas lancé : ` +
+        `<code>lancer_interface.bat</code> démarre tous les outils.</div>`;
+      f.dataset.down = "1";
+    } else {
+      f.innerHTML = `<iframe src="${esc(t.url)}" title="${esc(t.name)}"></iframe>`;
+    }
+    frames.appendChild(f);
+  }
+  [...frames.children].forEach(x => x.hidden = x !== f);
+  document.title = `${t.name} · Panneau de contrôle`;
+  document.body.classList.remove("open");
+  menu();
+}
+
+// Un serveur répond-il ? (requête sans CORS : on sait seulement s'il est joignable)
+async function check() {
+  await Promise.all(TOOLS.filter(t => t.check).map(async t => {
+    let up = false;
+    try { await fetch(t.check, {mode: "no-cors", cache: "no-store"}); up = true; } catch (e) {}
+    const was = status[t.id]; status[t.id] = up;
+    // outil revenu en ligne alors qu'on affichait « ne répond pas » : on recharge sa page
+    const f = frames.querySelector(`[data-id="${t.id}"]`);
+    if (up && was === false && f && f.dataset.down) { f.remove(); if (current() === t.id) show(); }
+  }));
+  menu();
+}
+
+document.getElementById("burger").onclick = () => document.body.classList.toggle("open");
+document.getElementById("scrim").onclick = () => document.body.classList.remove("open");
+addEventListener("keydown", e => { if (e.key === "Escape") document.body.classList.remove("open"); });
+addEventListener("hashchange", show);
+// la page d'accueil (dans son cadre) demande d'ouvrir un outil
+addEventListener("message", e => { if (e.data && e.data.open) location.hash = "#/" + e.data.open; });
+
+(async () => {
+  TOOLS = await (await fetch("/api/tools", {cache: "no-store"})).json();
+  await check();
+  show();
+  setInterval(check, 5000);
+})();
+</script></body></html>

@@ -3,9 +3,9 @@ en JSON quelles images (1 par seconde) contiennent un ajout de montage, et on co
 leur coût et leur durée pour choisir le prochain modèle d'annotation. Outil autonome : il n'est
 branché ni au dataset, ni au classifieur, ni aux agents.
 
-    .venv/Scripts/python.exe utils/llm_bench/server.py [--port 8790]
+    .venv/Scripts/python.exe interface/llm_bench/server.py [--port 8790]
 
-Chaque vidéo chargée est rangée dans utils/llm_bench/_videos/<id>/ (vidéo, images, et une réponse
+Chaque vidéo chargée est rangée dans interface/llm_bench/_videos/<id>/ (vidéo, images, et une réponse
 JSON par modèle dans runs/). Chaque lancement de modèle est un appel payant à l'API de son
 fournisseur (clés MISTRAL_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY du .env).
 """
@@ -27,7 +27,7 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
-from utils import dev_reload  # noqa: E402
+from interface import dev_reload  # noqa: E402
 from video_source.annotators import (KEYS, MODELS, PROMPT, PROVIDER, REASONING, REASONING_BY_MODEL,  # noqa: E402
                                      ask, client, parse, reasoning)
 from video_source.annotators import cost as _cost  # noqa: E402
@@ -160,7 +160,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
-        if dev_reload.enabled():  # lancé par utils/dev_reload.py : la page se recharge toute seule
+        if dev_reload.enabled():  # lancé par interface/dev_reload.py : la page se recharge toute seule
             if u.path == "/__dev":
                 return self._json(HTTPStatus.OK, dev_reload.status(HERE / "index.html"))
             if u.path in ("/", "/index.html"):
@@ -224,7 +224,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="utils/llm_bench/server.py")
+    p = argparse.ArgumentParser(prog="interface/llm_bench/server.py")
     p.add_argument("--port", type=int, default=8790)
     a = p.parse_args()
     print(f"banc des annotateurs — http://localhost:{a.port}", flush=True)

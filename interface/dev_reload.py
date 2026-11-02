@@ -1,6 +1,8 @@
-"""Relance un serveur à chaque modification d'un fichier .py du projet (développement).
+"""Relance un serveur à chaque modification de son code (développement) : les .py de son dossier
+(interface/<outil>/) et ceux du code partagé qu'il peut importer (SHARED). Modifier un outil ne
+redémarre donc que lui : le serveur du modèle, long à recharger, n'est pas relancé pour une page voisine.
 
-    .venv/Scripts/python.exe utils/dev_reload.py interface/server.py [arguments du serveur]
+    .venv/Scripts/python.exe interface/dev_reload.py interface/modele/server.py [arguments du serveur]
 
 Le serveur tourne avec DEV_RELOAD=1 : ses pages se rechargent toutes seules quand leur HTML change
 ou que le serveur redémarre (voir /__dev dans les serveurs). Ctrl+C arrête tout.
@@ -13,7 +15,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WATCH = ["interface", "utils", "agents", "model_training_pipeline", "00_video_source"]
+SHARED = ["agents", "model_training_pipeline", "00_video_source", "interface/dev_reload.py"]
 POLL_S = 0.7
 BOOT = time.time()
 
@@ -48,10 +50,11 @@ def page(html: Path) -> bytes:
     return html.read_text(encoding="utf-8").replace("</body>", LIVE_RELOAD + "\n</body>", 1).encode()
 
 
-def snapshot() -> dict[Path, float]:
+def snapshot(own: Path) -> dict[Path, float]:
+    """Dates de modification des .py surveillés : ceux du dossier du serveur (own) et de SHARED."""
     out = {}
-    for d in WATCH:
-        for p in (ROOT / d).rglob("*.py"):
+    for d in [own, *(ROOT / x for x in SHARED)]:
+        for p in ([d] if d.is_file() else d.rglob("*.py")):
             if "__pycache__" not in p.parts:
                 try:
                     out[p] = p.stat().st_mtime
@@ -65,13 +68,14 @@ def main() -> None:
         sys.exit(__doc__)
     cmd = [sys.executable, *sys.argv[1:]]
     env = {**os.environ, "DEV_RELOAD": "1", "PYTHONUNBUFFERED": "1"}
-    name = Path(sys.argv[1]).parent.name
-    seen = snapshot()
+    own = (ROOT / sys.argv[1]).resolve().parent
+    name = own.name
+    seen = snapshot(own)
     proc = subprocess.Popen(cmd, cwd=ROOT, env=env)
     try:
         while True:
             time.sleep(POLL_S)
-            now = snapshot()
+            now = snapshot(own)
             changed = [p for p in now.keys() | seen.keys() if now.get(p) != seen.get(p)]
             seen = now
             if changed:

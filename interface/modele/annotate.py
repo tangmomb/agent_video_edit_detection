@@ -5,7 +5,7 @@ dataset d'entraînement est collecté par model_training_pipeline (generate_data
 
 Une vidéo annotée est rangée dans data/real_videos/<id>/ : video.*, frames/, labels.json (étiquette
 des annotateurs et correction manuelle éventuelle de chaque image) et preds.json (notes du modèle).
-Le banc utils/llm_bench compare les modèles candidats sur cette même annotation.
+Le banc interface/llm_bench compare les modèles candidats sur cette même annotation.
 """
 
 import json

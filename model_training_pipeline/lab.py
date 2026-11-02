@@ -27,6 +27,7 @@ Règles :
 import base64
 import io
 import json
+import sys
 import pickle
 import time
 from collections import Counter, defaultdict
@@ -766,11 +767,17 @@ class Lab:
         for d in sorted(p for p in EXP_DIR.glob("exp_*") if p.is_dir()):
             if not (d / "metrics.json").exists():
                 continue
-            e = {"id": d.name,
-                 **json.loads((d / "config.json").read_text(encoding="utf-8")),
-                 **json.loads((d / "metrics.json").read_text(encoding="utf-8"))}
-            if (d / "final_test.json").exists():
-                e["final_test"] = json.loads((d / "final_test.json").read_text(encoding="utf-8"))
+            try:
+                e = {"id": d.name,
+                     **json.loads((d / "config.json").read_text(encoding="utf-8")),
+                     **json.loads((d / "metrics.json").read_text(encoding="utf-8"))}
+                if (d / "final_test.json").exists():
+                    e["final_test"] = json.loads((d / "final_test.json").read_text(encoding="utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                # Fichiers illisibles (run 009 : arrêt brutal de la machine, fichiers remplis de zéros) :
+                # l'expérience est ignorée plutôt que de casser list_experiments et la fin de run.
+                print(f"[lab] {d.name} ignorée : fichiers illisibles", file=sys.stderr)
+                continue
             e["en_production"] = prod.get("experiment_id") == d.name
             out.append(e)
         return out

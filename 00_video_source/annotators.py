@@ -1,7 +1,7 @@
 """Annotation d'une image par des LLM de vision : « l'image est-elle brute de la caméra ou contient-elle
 un ajout de montage ? ». Une requête par image, réponse {"ajout": true|false}.
 
-Le banc utils/llm_bench compare tous les modèles de MODELS ; le dataset est étiqueté par les trois
+Le banc interface/llm_bench compare tous les modèles de MODELS ; le dataset est étiqueté par les trois
 modèles d'ANNOTATORS (choisis sur le banc) : une image n'a d'étiquette que s'ils sont tous d'accord.
 """
 

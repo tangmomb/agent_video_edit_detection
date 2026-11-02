@@ -2,7 +2,7 @@
 (1 par seconde) avec son étiquette (ajout / brute / sans étiquette) et le vote de chaque annotateur.
 Lecture seule, aucun appel payant.
 
-    .venv/Scripts/python.exe utils/dataset_viewer/server.py [--port 8800]
+    .venv/Scripts/python.exe interface/dataset_viewer/server.py [--port 8800]
 """
 
 import argparse
@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
-from utils import dev_reload  # noqa: E402
+from interface import dev_reload  # noqa: E402
 from video_source.annotators import ANNOTATORS  # noqa: E402
 from video_source.config import FRAMES_DIR, SAMPLES_DIR  # noqa: E402
 from video_source.youtube import load_meta  # noqa: E402
@@ -104,7 +104,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="utils/dataset_viewer/server.py")
+    p = argparse.ArgumentParser(prog="interface/dataset_viewer/server.py")
     p.add_argument("--port", type=int, default=8800)
     a = p.parse_args()
     print(f"visionneuse du dataset — http://localhost:{a.port}", flush=True)

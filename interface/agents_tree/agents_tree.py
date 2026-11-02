@@ -1,7 +1,7 @@
-"""Génère utils/agents_tree.html : l'arbre des agents et de leurs outils, lu dans le code de agents/
+"""Génère interface/agents_tree/agents_tree.html : l'arbre des agents et de leurs outils, lu dans le code de agents/
 (modèle, tours, outils), avec pour chaque outil un exemple d'appel et de réponse.
 
-    .venv/Scripts/python.exe utils/agents_tree.py [--from-run runs/<NNN>_…] [--examples exemples.json]
+    .venv/Scripts/python.exe interface/agents_tree/agents_tree.py [--from-run runs/<NNN>_…] [--examples exemples.json]
 
 --from-run : chaque outil montre son premier appel réussi dans le journal de ce run (appel et réponse
 réels). exemples.json (facultatif) : {nom d'outil: {"call": {...}, "response": ..., "note": "…"}},
@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[1]))
 
 from agents import orchestrator  # noqa: E402
 from model_training_pipeline.lab import Lab  # noqa: E402
@@ -176,7 +176,7 @@ def render(examples: dict, note: str) -> str:
 <title>Agents et outils</title><style>{CSS}</style></head>
 <body><main>
 <h1>Agents et outils</h1>
-<p class="sub">Exemples d'appel et de réponse de chaque outil, et prompts des agents, générés par <code>utils/agents_tree.py</code>.</p>
+<p class="sub">Exemples d'appel et de réponse de chaque outil, et prompts des agents, générés par <code>interface/agents_tree/agents_tree.py</code>.</p>
 <div class="toolbar"><button id="open">Tout déplier</button><button id="close">Tout replier</button></div>
 <div class="legend"><span><span class="badge agent">agent</span> agent LLM (via LiteLLM)</span>
 <span><span class="badge tool">outil</span> appel au labo</span>
@@ -308,7 +308,7 @@ def refresh(examples: dict, summary_usd: float = 0.0) -> list[str]:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(prog="utils/agents_tree.py")
+    p = argparse.ArgumentParser(prog="interface/agents_tree/agents_tree.py")
     p.add_argument("--from-run", type=Path, help="tire les exemples du journal de ce run (runs/<NNN>_…)")
     p.add_argument("--examples", type=Path, help="exemples d'appels et de réponses par outil (JSON)")
     p.add_argument("--examples-note", default="", help="d'où viennent les exemples")

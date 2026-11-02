@@ -206,9 +206,14 @@ class Session:
         run["agent_calls"] = self.calls
         path = self.run_dir / "pipeline.json"
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.trace, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(self.trace, ensure_ascii=False, indent=2, default=str))
+            # Sur disque avant de remplacer le journal : après un arrêt brutal de la machine, on garde
+            # l'ancien ou le nouveau, pas un fichier rempli de zéros (run 009, tout le journal perdu).
+            fh.flush()
+            os.fsync(fh.fileno())
         # Sous Windows, un fichier ouvert en lecture ailleurs ne peut pas être remplacé : un lecteur
-        # du journal (utils/run_chat, toutes les 5 s) faisait échouer l'outil en cours (run 008).
+        # du journal (interface/run_chat, toutes les 5 s) faisait échouer l'outil en cours (run 008).
         for wait in (0.05, 0.1, 0.2, 0.5, 1.0, None):
             try:
                 os.replace(tmp, path)
@@ -283,7 +288,7 @@ class Session:
             nonlocal last_cost, sent
             t0 = time.perf_counter()
             params = {"model": model, "max_tokens": 16000, "tool_choice": tool_choice, **reasoning}
-            # Requête brute, pour utils/run_chat : les paramètres et les messages ajoutés depuis le
+            # Requête brute, pour interface/run_chat : les paramètres et les messages ajoutés depuis le
             # tour précédent (la requête entière se recompose en les mettant bout à bout, avec les
             # schémas d'outils enregistrés une fois par agent) ; images remplacées par leur fichier.
             request = {"params": params, "new_messages": _freeze(messages[sent:], image_files)}
