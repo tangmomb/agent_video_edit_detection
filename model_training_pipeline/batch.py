@@ -22,7 +22,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from PIL import Image
-from video_source import annotators
+from video_source import annotators, retry
 from video_source.config import DATA_DIR, SAMPLES_DIR
 
 from . import frames
@@ -119,6 +119,10 @@ def estimate(samples: list[Path] | None = None) -> dict:
 
 
 def _upload_and_create(provider: str, api, model: str, path: Path) -> str:
+    return retry.forever(lambda: _create(provider, api, model, path), f"envoi du batch {model}")
+
+
+def _create(provider: str, api, model: str, path: Path) -> str:
     if provider == "openai":
         with open(path, "rb") as fh:
             file_id = api.files.create(file=fh, purpose="batch").id
@@ -174,7 +178,8 @@ def submit(max_usd: float, apis: dict | None = None, samples: list[Path] | None 
 
 
 def _job(provider: str, api, job_id: str):
-    return api.batches.retrieve(job_id) if provider == "openai" else api.batch.jobs.get(job_id=job_id)
+    return retry.forever(lambda: api.batches.retrieve(job_id) if provider == "openai"
+                         else api.batch.jobs.get(job_id=job_id), f"suivi du batch {job_id}")
 
 
 def status(apis: dict | None = None, job_ids: set[str] | None = None) -> list[dict]:
@@ -211,13 +216,16 @@ def wait(job_ids: set[str], every_s: float = 180, apis: dict | None = None) -> N
 def _download(provider: str, api, file_id: str | None) -> list[dict]:
     if not file_id:
         return []
-    if provider == "openai":
-        text = api.files.content(file_id).text
-    else:
-        r = api.files.download(file_id=file_id)  # réponse en flux : à lire avant d'en prendre le texte
-        r.read()
-        text = r.text
+    text = retry.forever(lambda: _text(provider, api, file_id), f"résultats du batch ({file_id})")
     return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def _text(provider: str, api, file_id: str) -> str:
+    if provider == "openai":
+        return api.files.content(file_id).text
+    r = api.files.download(file_id=file_id)  # réponse en flux : à lire avant d'en prendre le texte
+    r.read()
+    return r.text
 
 
 def _timing(job) -> dict:

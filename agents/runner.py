@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from video_source import retry
 from video_source.annotators import MODELS
 from video_source.config import LAB_DIR
 
@@ -52,7 +53,6 @@ RUNS_DIR = LAB_DIR / "runs"
 # (01/11/2026). À retester quand il sortira de préversion.
 DEFAULT_MODEL = "mistral/mistral-large-4-0"
 # Attentes avant chaque relance d'un appel en erreur passagère (Session._call).
-RETRY_WAITS_S = (5, 20, 60)
 # $/million de tokens : tarifs relevés à la main (table des modèles du banc des annotateurs,
 # octobre 2026), prioritaires sur ceux de LiteLLM, parfois en retard. cached_input : tokens
 # d'entrée servis depuis le cache, quand l'API les signale et que le fournisseur publie un prix.
@@ -207,7 +207,16 @@ class Session:
         path = self.run_dir / "pipeline.json"
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.trace, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-        os.replace(tmp, path)
+        # Sous Windows, un fichier ouvert en lecture ailleurs ne peut pas être remplacé : un lecteur
+        # du journal (utils/run_chat, toutes les 5 s) faisait échouer l'outil en cours (run 008).
+        for wait in (0.05, 0.1, 0.2, 0.5, 1.0, None):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if wait is None:
+                    raise
+                time.sleep(wait)
 
     def _step(self, call: int, agent: str, type_: str, **data) -> None:
         parent = self._stack[-2] if len(self._stack) > 1 else None
@@ -406,19 +415,10 @@ class Session:
         return final
 
     def _call(self, **kwargs):
-        """Appel au modèle, relancé après une erreur passagère du fournisseur (service indisponible,
-        trop de requêtes, coupure, délai dépassé) : DeepSeek V4 Flash, en préversion chez Mistral,
-        a refusé 7 délégations sur 13 en 503 sur le banc b3. Les autres erreurs remontent."""
-        import litellm
-        transient = (litellm.ServiceUnavailableError, litellm.RateLimitError, litellm.Timeout,
-                     litellm.APIConnectionError, litellm.InternalServerError)
-        for wait in RETRY_WAITS_S:
-            try:
-                return self.completion(**kwargs)
-            except transient as e:
-                self._say(f"[relance dans {wait} s] {type(e).__name__}")
-                time.sleep(wait)
-        return self.completion(**kwargs)
+        """Appel au modèle, relancé toutes les minutes sans limite après une erreur passagère du
+        fournisseur (retry.forever) : DeepSeek V4 Flash, en préversion chez Mistral, a refusé 7
+        délégations sur 13 en 503 sur le banc b3. Les autres erreurs remontent."""
+        return retry.forever(lambda: self.completion(**kwargs), kwargs.get("model", "agent"), say=self._say)
 
     def add_cost(self, usd: float) -> None:
         """Dépense faite hors des appels de modèle de la session (descriptions d'images en batch)."""

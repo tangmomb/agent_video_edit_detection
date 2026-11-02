@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conversations des runs</title>
+<style>
+:root{
+  --side:#ffffff;--side-hover:#f5f6f6;--side-active:#ebedef;--line:#e7e9ea;--fg:#111b21;--muted:#667781;
+  --chat:#f0f2f5;--bubble:#ffffff;--me:#d9fdd3;--sys:#ffffffd9;--sys-fg:#54656f;--code:#f0f2f5;--accent:#00a884;
+  --shadow:0 1px .5px rgba(11,20,26,.13);
+  --orchestrator:#0b7d5a;--dataset_builder:#c4620a;--model_researcher:#7c4dcf;--evaluator:#0a7cb0;--toi:#00a884;
+  --err:#d93a3a;--run:#e89a00;
+  --b-orchestrator:#d9fdd3;--b-dataset_builder:#fdecd8;--b-model_researcher:#ede6fc;--b-evaluator:#dcf0fb;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --side:#111b21;--side-hover:#202c33;--side-active:#2a3942;--line:#222d34;--fg:#e9edef;--muted:#8696a0;
+  --chat:#0b141a;--bubble:#202c33;--me:#005c4b;--sys:#182229;--sys-fg:#8696a0;--code:#111b21;--accent:#00a884;
+  --shadow:0 1px .5px rgba(0,0,0,.4);
+  --orchestrator:#25d366;--dataset_builder:#ffa458;--model_researcher:#b69cff;--evaluator:#5cc4f2;--toi:#00a884;
+  --b-orchestrator:#005c4b;--b-dataset_builder:#4a3218;--b-model_researcher:#33284f;--b-evaluator:#173a4d}}
+:root[data-theme="dark"]{
+  --side:#111b21;--side-hover:#202c33;--side-active:#2a3942;--line:#222d34;--fg:#e9edef;--muted:#8696a0;
+  --chat:#0b141a;--bubble:#202c33;--me:#005c4b;--sys:#182229;--sys-fg:#8696a0;--code:#111b21;--accent:#00a884;
+  --shadow:0 1px .5px rgba(0,0,0,.4);
+  --orchestrator:#25d366;--dataset_builder:#ffa458;--model_researcher:#b69cff;--evaluator:#5cc4f2;--toi:#00a884;
+  --b-orchestrator:#005c4b;--b-dataset_builder:#4a3218;--b-model_researcher:#33284f;--b-evaluator:#173a4d}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--chat);color:var(--fg);font:14.2px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif;display:flex}
+
+/* colonne des runs */
+aside{width:380px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column}
+aside h1{font-size:20px;font-weight:700;margin:0;padding:18px 20px 12px}
+.search{margin:0 12px 8px;background:var(--side-hover);border-radius:8px;padding:7px 12px;color:var(--muted);font-size:13px}
+#runs{flex:1;overflow-y:auto}
+.run{display:flex;gap:12px;padding:10px 16px;cursor:pointer;border-top:1px solid var(--line)}
+.run:first-child{border-top:none}
+.run:hover{background:var(--side-hover)}
+.run.active{background:var(--side-active)}
+.run .ic{width:46px;height:46px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:14px;color:#fff;background:linear-gradient(135deg,var(--orchestrator),var(--model_researcher))}
+.run .body{flex:1;min-width:0}
+.run .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.run .name{font-size:16px;font-weight:600}
+.run .date{font-size:12px;color:var(--muted);flex:none}
+.run .prev{font-size:13.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.run .tags{display:flex;gap:6px;margin-top:4px}
+.tag{font-size:11px;padding:1px 7px;border-radius:9px;background:var(--side-hover);color:var(--muted)}
+.tag.running{background:var(--run);color:#fff}
+.tag.error{background:var(--err);color:#fff}
+
+/* conversation */
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+.bar{display:flex;align-items:center;gap:14px;padding:10px 20px;background:var(--side);border-bottom:1px solid var(--line);flex:none}
+.bar .ic{width:40px;height:40px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:#fff;background:linear-gradient(135deg,var(--orchestrator),var(--model_researcher))}
+.bar .title{font-size:16px;font-weight:600}
+.bar .sub{font-size:13px;color:var(--muted)}
+.people{display:flex;gap:10px;flex-wrap:wrap;margin-top:1px}
+.people span{font-size:12.5px;color:var(--muted)}
+.people i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:0}
+.spacer{flex:1}
+.switch{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none;margin-left:14px}
+.switch input{accent-color:var(--accent)}
+.stats{display:flex;gap:18px;font-size:12.5px;color:var(--muted);text-align:right}
+.stats b{display:block;color:var(--fg);font-size:14px}
+#chat{flex:1;overflow-y:auto;padding:18px 7% 40px;
+  background-image:radial-gradient(rgba(127,127,127,.07) 1px,transparent 1px);background-size:22px 22px}
+.goal{max-width:720px;margin:6px auto 18px;background:var(--sys);border-radius:10px;box-shadow:var(--shadow);padding:10px 16px;text-align:center}
+.goal small{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--sys-fg);margin-bottom:2px}
+.empty{color:var(--muted);text-align:center;margin-top:80px}
+
+.divider{display:flex;justify-content:center;margin:22px 0 12px}
+.divider span{background:var(--sys);color:var(--sys-fg);font-size:12.5px;padding:5px 12px;border-radius:8px;box-shadow:var(--shadow)}
+.divider b{font-weight:600}
+
+.msg{display:flex;margin:2px 0}
+.msg.me{justify-content:flex-end}
+.msg.first{margin-top:10px}
+.bubble{position:relative;max-width:min(720px,72%);background:var(--bubble);padding:6px 9px 7px 10px;border-radius:8px;
+  box-shadow:var(--shadow);white-space:pre-wrap;word-break:break-word}
+.msg.first .bubble{border-top-left-radius:0}
+.msg.me.first .bubble{border-top-left-radius:8px;border-top-right-radius:0}
+.who{font-size:12.8px;font-weight:600;margin-bottom:1px}
+.who small{font-weight:400;color:var(--muted);margin-left:6px}
+.time{float:right;font-size:11px;color:var(--muted);margin:6px 0 -4px 12px}
+.bubble.report{border-left:4px solid var(--c)}
+.bubble.report .badge{display:inline-block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--c);margin-bottom:3px}
+.bubble code{font:12.5px Consolas,ui-monospace,monospace;background:var(--code);padding:0 4px;border-radius:4px}
+.bubble b.h{display:block;margin-top:4px}
+.calls{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{font:12px Consolas,ui-monospace,monospace;background:var(--code);border:1px solid var(--line);border-radius:6px;
+  padding:2px 7px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+.chip em{font-style:normal;color:var(--muted)}
+.thinking{white-space:pre-wrap;font-size:13px;font-style:italic;color:var(--muted);border-left:2px solid var(--line);
+  padding-left:8px;margin:4px 0 2px}
+.foot{font-size:12px;color:var(--muted);margin-top:6px;padding-top:5px;border-top:1px solid var(--line)}
+.more{color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap}
+
+.tool{max-width:min(720px,72%);margin:3px 0 3px 18px;background:var(--sys);border-radius:8px;box-shadow:var(--shadow);font-size:13px}
+.tool summary{cursor:pointer;padding:5px 10px;color:var(--sys-fg);list-style:none;display:flex;gap:8px;align-items:center}
+.tool summary::-webkit-details-marker{display:none}
+.tool summary:before{content:"▸";font-size:10px;color:var(--muted)}
+.tool[open] summary:before{content:"▾"}
+.tool summary b{font:600 12.5px Consolas,ui-monospace,monospace;color:var(--fg)}
+.tool summary .d{margin-left:auto;font-size:11.5px}
+.tool.err summary,.tool.err summary b{color:var(--err)}
+.tool pre{margin:0;padding:2px 12px 10px;white-space:pre-wrap;word-break:break-word;font:12px/1.45 Consolas,ui-monospace,monospace;
+  max-height:420px;overflow:auto}
+.tool .imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;padding:2px 12px 12px}
+.tool figure{margin:0}
+.tool figure img{width:100%;border-radius:6px;display:block}
+.tool figcaption{font-size:11.5px;color:var(--muted);margin-top:3px}
+.live{display:flex;justify-content:center;margin:16px 0}
+.live span{font-size:12.5px;color:#fff;background:var(--run);padding:4px 12px;border-radius:12px}
+</style></head>
+<body>
+<aside>
+  <h1>Runs</h1>
+  <div class="search">Conversations des agents, du plus récent au plus ancien</div>
+  <div id="runs"></div>
+</aside>
+<main>
+  <div class="bar">
+    <div class="ic" id="barIc">—</div>
+    <div><div class="title" id="title">Choisis un run</div>
+      <div class="people" id="people"></div></div>
+    <div class="spacer"></div>
+    <div class="stats" id="stats"></div>
+    <label class="switch"><input type="checkbox" id="showThinking">Réflexions</label>
+    <label class="switch"><input type="checkbox" id="showTools" checked>Outils</label>
+  </div>
+  <div id="chat"><p class="empty">Choisis un run à gauche.</p></div>
+</main>
+<script>
+const NAMES = {toi: "Toi", orchestrator: "Orchestrateur", dataset_builder: "Dataset Builder",
+               model_researcher: "Model Researcher", evaluator: "Evaluator"};
+const CUT = 900;  // caractères d'un message avant « voir plus »
+const REFRESH_MS = 5000;  // run en cours : relu toutes les 5 s
+const color = a => `var(--${a in NAMES ? a : "toi"})`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+// Markdown minimal des messages des agents : titres, gras, code ; le reste reste tel quel
+const md = s => esc(s).replace(/^#{1,6} +(.+)$/gm, '<b class="h">$1</b>').replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+                      .replace(/`([^`\n]+)`/g, "<code>$1</code>");
+const chat = document.getElementById("chat");
+let current = null, timer = null, opened = new Set(), list = [];
+
+function longText(text, key) {
+  if (text.length <= CUT || opened.has(key)) return md(text);
+  return md(text.slice(0, CUT)) + `… <span class="more" data-key="${key}">voir plus</span>`;
+}
+
+function day(iso) { return iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + " " + iso.slice(11, 16) : ""; }
+
+function sidebar() {
+  document.getElementById("runs").innerHTML = list.map(r => {
+    const tag = r.status === "running" ? '<span class="tag running">en cours</span>'
+              : r.status === "error" ? '<span class="tag error">erreur</span>'
+              : r.status === "interrompu" ? '<span class="tag">interrompu</span>' : "";
+    return `<div class="run${r.id === current ? " active" : ""}" data-id="${esc(r.id)}">
+      <div class="ic">${esc(r.id.split("_")[0])}</div>
+      <div class="body"><div class="top"><span class="name">Run ${esc(r.id.split("_")[0])}</span><span class="date">${day(r.started)}</span></div>
+      <div class="prev">${esc(r.preview || (r.status === "running" ? "en cours…" : r.status === "interrompu" ? "arrêté avant son rapport final" : ""))}</div>
+      <div class="tags">${tag}<span class="tag">${r.cost ?? "?"} $ / ${r.budget ?? "?"} $</span>${r.calls ? `<span class="tag">${r.calls} délégations</span>` : ""}</div></div></div>`;
+  }).join("");
+}
+
+// L'orchestrateur parle à droite (c'est lui qui mène la conversation), chaque sous-agent à gauche
+// dans sa couleur de bulle.
+function bubble(m, agent, inner, {report = false, label = "", thinking = "", calls = [], foot = "", first = true} = {}) {
+  const c = color(agent), me = agent === "orchestrator";
+  return `<div class="msg${me ? " me" : ""}${first ? " first" : ""}"><div class="bubble${report ? " report" : ""}" ` +
+    `style="--c:${c};background:var(--b-${agent in NAMES ? agent : "orchestrator"})">` +
+    (first ? `<div class="who" style="color:${c}">${esc(NAMES[agent] || agent)}${label ? `<small>${esc(label)}</small>` : ""}</div>` : "") +
+    (report ? '<div class="badge">Rapport final</div><br>' : "") +
+    (thinking ? `<div class="thinking think">${esc(thinking)}</div>` : "") +
+    (inner || "") +
+    (calls.length ? `<div class="calls">${calls.map(k => `<span class="chip" title="${esc(k.input)}">${esc(k.name)} <em>${esc(k.input === "{}" ? "" : k.input)}</em></span>`).join("")}</div>` : "") +
+    (foot ? `<div class="foot">${esc(foot)}</div>` : "") +
+    `<span class="time">${m.time.slice(0, 5)}</span></div></div>`;
+}
+
+function items(list) {
+  const imgs = [], out = [];
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    if (it.img) continue;
+    const next = list[i + 1];
+    if (next && next.img) imgs.push(`<figure><img loading="lazy" src="${esc(next.img)}" alt=""><figcaption>${esc(it.text)}</figcaption></figure>`);
+    else out.push(`<pre>${esc(it.text)}</pre>`);
+  }
+  list.forEach((it, i) => { if (it.img && !(list[i - 1] && list[i - 1].text)) imgs.push(`<figure><img loading="lazy" src="${esc(it.img)}" alt=""></figure>`); });
+  return out.join("") + (imgs.length ? `<div class="imgs">${imgs.join("")}</div>` : "");
+}
+
+function draw(run) {
+  const n = run.id.split("_")[0];
+  document.getElementById("barIc").textContent = n;
+  document.getElementById("title").textContent = `Run ${n} · ${day(run.started)}`;
+  const present = [...new Set(run.msgs.flatMap(m => [m.agent, m.from]).filter(Boolean))];
+  document.getElementById("people").innerHTML = ["orchestrator", "dataset_builder", "model_researcher", "evaluator"]
+    .filter(a => present.includes(a)).map(a => `<span><i style="background:${color(a)}"></i>${NAMES[a]}</span>`).join("");
+  const mins = run.started && run.ended ? Math.round((new Date(run.ended) - new Date(run.started)) / 60000) + " min"
+             : run.status === "running" ? "en cours" : "—";
+  document.getElementById("stats").innerHTML =
+    `<div><b>${run.cost_usd ?? "?"} $</b>sur ${run.budget_usd ?? "?"} $</div><div><b>${mins}</b>durée</div>` +
+    `<div><b>${(run.agent_model || "mistral/mistral-large-4-0").split("/").pop()}</b>modèle</div>`;
+  const out = [];
+  let last = null;  // auteur de la bulle précédente : une suite de bulles ne répète pas le nom
+  for (const m of run.msgs) {
+    const key = String(m.n);
+    if (m.k === "task") {
+      if (m.from === "toi") {  // consigne de lancement : en tête, hors conversation
+        out.push(`<div class="goal"><small>Consigne de lancement du run · ${m.time.slice(0, 5)}</small>${longText(m.text, key)}</div>`);
+        last = null;
+        continue;
+      }
+      out.push(`<div class="divider"><span><b>${esc(NAMES[m.agent] || m.agent)}</b> prend la main · ${m.time.slice(0, 5)}</span></div>`);
+      out.push(bubble(m, m.from, longText(m.text, key), {label: "consigne pour " + (NAMES[m.agent] || m.agent)}));
+      last = m.from;
+    } else if (m.k === "turn") {
+      out.push(bubble(m, m.agent, m.text ? longText(m.text, key) : "", {thinking: m.thinking, calls: m.calls, first: last !== m.agent}));
+      last = m.agent;
+    } else if (m.k === "tool" || m.k === "code") {
+      const name = m.k === "tool" ? `<b>${esc(m.tool)}</b>${m.error ? " · erreur" : ""}` : "message ajouté par le code";
+      out.push(`<details class="tool${m.error ? " err" : ""}" data-key="${key}"${opened.has("d" + key) ? " open" : ""}>` +
+               `<summary>${name}<span class="d">${m.dur != null ? m.dur + " s" : ""}</span></summary>${items(m.items)}</details>`);
+    } else if (m.k === "end") {
+      const min = m.dur != null ? Math.round(m.dur / 6) / 10 + " min" : "";
+      out.push(bubble(m, m.agent, longText(m.text, key), {report: true,
+        foot: [m.tools != null ? m.tools + " appels d'outils" : "", min, m.cost != null ? "session à " + m.cost + " $" : ""].filter(Boolean).join(" · ")}));
+      out.push(`<div class="divider"><span><b>${esc(NAMES[m.agent] || m.agent)}</b> rend la main · ${m.time.slice(0, 5)}</span></div>`);
+      last = null;
+    }
+  }
+  if (run.status === "interrompu") out.push('<div class="divider"><span>Run interrompu avant son rapport final</span></div>');
+  if (run.status === "running") out.push('<div class="live"><span>Run en cours… mis à jour toutes les 5 s</span></div>');
+  chat.innerHTML = out.join("") || '<p class="empty">Run vide.</p>';
+  applyToggles();
+}
+
+async function load(keepScroll) {
+  clearTimeout(timer);
+  const id = current;
+  let run = null;
+  try { run = await (await fetch(`/api/run?id=${encodeURIComponent(id)}`, {cache: "no-store"})).json(); } catch (e) {}
+  if (id !== current) return;  // un autre run a été choisi entre-temps
+  if (run && run.msgs) {
+    const atBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 60, top = chat.scrollTop;
+    draw(run);
+    chat.scrollTop = !keepScroll ? 0 : atBottom ? chat.scrollHeight : top;
+  }
+  if (!run || !run.msgs || run.status === "running") timer = setTimeout(() => { refreshList(); load(true); }, REFRESH_MS);
+}
+
+async function refreshList() {
+  try { list = await (await fetch("/api/runs", {cache: "no-store"})).json(); } catch (e) {}
+  sidebar();
+}
+
+function pick(id) {
+  current = id; opened = new Set();
+  try { localStorage.setItem("run_chat_run", id); } catch (e) {}
+  sidebar(); load(false);
+}
+
+function applyToggles() {
+  const t = document.getElementById("showThinking").checked, o = document.getElementById("showTools").checked;
+  document.querySelectorAll(".think").forEach(e => e.style.display = t ? "" : "none");
+  document.querySelectorAll(".tool").forEach(e => e.style.display = o ? "" : "none");
+}
+
+document.getElementById("runs").addEventListener("click", e => { const r = e.target.closest(".run"); if (r) pick(r.dataset.id); });
+chat.addEventListener("click", e => {
+  const k = e.target.dataset && e.target.dataset.key;
+  if (k && e.target.classList.contains("more")) { opened.add(k); load(true); }
+});
+chat.addEventListener("toggle", e => {
+  const k = e.target.dataset && e.target.dataset.key;
+  if (k) e.target.open ? opened.add("d" + k) : opened.delete("d" + k);
+}, true);
+document.getElementById("showThinking").onchange = applyToggles;
+document.getElementById("showTools").onchange = applyToggles;
+
+(async () => {
+  await refreshList();
+  if (!list.length) { chat.innerHTML = '<p class="empty">Aucun run dans runs/.</p>'; return; }
+  let id = list[0].id;
+  try { const s = localStorage.getItem("run_chat_run"); if (s && list.some(r => r.id === s)) id = s; } catch (e) {}
+  pick(id);
+})();
+</script></body></html>

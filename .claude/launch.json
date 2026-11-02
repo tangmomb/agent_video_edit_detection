@@ -41,6 +41,15 @@
         "utils/skip_tester/server.py"
       ],
       "port": 8810
+    },
+    {
+      "name": "run-chat",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "utils/dev_reload.py",
+        "utils/run_chat/server.py"
+      ],
+      "port": 8820
     }
   ]
 }

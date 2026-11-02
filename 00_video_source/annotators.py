@@ -14,6 +14,7 @@ from pathlib import Path
 from PIL import Image
 
 from . import config  # noqa: F401  (charge le .env)
+from . import retry
 
 try:
     # Importé ici, avant les threads d'annotation : le SDK OpenAI lit httpx2 dans sys.modules sans
@@ -135,11 +136,12 @@ def read_chat(response) -> tuple[str, dict]:
 
 def ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: str | None) -> tuple[str, dict]:
     """Une requête (consigne + une image) ; renvoie le texte de la réponse et les tokens consommés.
-    reasoning=None : sans effort de raisonnement imposé."""
+    reasoning=None : sans effort de raisonnement imposé. Erreurs passagères relancées sans fin
+    (retry.forever)."""
     if provider == "anthropic":
         url = data_url(path, max_side)
         # Pas de fallbacks : on compare des modèles, la réponse doit venir du modèle demandé.
-        r = api.messages.create(
+        r = retry.forever(lambda: api.messages.create(
             model=model, max_tokens=8000,
             messages=[{"role": "user", "content": [
                 {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
@@ -148,14 +150,14 @@ def ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: st
             output_config={"format": {"type": "json_schema", "schema": {
                 "type": "object", "properties": {"ajout": {"type": "boolean"}},
                 "required": ["ajout"], "additionalProperties": False}},
-                **({"effort": reasoning} if reasoning else {})})
+                **({"effort": reasoning} if reasoning else {})}), model)
         u = r.usage
         cached, created = u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0
         text = "" if r.stop_reason == "refusal" else "".join(b.text for b in r.content if b.type == "text")
         return text, {"input": u.input_tokens + cached + created, "cached_input": cached, "output": u.output_tokens}
     body = chat_body(provider, model, path, max_side, reasoning)
-    r = api.chat.completions.create(**body) if provider == "openai" else api.chat.complete(**body)
-    return read_chat(r)
+    create = api.chat.completions.create if provider == "openai" else api.chat.complete
+    return read_chat(retry.forever(lambda: create(**body), model))
 
 
 def reasoning(model: str) -> str | None:
