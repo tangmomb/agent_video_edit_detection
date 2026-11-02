@@ -11,7 +11,7 @@ CONTEXT = """Projet : un classifieur qui dit si une image de vidéo YouTube cont
 pas de la caméra). Une image par seconde de vidéo. Partout, « chaîne » veut dire chaîne YouTube, et \
 chaque vidéo vient d'une chaîne différente.
 
-Objectif : le meilleur rappel à 95 % de précision, sur des chaînes \
+Objectif : le meilleur rappel à 95 % de précision (abrégé « rappel à 95 % »), sur des chaînes \
 YouTube que le modèle n'a jamais vues. Le temps de calcul ne compte pas.
 
 Données : chaque image est étiquetée par trois LLM de vision, seulement s'ils sont d'accord.

@@ -26,10 +26,8 @@ h2 .who.agent{color:var(--agent)}h2 .who.code{color:var(--code)}
 font-size:12px;font-weight:700;text-align:center;line-height:22px;margin-right:6px}
 .arrow{text-align:center;color:var(--muted);font-size:18px;line-height:1;margin:6px 0}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.ladder{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.ladder span{font-size:13px;padding:3px 9px;border-radius:12px;border:1px solid currentColor}
+.steps{margin:6px 0 0;padding-left:20px;color:var(--muted);font-size:14px}.steps li{margin:3px 0}
 .ok{color:var(--ok)}.ko{color:var(--ko)}.warn{color:var(--warn)}
-.ladder .sep{border:none;color:var(--muted);padding:3px 0}
 .q{background:var(--panel);border:2px dashed var(--code);border-radius:10px;padding:10px 14px;text-align:center;font-weight:600}
 .branches{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
 .branch .lab{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:center;margin-bottom:4px}
@@ -57,12 +55,16 @@ font-size:12px;font-weight:700;text-align:center;line-height:22px;margin-right:6
 <div class="box code"><h3><span class="num">1</span>Le plus gros split</h3>
   <p>Seules comptent les expériences du split qui a le plus de vidéos (le plus récent, en pratique).</p></div>
 <div class="arrow">↓</div>
-<div class="box code"><h3><span class="num">2</span>Le meilleur groupe de candidats</h3>
-  <p>On prend le premier groupe qui n'est pas vide :</p>
-  <div class="ladder"><span class="ok">test réussi</span><span class="sep">sinon</span><span class="warn">non testé</span><span class="sep">sinon</span><span class="ko">test échoué</span></div></div>
+<div class="box code"><h3><span class="num">2</span>Les candidats, selon leur test final</h3>
+  <p>On ne compare que des modèles qui en sont au même point du test final :</p>
+  <ul class="steps">
+    <li>si au moins un modèle a <span class="ok"><b>réussi</b></span> son test, on choisit <b>seulement parmi eux</b> : un modèle vérifié passe toujours devant un modèle qui ne l'est pas ;</li>
+    <li>sinon, parmi ceux qui n'ont <span class="warn"><b>pas été testés</b></span> : ils peuvent encore tenir leurs 95 % ;</li>
+    <li>en dernier recours seulement, parmi ceux qui ont <span class="ko"><b>échoué</b></span> leur test.</li>
+  </ul></div>
 <div class="arrow">↓</div>
 <div class="box code"><h3><span class="num">3</span>Le meilleur du groupe</h3>
-  <p>On garde ceux dont l'<b>AP par chaîne</b> sur val est à moins de <b>0,005</b> de la meilleure (ils reconnaissent aussi bien les ajouts sur des chaînes nouvelles), puis on prend celui de <b>meilleur rappel</b> val à 95 %.</p></div>
+  <p>On garde ceux dont l'<b>AP par chaîne</b> sur val est à moins de <b>0,005</b> de la meilleure (ils reconnaissent aussi bien les ajouts sur des chaînes nouvelles), puis on prend celui qui a le <b>meilleur rappel</b> sur val (la part des ajouts trouvés, au seuil qui tient 95 % de précision).</p></div>
 <div class="arrow">↓</div>
 <div class="q"><span class="num">4</span>Ce candidat a-t-il réussi son test ?</div>
 <div class="branches">

@@ -56,7 +56,7 @@ summary code{background:none;padding:0;font-size:14px}
 <span><span class="badge delegate">délègue</span> lance un sous-agent</span></div>
 <ul class="tree"><li class="node agent"><details open><summary><span class="badge agent">agent</span><span class="aname">orchestrator</span><span class="meta">mistral/mistral-large-4-0 · 30 tours max · 5 outils</span></summary><div class="body"><details class="prompts"><summary>Prompts</summary><div class="exlabel">Ce que reçoit le modèle</div><div class="legend2"><span class="sys">système</span> : fixe, écrit dans le code · <span class="user">utilisateur</span> : objectif du run, option --goal de python -m agents (sinon sa valeur par défaut) · <span class="tools">outils</span> : schémas envoyés à chaque tour, hors des messages</div><pre class="llm"><span class="sys"><b>SYSTÈME</b>Projet : un classifieur qui dit si une image de vidéo YouTube contient un ajout de montage (texte, sous-titres, logo, bandeau, image incrustée, cadre, effet graphique : tout ce qui ne vient pas de la caméra). Une image par seconde de vidéo. Partout, « chaîne » veut dire chaîne YouTube, et chaque vidéo vient d&#x27;une chaîne différente.
 
-Objectif : le meilleur rappel à 95 % de précision, sur des chaînes YouTube que le modèle n&#x27;a jamais vues. Le temps de calcul ne compte pas.
+Objectif : le meilleur rappel à 95 % de précision (abrégé « rappel à 95 % »), sur des chaînes YouTube que le modèle n&#x27;a jamais vues. Le temps de calcul ne compte pas.
 
 Données : chaque image est étiquetée par trois LLM de vision, seulement s&#x27;ils sont d&#x27;accord.
 
@@ -232,7 +232,7 @@ Outils de chaque agent (rien d&#x27;autre n&#x27;est possible) :
   ]
 }</pre></div></details></li><li class="node delegate"><details><summary><span class="badge delegate">délègue</span><code class="tname">ask_dataset_builder</code></summary><div class="body"><div class="exlabel">Ce que reçoit le modèle</div><div class="legend2"><span class="sys">système</span> : fixe, écrit dans le code · <span class="user">utilisateur</span> : consigne rédigée par l’orchestrateur à chaque délégation · <span class="tools">outils</span> : schémas envoyés à chaque tour, hors des messages</div><pre class="llm"><span class="sys"><b>SYSTÈME</b>Projet : un classifieur qui dit si une image de vidéo YouTube contient un ajout de montage (texte, sous-titres, logo, bandeau, image incrustée, cadre, effet graphique : tout ce qui ne vient pas de la caméra). Une image par seconde de vidéo. Partout, « chaîne » veut dire chaîne YouTube, et chaque vidéo vient d&#x27;une chaîne différente.
 
-Objectif : le meilleur rappel à 95 % de précision, sur des chaînes YouTube que le modèle n&#x27;a jamais vues. Le temps de calcul ne compte pas.
+Objectif : le meilleur rappel à 95 % de précision (abrégé « rappel à 95 % »), sur des chaînes YouTube que le modèle n&#x27;a jamais vues. Le temps de calcul ne compte pas.
 
 Données : chaque image est étiquetée par trois LLM de vision, seulement s&#x27;ils sont d&#x27;accord.
 
@@ -418,7 +418,7 @@ Outils réellement appelés par dataset_builder :
   &quot;budget_annotation_restant_usd&quot;: 0.193
 }</pre></div></details></li></ul></details></li></ul></li><li class="node delegate"><details><summary><span class="badge delegate">délègue</span><code class="tname">ask_model_researcher</code></summary><div class="body"><div class="exlabel">Ce que reçoit le modèle</div><div class="legend2"><span class="sys">système</span> : fixe, écrit dans le code · <span class="user">utilisateur</span> : consigne rédigée par l’orchestrateur à chaque délégation · <span class="tools">outils</span> : schémas envoyés à chaque tour, hors des messages</div><pre class="llm"><span class="sys"><b>SYSTÈME</b>Projet : un classifieur qui dit si une image de vidéo YouTube contient un ajout de montage (texte, sous-titres, logo, bandeau, image incrustée, cadre, effet graphique : tout ce qui ne vient pas de la caméra). Une image par seconde de vidéo. Partout, « chaîne » veut dire chaîne YouTube, et chaque vidéo vient d&#x27;une chaîne différente.
 
-Objectif : le meilleur rappel à 95 % de précision, sur des chaînes YouTube que le modèle n&#x27;a jamais vues. Le temps de calcul ne compte pas.
+Objectif : le meilleur rappel à 95 % de précision (abrégé « rappel à 95 % »), sur des chaînes YouTube que le modèle n&#x27;a jamais vues. Le temps de calcul ne compte pas.
 
 Données : chaque image est étiquetée par trois LLM de vision, seulement s&#x27;ils sont d&#x27;accord.
 
@@ -911,7 +911,7 @@ Outils réellement appelés par model_researcher :
   }
 }</pre></div></details></li></ul></details></li></ul></li><li class="node delegate"><details><summary><span class="badge delegate">délègue</span><code class="tname">ask_evaluator</code></summary><div class="body"><div class="exlabel">Ce que reçoit le modèle</div><div class="legend2"><span class="sys">système</span> : fixe, écrit dans le code · <span class="user">utilisateur</span> : consigne rédigée par l’orchestrateur à chaque délégation · <span class="tools">outils</span> : schémas envoyés à chaque tour, hors des messages</div><pre class="llm"><span class="sys"><b>SYSTÈME</b>Projet : un classifieur qui dit si une image de vidéo YouTube contient un ajout de montage (texte, sous-titres, logo, bandeau, image incrustée, cadre, effet graphique : tout ce qui ne vient pas de la caméra). Une image par seconde de vidéo. Partout, « chaîne » veut dire chaîne YouTube, et chaque vidéo vient d&#x27;une chaîne différente.
 
-Objectif : le meilleur rappel à 95 % de précision, sur des chaînes YouTube que le modèle n&#x27;a jamais vues. Le temps de calcul ne compte pas.
+Objectif : le meilleur rappel à 95 % de précision (abrégé « rappel à 95 % »), sur des chaînes YouTube que le modèle n&#x27;a jamais vues. Le temps de calcul ne compte pas.
 
 Données : chaque image est étiquetée par trois LLM de vision, seulement s&#x27;ils sont d&#x27;accord.
 
