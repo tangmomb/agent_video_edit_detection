@@ -62,7 +62,7 @@ def messages(log: dict, run: str) -> list[dict]:
             text, thinking = "\n\n".join(s.get("text") or []), "\n\n".join(s.get("thinking") or [])
             calls = [{"name": c["name"], "input": c["input"]} for c in s.get("tool_calls") or []]
             if text or thinking or calls:
-                out.append({**base, "k": "turn", "text": text, "thinking": thinking, "calls": calls})
+                out.append({**base, "k": "turn", "text": text, "thinking": thinking, "calls": calls, "turn_n": s["n"]})
         elif kind == "tool":
             if s["tool"].startswith("ask_") and not s["error"]:
                 continue  # le rapport du sous-agent arrive déjà avec son « end »
@@ -80,9 +80,120 @@ def messages(log: dict, run: str) -> list[dict]:
                 continue  # images d'un show_examples, déjà montrées avec son résultat
             out.append({**base, "k": "code", "items": items})
         elif kind == "end":
-            out.append({**base, "k": "end", "text": s.get("final") or "", "cost": s.get("cost_usd"),
+            final, thinking, turn_n = s.get("final") or "", "", None
+            last = out[-1] if out else None
+            # Le rapport est le texte du dernier tour (sans outil), suivi de la vérification
+            # automatique : ce tour devient la bulle du rapport, pour qu'une bulle reste un appel au
+            # modèle au lieu d'afficher deux fois le même texte.
+            if (last and last["k"] == "turn" and last["agent"] == s["agent"] and not last["calls"]
+                    and final.startswith(last["text"].strip()[:200])):
+                popped = out.pop()
+                thinking, turn_n = popped["thinking"], popped["turn_n"]
+            out.append({**base, "k": "end", "text": final, "thinking": thinking, "turn_n": turn_n,
+                        "cost": s.get("cost_usd"),
                         "dur": s.get("duration_s"), "tools": s.get("tools_called")})
     return out
+
+
+def _tool_content(result, run: str) -> list[dict]:
+    """Message d'outil tel que le runner l'a renvoyé au modèle : le JSON du résultat, ou, pour un
+    résultat avec images, son texte suivi d'une note (les images et leurs légendes partent dans le
+    message user suivant)."""
+    if not isinstance(result, list):
+        return [{"text": result if isinstance(result, str) else json.dumps(result, ensure_ascii=False)}]
+    items = [str(c) for c in result]
+    imgs = [k for k, c in enumerate(items) if c.startswith("<image ")]
+    captions = {k - 1 for k in imgs if k and not items[k - 1].startswith("<image ")}
+    text = "\n".join(c for k, c in enumerate(items) if k not in captions and k not in imgs)
+    if imgs:
+        text = (text + "\n" if text else "") + f"[{len(imgs)} image(s), chacune précédée de sa légende, dans le message suivant]"
+    return [{"text": text}]
+
+
+def call_detail(log: dict, run: str, n: int) -> dict:
+    """Tout l'appel au modèle d'une bulle (le tour n du journal), reconstitué comme le runner l'a
+    envoyé : prompt système, schémas d'outils, messages depuis la consigne (tours précédents de
+    l'agent, résultats d'outils, messages du code), puis la réponse, ses tokens et son coût."""
+    steps = log["steps"]
+    turn = next(s for s in steps if s["n"] == n and s["type"] == "turn")
+    mine = [s for s in steps if s["call"] == turn["call"] and s["n"] < n]
+    agent = log.get("agents", {}).get(turn["agent"], {})
+    start = next((s for s in mine if s["type"] == "start"), {})
+    messages = [{"role": "user", "items": [{"text": start.get("task", "")}]}]
+    for s in mine:
+        if s["type"] == "turn":
+            messages.append({"role": "assistant", "thinking": "\n\n".join(s.get("thinking") or []),
+                             "items": [{"text": "\n\n".join(s.get("text") or [])}],
+                             "calls": s.get("tool_calls") or []})
+        elif s["type"] == "tool":
+            messages.append({"role": "tool", "name": s["tool"], "items": _tool_content(s.get("result"), run)})
+        elif s["type"] == "user":
+            messages.append({"role": "user", "items": _items(s.get("content") or [], run)})
+    return {"agent": turn["agent"], "turn": turn.get("turn"), "model": start.get("model"),
+            "reasoning": start.get("reasoning"), "max_turns": start.get("max_turns"),
+            "system": agent.get("system", ""), "tools": agent.get("tools", []), "messages": messages,
+            "response": {"thinking": "\n\n".join(turn.get("thinking") or []),
+                         "text": "\n\n".join(turn.get("text") or []), "calls": turn.get("tool_calls") or [],
+                         "stop": turn.get("stop")},
+            "tokens": turn.get("tokens"), "cost": turn.get("turn_cost_usd"), "dur": turn.get("duration_s")}
+
+
+def _reply(raw: dict) -> dict:
+    """Message de l'assistant tel que le runner le rejoue au tour suivant (sans les champs vides ni
+    l'annotation interne de LiteLLM)."""
+    msg = dict(((raw or {}).get("choices") or [{}])[0].get("message") or {})
+    msg.pop("provider_specific_fields", None)
+    return {k: v for k, v in msg.items() if v is not None}
+
+
+def raw_call(log: dict, n: int) -> dict:
+    """Requête et réponse brutes de l'appel du tour n. Exactes pour les runs qui les journalisent
+    (request et raw_response à chaque tour) ; sinon reconstituées depuis le contenu du journal, au
+    format de l'API (sans les id des appels d'outils, jamais enregistrés)."""
+    steps = log["steps"]
+    turn = next(s for s in steps if s["n"] == n and s["type"] == "turn")
+    mine = [s for s in steps if s["call"] == turn["call"] and s["n"] <= n]
+    tools = log.get("agents", {}).get(turn["agent"], {}).get("tools", [])
+    if "request" in turn:
+        messages = []
+        for s in mine:
+            if s["type"] == "turn":
+                messages += s["request"]["new_messages"]
+                if s["n"] < n:
+                    messages.append(_reply(s.get("raw_response")))
+        return {"exact": True, "request": {**turn["request"]["params"], "messages": messages, "tools": tools},
+                "response": turn.get("raw_response")}
+    start = next((s for s in mine if s["type"] == "start"), {})
+    messages = [{"role": "system", "content": log.get("agents", {}).get(turn["agent"], {}).get("system", "")},
+                {"role": "user", "content": start.get("task", "")}]
+    for s in mine:
+        if s["type"] == "turn" and s["n"] < n:
+            msg = {"role": "assistant", "content": "\n\n".join(s.get("text") or [])}
+            if s.get("thinking"):
+                msg["reasoning_content"] = "\n\n".join(s["thinking"])
+            if s.get("tool_calls"):
+                msg["tool_calls"] = [{"type": "function", "function": {"name": c["name"], "arguments": c["input"]}}
+                                     for c in s["tool_calls"]]
+            messages.append(msg)
+        elif s["type"] == "tool":
+            messages.append({"role": "tool", "name": s["tool"],
+                             "content": _tool_content(s.get("result"), "")[0]["text"]})
+        elif s["type"] == "user":
+            messages.append({"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": c}} if str(c).startswith("<image ") else {"type": "text", "text": c}
+                for c in s.get("content") or []]})
+    msg = {"role": "assistant", "content": "\n\n".join(turn.get("text") or [])}
+    if turn.get("thinking"):
+        msg["reasoning_content"] = "\n\n".join(turn["thinking"])
+    if turn.get("tool_calls"):
+        msg["tool_calls"] = [{"type": "function", "function": {"name": c["name"], "arguments": c["input"]}}
+                             for c in turn["tool_calls"]]
+    t = turn.get("tokens") or {}
+    return {"exact": False,
+            "request": {"model": start.get("model"), "max_tokens": 16000, "messages": messages, "tools": tools},
+            "response": {"choices": [{"finish_reason": turn.get("stop"), "message": msg}],
+                         "usage": {"prompt_tokens": t.get("input"), "completion_tokens": t.get("output"),
+                                   "prompt_tokens_details": {"cached_tokens": t.get("cached_input")}}}}
 
 
 def _log(run: str) -> dict:
@@ -142,6 +253,19 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:  # écriture en cours : la page redemandera
                 return self._json({"error": "journal en cours d'écriture"}, HTTPStatus.SERVICE_UNAVAILABLE)
             return self._json({**log.get("run", {}), "id": run, "msgs": messages(log, run)})
+        if u.path == "/api/call":
+            q = parse_qs(u.query)
+            try:
+                run = q.get("id", [""])[0]
+                return self._json(call_detail(_log(run), run, int(q.get("n", ["0"])[0])))
+            except (FileNotFoundError, StopIteration, ValueError):
+                return self.send_error(HTTPStatus.NOT_FOUND)
+        if u.path == "/api/raw":
+            q = parse_qs(u.query)
+            try:
+                return self._json(raw_call(_log(q.get("id", [""])[0]), int(q.get("n", ["0"])[0])))
+            except (FileNotFoundError, StopIteration, ValueError):
+                return self.send_error(HTTPStatus.NOT_FOUND)
         if u.path.startswith("/img/"):
             parts = unquote(u.path[5:]).split("/")
             f = RUNS / Path(parts[0]).name / "images" / Path(parts[-1]).name if len(parts) == 2 else None

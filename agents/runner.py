@@ -270,6 +270,8 @@ class Session:
         tools = {t.name: t for t in agent.tools}
         n_images = 0
         messages = [{"role": "system", "content": agent.system}, {"role": "user", "content": task}]
+        sent = 0  # messages déjà journalisés avec une requête (chaque tour n'enregistre que les nouveaux)
+        image_files: dict[str, str] = {}  # image envoyée (data URL) -> son fichier dans le run
         final = ""
         used: list[tuple[str, str | None]] = []  # (outil, erreur ou None) pour la vérification
         # Les sous-agents s'arrêtent à budget - réserve ; l'orchestrateur peut aller jusqu'au budget.
@@ -278,16 +280,15 @@ class Session:
         last_cost = 0.0  # coût du dernier appel : estimation du prochain
 
         def complete(turn: int, tool_choice: str):
-            nonlocal last_cost
+            nonlocal last_cost, sent
             t0 = time.perf_counter()
-            response = self._call(
-                model=model,
-                max_tokens=16000,
-                messages=messages,
-                tools=tool_schemas,
-                tool_choice=tool_choice,
-                **reasoning,
-            )
+            params = {"model": model, "max_tokens": 16000, "tool_choice": tool_choice, **reasoning}
+            # Requête brute, pour utils/run_chat : les paramètres et les messages ajoutés depuis le
+            # tour précédent (la requête entière se recompose en les mettant bout à bout, avec les
+            # schémas d'outils enregistrés une fois par agent) ; images remplacées par leur fichier.
+            request = {"params": params, "new_messages": _freeze(messages[sent:], image_files)}
+            sent = len(messages)
+            response = self._call(messages=messages, tools=tool_schemas, **params)
             choice = response.choices[0]
             msg = choice.message
             tokens = _tokens(response.usage)
@@ -302,6 +303,7 @@ class Session:
             replay = msg.model_dump(exclude_none=True)
             replay.pop("provider_specific_fields", None)
             messages.append(replay)
+            sent += 1  # la réponse est dans raw_response : pas besoin de la rejournaliser
             thinking, texts = _split(msg)
             calls = msg.tool_calls or []
             for t in texts:
@@ -309,7 +311,8 @@ class Session:
             step("turn", turn=turn, stop=choice.finish_reason, thinking=thinking, text=texts,
                  tool_calls=[{"name": c.function.name, "input": c.function.arguments} for c in calls],
                  tokens=tokens, turn_cost_usd=round(cost, 5), cost_usd=round(self.spent, 4),
-                 duration_s=round(time.perf_counter() - t0, 2))
+                 duration_s=round(time.perf_counter() - t0, 2), request=request,
+                 raw_response=_freeze(_dump(response), image_files))
             final = "\n\n".join(texts)
             if choice.finish_reason == "length":
                 final += "\n\n[réponse tronquée : limite de tokens atteinte]"
@@ -367,8 +370,9 @@ class Session:
                             if b["type"] == "image":
                                 n_images += 1
                                 paths.append(self._save_image(call, turn, n_images, b["source"]))
-                                images.append({"type": "image_url", "image_url": {
-                                    "url": f"data:{b['source']['media_type']};base64,{b['source']['data']}"}})
+                                url = f"data:{b['source']['media_type']};base64,{b['source']['data']}"
+                                image_files[url] = paths[-1]
+                                images.append({"type": "image_url", "image_url": {"url": url}})
                                 logged.append(f"<image {paths[-1]}>")
                             elif k in captions:
                                 images.append({"type": "text", "text": b["text"]})
@@ -483,6 +487,31 @@ def _tokens(usage) -> dict:
     return {"input": _get(usage, "prompt_tokens") or 0,
             "cached_input": _get(details, "cached_tokens") or 0,
             "output": _get(usage, "completion_tokens") or 0}
+
+
+def _dump(obj) -> Any:
+    """Objet du SDK (réponse LiteLLM) en dict JSON."""
+    for attr in ("model_dump", "dict"):
+        if hasattr(obj, attr):
+            try:
+                return getattr(obj, attr)()
+            except Exception:
+                pass
+    return obj
+
+
+def _freeze(value, image_files: dict[str, str]) -> Any:
+    """Copie JSON (figée : les messages changent ensuite), images en base64 remplacées par
+    « <image fichier> » pour ne pas alourdir le journal."""
+    def walk(v):
+        if isinstance(v, dict):
+            return {k: walk(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        if isinstance(v, str) and v.startswith("data:image/"):
+            return f"<image {image_files.get(v, 'non enregistrée')}>"
+        return v
+    return walk(json.loads(json.dumps(value, default=str)))
 
 
 def _split(msg) -> tuple[list[str], list[str]]:

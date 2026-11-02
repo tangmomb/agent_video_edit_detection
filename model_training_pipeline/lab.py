@@ -586,6 +586,20 @@ class Lab:
         path = EXP_DIR / "production.json"
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
+    def production_status(self) -> dict | None:
+        """Le modèle en production et les données dont il est issu : vidéos de son split contre
+        vidéos disponibles aujourd'hui (hors exclues). Moins de vidéos dans son split : un modèle
+        entraîné sur tout le dataset actuel reste à faire."""
+        prod = self.production()
+        if not prod:
+            return None
+        split = next((sp for sp in self._split_summaries() if sp["split_id"] == prod.get("split_id")), None)
+        available = len({r["sample_id"] for r in self.rows} - set(self._excluded()))
+        return {"experiment_id": prod["experiment_id"], "split_id": prod.get("split_id"),
+                "test": (prod.get("test") or {}).get("statut"),
+                "videos_du_split": sum(split[k] for k in SPLITS) if split else None,
+                "videos_disponibles": available}
+
     def train_model(self, embeddings: list[str], model: str = "logreg", params: dict | None = None, balance: dict | None = None,
                     weights: dict | None = None, note: str = "") -> dict:
         # Toujours sur le split le plus récent : un ancien split ne se compare plus à rien de récent.

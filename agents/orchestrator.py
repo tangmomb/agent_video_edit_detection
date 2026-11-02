@@ -22,6 +22,14 @@ list_experiments), tu délègues à trois agents avec les outils ask_* et tu dé
 - Evaluator : analyse des erreurs, seul accès au test.
 Cycle type : données si besoin → nouveau split → expériences → évaluation → décision.
 
+Ton but : un modèle en production entraîné sur le plus de données possible, et le meilleur sur ces \
+données. Commence par global_status et décide :
+- s'il reste des vidéos annotables, fais-les collecter : plus de données, c'est le levier principal ;
+- si le modèle en production vient d'un split qui a moins de vidéos que celles disponibles \
+(production.videos_du_split < videos_disponibles), ou s'il n'y en a pas, il faut un nouveau split, \
+des expériences et un test final ;
+- sinon, il n'y a rien à faire : conclus tout de suite, sans déléguer, en le disant.
+
 Délégation :
 - Les agents ne voient pas ta conversation : chaque consigne est autonome (objectif, contraintes, \
 ids d'expériences, contenu attendu du rapport).
@@ -32,18 +40,17 @@ appelés : elle fait foi, et ce qu'elle ne confirme pas est faux. Relis global_s
 délégation.
 - Une étape impossible (budget à 0, test final épuisé…) : ne la redemande pas autrement, conclus.
 
-Données : demande-en quand l'analyse d'erreurs montre qu'elles manquent, en donnant au Dataset \
+Données : avant une collecte, fais analyser les erreurs du meilleur modèle et donne au Dataset \
 Builder les types de montage à viser, tels que l'analyse les décrit (ex. « sous-titres blancs en \
-bas », « petit logo en coin »). Si \
-c'est le cas et que global_status annonce des vidéos annotables, fais-les collecter avant de \
-conclure, même peu : chaque chaîne compte. Fais ensuite créer un nouveau split et réentraîner la \
-meilleure config dessus.
+bas », « petit logo en coin »). Fais ensuite créer un nouveau split et réentraîner la meilleure \
+config dessus.
 
 Budget : une réserve (reserve_rapport_usd) est gardée pour ton rapport ; une fois le reste \
 dépensé, les délégations sont refusées. Planifie le test final avant.
 
-Pour conclure (objectif atteint, gains qui plafonnent ou budget) : fais tester par l'Evaluator \
-candidat_a_tester (list_experiments). S'il échoue et qu'il reste un test, le suivant. Aucun agent ne met de modèle en production : le code \
+Pour conclure (gains qui plafonnent ou budget) : fais tester par l'Evaluator candidat_a_tester \
+(list_experiments). S'il échoue et qu'il reste un test, le suivant. Aucun agent ne met de modèle \
+en production : le code \
 choisit ensuite le meilleur parmi les modèles qui ont réussi leur test (à défaut, le meilleur, \
 marqué non vérifié) et l'ajoute à ton rapport.
 
@@ -82,7 +89,7 @@ def make(lab: Lab, session: Session) -> Agent:
                                          "images_etiquetees", "videos_sans_ajout",
                                          "pourcentage_images_avec_ajout")}
             dataset["budgets"] = info["budgets"]
-        return {"dataset_total_disponible": dataset,
+        return {"dataset_total_disponible": dataset, "production": lab.production_status(),
                 "budget_session_usd": {"depense": round(session.spent, 2), "total": session.budget_usd,
                                        "reserve_rapport_usd": round(session.reserve_usd, 2),
                                        "disponible_pour_deleguer": round(max(
@@ -96,8 +103,9 @@ def make(lab: Lab, session: Session) -> Agent:
         max_turns=30,
         tools=[
             Tool(name="global_status",
-                 description="Volumes du dataset, budgets restants (vidéos, annotation, tests finaux) et "
-                             "budget de session.",
+                 description="Volumes du dataset, budgets restants (vidéos, annotation, tests finaux), "
+                             "modèle en production (son split, son test, les vidéos de son split contre "
+                             "celles disponibles aujourd'hui) et budget de session.",
                  input_schema={"type": "object", "properties": {}}, fn=global_status),
             list_experiments_tool(lab, brief=True),
             Tool(name="ask_dataset_builder",

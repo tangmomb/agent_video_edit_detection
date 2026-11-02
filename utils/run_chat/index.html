@@ -8,6 +8,7 @@
   --shadow:0 1px .5px rgba(11,20,26,.13);
   --orchestrator:#0b7d5a;--dataset_builder:#c4620a;--model_researcher:#7c4dcf;--evaluator:#0a7cb0;--toi:#00a884;
   --err:#d93a3a;--run:#e89a00;
+  --deleg-bg:#fff8e1;--deleg-line:#f0dfa6;--deleg-fg:#8a6500;
   --b-orchestrator:#d9fdd3;--b-dataset_builder:#fdecd8;--b-model_researcher:#ede6fc;--b-evaluator:#dcf0fb;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -15,12 +16,14 @@
   --chat:#0b141a;--bubble:#202c33;--me:#005c4b;--sys:#182229;--sys-fg:#8696a0;--code:#111b21;--accent:#00a884;
   --shadow:0 1px .5px rgba(0,0,0,.4);
   --orchestrator:#25d366;--dataset_builder:#ffa458;--model_researcher:#b69cff;--evaluator:#5cc4f2;--toi:#00a884;
+  --deleg-bg:#2b2611;--deleg-line:#4a4120;--deleg-fg:#e8c55a;
   --b-orchestrator:#005c4b;--b-dataset_builder:#4a3218;--b-model_researcher:#33284f;--b-evaluator:#173a4d}}
 :root[data-theme="dark"]{
   --side:#111b21;--side-hover:#202c33;--side-active:#2a3942;--line:#222d34;--fg:#e9edef;--muted:#8696a0;
   --chat:#0b141a;--bubble:#202c33;--me:#005c4b;--sys:#182229;--sys-fg:#8696a0;--code:#111b21;--accent:#00a884;
   --shadow:0 1px .5px rgba(0,0,0,.4);
   --orchestrator:#25d366;--dataset_builder:#ffa458;--model_researcher:#b69cff;--evaluator:#5cc4f2;--toi:#00a884;
+  --deleg-bg:#2b2611;--deleg-line:#4a4120;--deleg-fg:#e8c55a;
   --b-orchestrator:#005c4b;--b-dataset_builder:#4a3218;--b-model_researcher:#33284f;--b-evaluator:#173a4d}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden}
@@ -64,6 +67,14 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .stats b{display:block;color:var(--fg);font-size:14px}
 #chat{flex:1;overflow-y:auto;padding:18px 7% 40px;
   background-image:radial-gradient(rgba(127,127,127,.07) 1px,transparent 1px);background-size:22px 22px}
+.deleg{max-width:min(760px,80%);margin:22px auto 14px;background:var(--deleg-bg);border:1px solid var(--deleg-line);
+  border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+.deleg .dh{display:flex;gap:8px;align-items:center;padding:6px 14px;font-size:12.5px;color:var(--deleg-fg);
+  border-bottom:1px solid var(--deleg-line)}
+.deleg .dh span{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;background:var(--deleg-fg);
+  color:var(--deleg-bg);padding:1px 7px;border-radius:5px}
+.deleg .dh b{color:var(--c)}
+.deleg .dt{padding:8px 14px 10px;white-space:pre-wrap;word-break:break-word}
 .goal{max-width:720px;margin:6px auto 18px;background:var(--sys);border-radius:10px;box-shadow:var(--shadow);padding:10px 16px;text-align:center}
 .goal small{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--sys-fg);margin-bottom:2px}
 .empty{color:var(--muted);text-align:center;margin-top:80px}
@@ -91,12 +102,15 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .chip{font:12px Consolas,ui-monospace,monospace;background:var(--code);border:1px solid var(--line);border-radius:6px;
   padding:2px 7px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
 .chip em{font-style:normal;color:var(--muted)}
+.chip.deleg-chip{background:var(--deleg-bg);border-color:var(--deleg-line);color:var(--deleg-fg);font-weight:600}
+.chip.deleg-chip em{color:var(--deleg-fg);opacity:.75;font-weight:400}
 .thinking{white-space:pre-wrap;font-size:13px;font-style:italic;color:var(--muted);border-left:2px solid var(--line);
   padding-left:8px;margin:4px 0 2px}
 .foot{font-size:12px;color:var(--muted);margin-top:6px;padding-top:5px;border-top:1px solid var(--line)}
 .more{color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap}
 
 .tool{max-width:min(720px,72%);margin:3px 0 3px 18px;background:var(--sys);border-radius:8px;box-shadow:var(--shadow);font-size:13px}
+.tool.right{margin:3px 18px 3px auto}
 .tool summary{cursor:pointer;padding:5px 10px;color:var(--sys-fg);list-style:none;display:flex;gap:8px;align-items:center}
 .tool summary::-webkit-details-marker{display:none}
 .tool summary:before{content:"▸";font-size:10px;color:var(--muted)}
@@ -110,6 +124,37 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .tool figure{margin:0}
 .tool figure img{width:100%;border-radius:6px;display:block}
 .tool figcaption{font-size:11.5px;color:var(--muted);margin-top:3px}
+/* panneau d'un appel au modèle */
+.bubble.call{cursor:pointer}
+.bubble.call:hover{outline:2px solid var(--c);outline-offset:1px}
+.bubble.sel{outline:2px solid var(--c);outline-offset:1px}
+#panel{width:620px;flex:none;background:var(--side);border-left:1px solid var(--line);display:flex;flex-direction:column}
+#panel[hidden]{display:none}
+.ph{display:flex;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.pt{font-size:15px;font-weight:600}
+.ps{font-size:12.5px;color:var(--muted);margin-top:2px}
+.pa{display:flex;gap:6px;align-items:flex-start}
+.btn{font:inherit;font-size:12.5px;padding:3px 10px;border-radius:6px;border:1px solid var(--line);background:var(--chat);
+  color:var(--fg);cursor:pointer;white-space:nowrap}
+.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.tabs{display:flex;gap:6px;align-items:center;margin:4px 0 10px;flex-wrap:wrap}
+#pRawNote{font-size:12px;color:var(--muted);margin-left:6px}
+#pRawNote.warn{color:var(--run)}
+#pRawPre{margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.45 Consolas,ui-monospace,monospace;
+  background:var(--chat);border-radius:6px;padding:10px 12px}
+#pClose{border:none;background:none;color:var(--muted);font-size:18px;cursor:pointer;align-self:flex-start}
+.pb{flex:1;overflow-y:auto;padding:12px 16px 30px}
+.pb h3{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 0 6px}
+.pm{border-left:3px solid var(--k);border-radius:6px;background:var(--chat);margin:6px 0}
+.pm>summary,.pm>.lab{cursor:pointer;list-style:none;padding:5px 10px;font-size:12px;font-weight:600;color:var(--k)}
+.pm>summary::-webkit-details-marker{display:none}
+.pm>summary:before{content:"▸ ";color:var(--muted)}.pm[open]>summary:before{content:"▾ "}
+.pm small{font-weight:400;color:var(--muted);margin-left:6px}
+.pm pre{margin:0;padding:0 10px 8px;white-space:pre-wrap;word-break:break-word;font:12px/1.45 Consolas,ui-monospace,monospace;
+  max-height:340px;overflow:auto}
+.pm .think{font-style:italic;color:var(--muted)}
+.pm img{max-width:180px;border-radius:4px;margin:0 10px 8px;vertical-align:top}
+.k-sys{--k:#7c4dcf}.k-tools{--k:#c4620a}.k-user{--k:#1a8f53}.k-tool{--k:var(--muted)}.k-resp{--k:var(--accent)}
 .live{display:flex;justify-content:center;margin:16px 0}
 .live span{font-size:12.5px;color:#fff;background:var(--run);padding:4px 12px;border-radius:12px}
 </style></head>
@@ -131,6 +176,16 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
   </div>
   <div id="chat"><p class="empty">Choisis un run à gauche.</p></div>
 </main>
+<aside id="panel" hidden>
+  <div class="ph"><div><div class="pt" id="pTitle"></div><div class="ps" id="pStats"></div></div>
+    <div class="pa"><button id="pRaw" class="btn">JSON brut</button><button id="pClose" aria-label="Fermer">✕</button></div></div>
+  <div class="pb" id="pBody"></div>
+  <div class="pb" id="pRawBody" hidden>
+    <div class="tabs"><button class="btn on" data-tab="request">Requête</button><button class="btn" data-tab="response">Réponse</button>
+      <button class="btn" id="pCopy">Copier</button><span id="pRawNote"></span></div>
+    <pre id="pRawPre"></pre>
+  </div>
+</aside>
 <script>
 const NAMES = {toi: "Toi", orchestrator: "Orchestrateur", dataset_builder: "Dataset Builder",
                model_researcher: "Model Researcher", evaluator: "Evaluator"};
@@ -168,13 +223,14 @@ function sidebar() {
 // dans sa couleur de bulle.
 function bubble(m, agent, inner, {report = false, label = "", thinking = "", calls = [], foot = "", first = true} = {}) {
   const c = color(agent), me = agent === "orchestrator";
-  return `<div class="msg${me ? " me" : ""}${first ? " first" : ""}"><div class="bubble${report ? " report" : ""}" ` +
+  return `<div class="msg${me ? " me" : ""}${first ? " first" : ""}"><div class="bubble${report ? " report" : ""}${m.turn_n ? " call" : ""}"` +
+    `${m.turn_n ? ` data-n="${m.turn_n}" title="Voir l'appel complet au modèle"` : ""} ` +
     `style="--c:${c};background:var(--b-${agent in NAMES ? agent : "orchestrator"})">` +
     (first ? `<div class="who" style="color:${c}">${esc(NAMES[agent] || agent)}${label ? `<small>${esc(label)}</small>` : ""}</div>` : "") +
     (report ? '<div class="badge">Rapport final</div><br>' : "") +
     (thinking ? `<div class="thinking think">${esc(thinking)}</div>` : "") +
     (inner || "") +
-    (calls.length ? `<div class="calls">${calls.map(k => `<span class="chip" title="${esc(k.input)}">${esc(k.name)} <em>${esc(k.input === "{}" ? "" : k.input)}</em></span>`).join("")}</div>` : "") +
+    (calls.length ? `<div class="calls">${calls.map(k => `<span class="chip${k.name.startsWith("ask_") ? " deleg-chip" : ""}" title="${esc(k.input)}">${esc(k.name)} <em>${esc(k.input === "{}" ? "" : k.input)}</em></span>`).join("")}</div>` : "") +
     (foot ? `<div class="foot">${esc(foot)}</div>` : "") +
     `<span class="time">${m.time.slice(0, 5)}</span></div></div>`;
 }
@@ -214,19 +270,21 @@ function draw(run) {
         last = null;
         continue;
       }
-      out.push(`<div class="divider"><span><b>${esc(NAMES[m.agent] || m.agent)}</b> prend la main · ${m.time.slice(0, 5)}</span></div>`);
-      out.push(bubble(m, m.from, longText(m.text, key), {label: "consigne pour " + (NAMES[m.agent] || m.agent)}));
-      last = m.from;
+      // délégation : la consigne que reçoit le sous-agent, au centre, entre les deux conversations
+      out.push(`<div class="deleg" style="--c:${color(m.agent)}"><div class="dh"><span>Délégation</span>` +
+               `${esc(NAMES[m.from] || m.from)} → <b>${esc(NAMES[m.agent] || m.agent)}</b> · ${m.time.slice(0, 5)}</div>` +
+               `<div class="dt">${longText(m.text, key)}</div></div>`);
+      last = null;
     } else if (m.k === "turn") {
       out.push(bubble(m, m.agent, m.text ? longText(m.text, key) : "", {thinking: m.thinking, calls: m.calls, first: last !== m.agent}));
       last = m.agent;
     } else if (m.k === "tool" || m.k === "code") {
       const name = m.k === "tool" ? `<b>${esc(m.tool)}</b>${m.error ? " · erreur" : ""}` : "message ajouté par le code";
-      out.push(`<details class="tool${m.error ? " err" : ""}" data-key="${key}"${opened.has("d" + key) ? " open" : ""}>` +
+      out.push(`<details class="tool${m.error ? " err" : ""}${m.agent === "orchestrator" ? " right" : ""}" data-key="${key}"${opened.has("d" + key) ? " open" : ""}>` +
                `<summary>${name}<span class="d">${m.dur != null ? m.dur + " s" : ""}</span></summary>${items(m.items)}</details>`);
     } else if (m.k === "end") {
       const min = m.dur != null ? Math.round(m.dur / 6) / 10 + " min" : "";
-      out.push(bubble(m, m.agent, longText(m.text, key), {report: true,
+      out.push(bubble(m, m.agent, longText(m.text, key), {report: true, thinking: m.thinking,
         foot: [m.tools != null ? m.tools + " appels d'outils" : "", min, m.cost != null ? "session à " + m.cost + " $" : ""].filter(Boolean).join(" · ")}));
       out.push(`<div class="divider"><span><b>${esc(NAMES[m.agent] || m.agent)}</b> rend la main · ${m.time.slice(0, 5)}</span></div>`);
       last = null;
@@ -235,6 +293,7 @@ function draw(run) {
   if (run.status === "interrompu") out.push('<div class="divider"><span>Run interrompu avant son rapport final</span></div>');
   if (run.status === "running") out.push('<div class="live"><span>Run en cours… mis à jour toutes les 5 s</span></div>');
   chat.innerHTML = out.join("") || '<p class="empty">Run vide.</p>';
+  if (selected) { const b = chat.querySelector(`.bubble.call[data-n="${selected}"]`); if (b) b.classList.add("sel"); }
   applyToggles();
 }
 
@@ -258,7 +317,7 @@ async function refreshList() {
 }
 
 function pick(id) {
-  current = id; opened = new Set();
+  current = id; opened = new Set(); selected = null; document.getElementById("panel").hidden = true;
   try { localStorage.setItem("run_chat_run", id); } catch (e) {}
   sidebar(); load(false);
 }
@@ -272,8 +331,83 @@ function applyToggles() {
 document.getElementById("runs").addEventListener("click", e => { const r = e.target.closest(".run"); if (r) pick(r.dataset.id); });
 chat.addEventListener("click", e => {
   const k = e.target.dataset && e.target.dataset.key;
-  if (k && e.target.classList.contains("more")) { opened.add(k); load(true); }
+  if (k && e.target.classList.contains("more")) { opened.add(k); load(true); return; }
+  const b = e.target.closest(".bubble.call");
+  if (b) showCall(Number(b.dataset.n));
 });
+document.getElementById("pClose").onclick = () => {
+  document.getElementById("panel").hidden = true; selected = null;
+  document.querySelectorAll(".bubble.sel").forEach(x => x.classList.remove("sel"));
+};
+
+// Panneau : l'appel complet au modèle d'une bulle, tel que le runner l'a envoyé
+let selected = null;
+const block = (cls, label, body, open = false, small = "") =>
+  `<details class="pm ${cls}"${open ? " open" : ""}><summary>${label}${small ? `<small>${esc(small)}</small>` : ""}</summary>${body}</details>`;
+const pre = t => t ? `<pre>${esc(t)}</pre>` : "";
+const its = list => list.map(i => i.img ? `<img src="${esc(i.img)}" alt="">` : pre(i.text)).join("");
+const callList = calls => calls.map(c => pre(`${c.name}(${(() => { try { return JSON.stringify(JSON.parse(c.input), null, 2); } catch (e) { return c.input; } })()})`)).join("");
+
+// JSON brut de l'appel : exact pour les runs qui le journalisent, reconstitué pour les anciens
+let raw = null, rawTab = "request";
+function showRaw() {
+  const on = !document.getElementById("pRawBody").hidden;
+  document.getElementById("pRaw").classList.toggle("on", on);
+  if (!on || !raw) return;
+  document.querySelectorAll("#pRawBody .tabs [data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === rawTab));
+  document.getElementById("pRawPre").textContent = JSON.stringify(raw[rawTab], null, 2);
+  const note = document.getElementById("pRawNote");
+  note.textContent = raw.exact ? "tel qu'envoyé à l'API (images remplacées par leur fichier)"
+    : "reconstitué : ce run n'enregistrait pas le JSON brut (pas d'id d'appel d'outil ni de réponse brute)";
+  note.className = raw.exact ? "" : "warn";
+}
+document.getElementById("pRaw").onclick = () => {
+  const r = document.getElementById("pRawBody");
+  r.hidden = !r.hidden; document.getElementById("pBody").hidden = !r.hidden; showRaw();
+};
+document.querySelectorAll("#pRawBody .tabs [data-tab]").forEach(b => b.onclick = () => { rawTab = b.dataset.tab; showRaw(); });
+document.getElementById("pCopy").onclick = async () => {
+  try { await navigator.clipboard.writeText(document.getElementById("pRawPre").textContent);
+        document.getElementById("pCopy").textContent = "Copié"; setTimeout(() => document.getElementById("pCopy").textContent = "Copier", 1200); }
+  catch (e) {}
+};
+
+async function showCall(n) {
+  raw = null;
+  fetch(`/api/raw?id=${encodeURIComponent(current)}&n=${n}`, {cache: "no-store"}).then(r => r.json())
+    .then(d => { if (selected === n) { raw = d; showRaw(); } }).catch(() => {});
+  selected = n;
+  document.querySelectorAll(".bubble.sel").forEach(x => x.classList.remove("sel"));
+  const b = document.querySelector(`.bubble.call[data-n="${n}"]`); if (b) b.classList.add("sel");
+  const panel = document.getElementById("panel"), body = document.getElementById("pBody");
+  panel.hidden = false; body.innerHTML = '<p class="empty">Chargement…</p>';
+  let d;
+  try { d = await (await fetch(`/api/call?id=${encodeURIComponent(current)}&n=${n}`, {cache: "no-store"})).json(); }
+  catch (e) { body.innerHTML = '<p class="empty">Appel introuvable.</p>'; return; }
+  if (selected !== n) return;
+  const t = d.tokens || {};
+  document.getElementById("pTitle").textContent = `Appel au modèle · ${NAMES[d.agent] || d.agent} · tour ${d.turn}/${d.max_turns}`;
+  document.getElementById("pStats").textContent =
+    `${(d.model || "").split("/").pop()} · entrée ${t.input ?? "?"} tokens (dont ${t.cached_input ?? 0} en cache) · ` +
+    `sortie ${t.output ?? "?"} · ${d.cost ?? "?"} $ · ${d.dur ?? "?"} s · fin : ${d.response.stop || "?"}`;
+  const msgs = d.messages.map((m, i) => {
+    if (m.role === "user") return block("k-user", i ? "utilisateur" : "utilisateur · consigne", its(m.items), i === 0, i ? "message ajouté par le code" : "");
+    if (m.role === "tool") return block("k-tool", "outil · " + esc(m.name), its(m.items));
+    return block("k-resp", "assistant", (m.thinking ? `<pre class="think">${esc(m.thinking)}</pre>` : "") + its(m.items) +
+                 (m.calls.length ? callList(m.calls) : ""), false, `tour ${d.messages.slice(0, i).filter(x => x.role === "assistant").length + 1}`);
+  }).join("");
+  const r = d.response;
+  body.innerHTML =
+    `<h3>Ce que reçoit le modèle</h3>` +
+    block("k-sys", "système", pre(d.system), false, `${d.system.length} caractères, fixe`) +
+    block("k-tools", "outils", pre(JSON.stringify(d.tools, null, 2)), false, `${d.tools.length} schémas, hors des messages`) +
+    msgs +
+    `<h3>Sa réponse</h3>` +
+    `<div class="pm k-resp"><div class="lab">assistant<small>ce tour</small></div>` +
+    (r.thinking ? `<pre class="think">${esc(r.thinking)}</pre>` : "") + pre(r.text) +
+    (r.calls.length ? `<div class="lab" style="color:var(--muted)">appels d'outils</div>` + callList(r.calls) : "") + `</div>`;
+  body.scrollTop = 0;
+}
 chat.addEventListener("toggle", e => {
   const k = e.target.dataset && e.target.dataset.key;
   if (k) e.target.open ? opened.add("d" + k) : opened.delete("d" + k);
