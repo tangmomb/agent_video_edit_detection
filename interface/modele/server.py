@@ -94,7 +94,7 @@ def analyze(model: Model, video: Path, job: Path) -> dict:
     result = {"job": job.name, "fps": FPS, "model": model.info(),
               "duration_s": round(time.perf_counter() - t0, 2),
               "frames": [{"t": round(i / FPS, 3), "prob": round(float(p), 5),
-                          "url": f"/jobs/{job.name}/frames/{f.name}"}
+                          "url": f"jobs/{job.name}/frames/{f.name}"}
                          for i, (f, p) in enumerate(zip(frames, probs))]}
     (job / "result.json").write_text(json.dumps(result), encoding="utf-8")
     return result

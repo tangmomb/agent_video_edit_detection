@@ -258,7 +258,7 @@ function runRow(r) {
 
 async function load() {
   let d;
-  try { d = await (await fetch("/api/runs", { cache: "no-store" })).json(); } catch { return; }
+  try { d = await (await fetch("api/runs", { cache: "no-store" })).json(); } catch { return; }
   overview(d);
   liveBanner(d);
   $("runs-count").textContent = `${d.runs.length}`;

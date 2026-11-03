@@ -1,0 +1,43 @@
+# Point d'entrée public du panneau : HTTPS automatique, un chemin par outil.
+# Copié dans /etc/caddy/Caddyfile. L'empreinte du mot de passe vit seulement sur le serveur, dans
+# /etc/caddy/agent_passwd (ligne « utilisateur empreinte », voir deploy/README.md).
+agent-video-edit-detection.tanguym.fr {
+	encode gzip
+
+	# Envoi de vidéos (modèle, saut d'images) : borne pour ne pas remplir le disque.
+	request_body {
+		max_size 1GB
+	}
+
+	@prive path /modele /modele/* /dataset /dataset/* /saut /saut/*
+	basic_auth @prive {
+		import /etc/caddy/agent_passwd
+	}
+
+	# Sans la barre finale, les adresses relatives des pages sortiraient du chemin de l'outil.
+	redir /runs /runs/
+	redir /conversations /conversations/
+	redir /modele /modele/
+	redir /dataset /dataset/
+	redir /saut /saut/
+
+	handle_path /runs/* {
+		reverse_proxy 127.0.0.1:8830
+	}
+	handle_path /conversations/* {
+		reverse_proxy 127.0.0.1:8820
+	}
+	handle_path /modele/* {
+		reverse_proxy 127.0.0.1:8780
+	}
+	handle_path /dataset/* {
+		reverse_proxy 127.0.0.1:8800
+	}
+	handle_path /saut/* {
+		reverse_proxy 127.0.0.1:8810
+	}
+	# Le panneau et ses pages statiques (arbre des agents, parcours).
+	handle {
+		reverse_proxy 127.0.0.1:8770
+	}
+}

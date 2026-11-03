@@ -40,7 +40,7 @@ def _items(content: list, run: str) -> list[dict]:
     out = []
     for c in map(str, content):
         if c.startswith("<image ") and c.endswith(">"):
-            out.append({"img": f"/img/{run}/{Path(c[7:-1]).name}"})
+            out.append({"img": f"img/{run}/{Path(c[7:-1]).name}"})
         else:
             out.append({"text": _cut(c)})
     return out

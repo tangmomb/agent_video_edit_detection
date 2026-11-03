@@ -1,0 +1,20 @@
+# Un outil du panneau : %i est son dossier dans interface/ (agent-interface@runs_summary, etc.).
+# Les serveurs n'écoutent que sur 127.0.0.1 ; Caddy est le seul point d'entrée.
+[Unit]
+Description=Panneau agent : %i
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/srv/agent_mots_cles
+Environment=INTERFACE_PROXIED=1
+Environment=HF_HOME=/srv/agent_mots_cles/.cache/huggingface
+ExecStart=/srv/agent_mots_cles/.venv/bin/python interface/%i/server.py
+Restart=always
+RestartSec=5
+# Le serveur du modèle charge torch et CLIP : un outil ne doit pas pouvoir étouffer la machine.
+MemoryMax=3G
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

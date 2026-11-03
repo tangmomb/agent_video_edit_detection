@@ -217,7 +217,7 @@ const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(
 const pct = (x) => `${(Math.round(x * 1000) / 10).toLocaleString("fr-FR")} %`;
 const dec = (x, n = 3) => x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n });
 
-fetch("/api/model").then((r) => r.json()).then((m) => {
+fetch("api/model").then((r) => r.json()).then((m) => {
   model = m;
   threshold = m.threshold;
   const tile = (k, v, s = "") => `<div><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
@@ -243,7 +243,7 @@ async function analyze(file) {
   st.innerHTML = `<span class="spinner"></span>Analyse de « ${file.name} » : extraction des images et passage dans le modèle…`;
   $("results").style.display = "none";
   try {
-    const r = await fetch("/api/analyze", { method: "POST", body: file,
+    const r = await fetch("api/analyze", { method: "POST", body: file,
       headers: { "X-Filename": encodeURIComponent(file.name) } });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.statusText);
@@ -258,9 +258,9 @@ async function analyze(file) {
 // Une analyse déjà faite se rouvre par l'adresse (#job=…) : lecture seule, aucun appel payant.
 async function reopen(job) {
   try {
-    const r = await fetch(`/jobs/${job}/result.json`);
+    const r = await fetch(`jobs/${job}/result.json`);
     if (!r.ok) return;
-    show(await r.json(), `/jobs/${job}/video.mp4`, job);
+    show(await r.json(), `jobs/${job}/video.mp4`, job);
   } catch (e) { /* analyse introuvable : on reste sur le dépôt */ }
 }
 

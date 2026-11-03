@@ -287,7 +287,7 @@ async function load(keepScroll) {
   clearTimeout(timer);
   const id = current;
   let run = null;
-  try { run = await (await fetch(`/api/run?id=${encodeURIComponent(id)}`, {cache: "no-store"})).json(); } catch (e) {}
+  try { run = await (await fetch(`api/run?id=${encodeURIComponent(id)}`, {cache: "no-store"})).json(); } catch (e) {}
   if (id !== current) return;  // un autre run a été choisi entre-temps
   if (run && run.msgs) {
     const atBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 60, top = chat.scrollTop;
@@ -298,7 +298,7 @@ async function load(keepScroll) {
 }
 
 async function refreshList() {
-  try { list = await (await fetch("/api/runs", {cache: "no-store"})).json(); } catch (e) {}
+  try { list = await (await fetch("api/runs", {cache: "no-store"})).json(); } catch (e) {}
   sidebar();
 }
 
@@ -360,7 +360,7 @@ document.getElementById("pCopy").onclick = async () => {
 
 async function showCall(n) {
   raw = null;
-  fetch(`/api/raw?id=${encodeURIComponent(current)}&n=${n}`, {cache: "no-store"}).then(r => r.json())
+  fetch(`api/raw?id=${encodeURIComponent(current)}&n=${n}`, {cache: "no-store"}).then(r => r.json())
     .then(d => { if (selected === n) { raw = d; showRaw(); } }).catch(() => {});
   selected = n;
   document.querySelectorAll(".bubble.sel").forEach(x => x.classList.remove("sel"));
@@ -368,7 +368,7 @@ async function showCall(n) {
   const panel = document.getElementById("panel"), body = document.getElementById("pBody");
   panel.hidden = false; body.innerHTML = '<p class="empty">Chargement…</p>';
   let d;
-  try { d = await (await fetch(`/api/call?id=${encodeURIComponent(current)}&n=${n}`, {cache: "no-store"})).json(); }
+  try { d = await (await fetch(`api/call?id=${encodeURIComponent(current)}&n=${n}`, {cache: "no-store"})).json(); }
   catch (e) { body.innerHTML = '<p class="empty">Appel introuvable.</p>'; return; }
   if (selected !== n) return;
   const t = d.tokens || {};

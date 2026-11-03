@@ -163,7 +163,7 @@ function setSeuil(v) {
 }
 
 async function init() {
-  const r = await (await fetch("/api/videos")).json();
+  const r = await (await fetch("api/videos")).json();
   pipe = r.seuil_pipeline;
   $("pipe").textContent = pipe;
   $("seuil-mark").style.left = `${(pipe - SMIN) / (SMAX - SMIN) * 100}%`;
@@ -193,7 +193,7 @@ async function load() {
   const id = $("video").value;
   if (!id) return;
   $("status").innerHTML = '<span class="spinner"></span>Calcul…';
-  const r = await fetch(`/api/simulate?id=${encodeURIComponent(id)}&seuil=${seuil()}`);
+  const r = await fetch(`api/simulate?id=${encodeURIComponent(id)}&seuil=${seuil()}`);
   const j = await r.json();
   if (!r.ok) { $("status").innerHTML = `<span class="err">${j.error || r.status}</span>`; return; }
   $("status").textContent = "";
@@ -232,10 +232,10 @@ function render() {
 
 async function upload(file) {
   $("status").innerHTML = `<span class="spinner"></span>Envoi de ${file.name} et extraction des images…`;
-  const r = await fetch("/api/upload", { method: "POST", body: file, headers: { "X-Filename": encodeURIComponent(file.name) } });
+  const r = await fetch("api/upload", { method: "POST", body: file, headers: { "X-Filename": encodeURIComponent(file.name) } });
   const j = await r.json();
   if (!r.ok) { $("status").innerHTML = `<span class="err">${j.error || r.status}</span>`; return; }
-  fillVideos((await (await fetch("/api/videos")).json()).videos, j.id);
+  fillVideos((await (await fetch("api/videos")).json()).videos, j.id);
   $("status").innerHTML = '<span class="spinner"></span>Calcul des embeddings CLIP…';
   load();
 }

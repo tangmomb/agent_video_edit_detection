@@ -59,7 +59,7 @@ function menu() {
   const id = current();
   document.getElementById("items").innerHTML = TOOLS.map(t =>
     `<a class="item${t.id === id ? " on" : ""}" href="#/${t.id}"><div class="ic">${t.icon || "•"}</div>` +
-    `<div class="tx"><div class="nm">${esc(t.name)}${t.check ? `<span class="dot${status[t.id] ? " up" : ""}" title="${status[t.id] ? "en ligne" : "hors ligne"}"></span>` : ""}</div>` +
+    `<div class="tx"><div class="nm">${esc(t.name)}${t.prive ? " 🔒" : ""}${t.port ? `<span class="dot${status[t.id] ? " up" : ""}" title="${status[t.id] ? "en ligne" : "hors ligne"}"></span>` : ""}</div>` +
     `<div class="ds">${esc(t.desc)}</div></div></a>`).join("");
 }
 
@@ -73,7 +73,7 @@ function show() {
   let f = frames.querySelector(`[data-id="${t.id}"]`);
   if (!f) {
     f = document.createElement("div"); f.dataset.id = t.id;
-    if (t.check && status[t.id] === false) {
+    if (t.port && status[t.id] === false) {
       f.innerHTML = `<div class="down"><b>${esc(t.name)} ne répond pas</b>Son serveur n'est pas lancé : ` +
         `<code>lancer_interface.bat</code> démarre tous les outils.</div>`;
       f.dataset.down = "1";
@@ -88,16 +88,17 @@ function show() {
   menu();
 }
 
-// Un serveur répond-il ? (requête sans CORS : on sait seulement s'il est joignable)
+// Quels serveurs répondent ? (vérifié par le serveur du panneau)
 async function check() {
-  await Promise.all(TOOLS.filter(t => t.check).map(async t => {
-    let up = false;
-    try { await fetch(t.check, {mode: "no-cors", cache: "no-store"}); up = true; } catch (e) {}
+  let state = {};
+  try { state = await (await fetch("/api/status", {cache: "no-store"})).json(); } catch (e) {}
+  TOOLS.filter(t => t.port).forEach(t => {
+    const up = !!state[t.id];
     const was = status[t.id]; status[t.id] = up;
     // outil revenu en ligne alors qu'on affichait « ne répond pas » : on recharge sa page
     const f = frames.querySelector(`[data-id="${t.id}"]`);
     if (up && was === false && f && f.dataset.down) { f.remove(); if (current() === t.id) show(); }
-  }));
+  });
   menu();
 }
 

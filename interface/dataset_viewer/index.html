@@ -123,7 +123,7 @@ const word = (f) => !f.annotee ? "pas annotée" : f.label === 1 ? "ajout" : f.la
 const color = (f) => !f.annotee ? "var(--sunk)" : f.label === 1 ? "var(--yes)" : f.label === 0 ? "var(--no)" : "var(--warn)";
 
 async function init() {
-  vids = await (await fetch("/api/videos")).json();
+  vids = await (await fetch("api/videos")).json();
   $("v-count").textContent = `${vids.length} vidéos`;
   $("videos").innerHTML = vids.length ? vids.map((v) => {
     const title = (v.title || v.id).slice(0, 70);
@@ -134,7 +134,7 @@ async function init() {
 }
 
 async function open(id) {
-  cur = await (await fetch(`/api/video?id=${encodeURIComponent(id)}`)).json();
+  cur = await (await fetch(`api/video?id=${encodeURIComponent(id)}`)).json();
   history.replaceState(null, "", `?v=${id}`);
   $("videos").value = id;
   const k = vids.findIndex((v) => v.id === id);

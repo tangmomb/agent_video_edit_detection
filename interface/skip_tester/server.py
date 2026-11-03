@@ -48,7 +48,7 @@ def _dataset(sid: str) -> dict:
     with _gpu:
         X = get_features([{"sample_id": sid, "frame": f.name} for f in frames], EXTRACTOR, "full")
     votes = load_votes(sdir)["frames"]
-    return {"frames": [f"/img/ds/{sid}/{f.name}" for f in frames], "X": X,
+    return {"frames": [f"img/ds/{sid}/{f.name}" for f in frames], "X": X,
             "labels": [votes.get(f.name, {}).get("label") for f in frames]}
 
 
@@ -61,7 +61,7 @@ def _upload(job: str) -> dict:
 
         with _gpu, torch.inference_mode():
             np.save(emb, embed_images(frames, EXTRACTOR, "full"))
-    return {"frames": [f"/img/up/{job}/{f.name}" for f in frames], "X": np.load(emb),
+    return {"frames": [f"img/up/{job}/{f.name}" for f in frames], "X": np.load(emb),
             "labels": [None] * len(frames)}
 
 

@@ -53,7 +53,7 @@ def video(sid: str) -> dict:
     frames = []
     for i, f in enumerate(_frames(d.name)):
         e = v["frames"].get(f.name)
-        frames.append({"i": i, "t": i, "url": f"/img/{d.name}/{f.name}",
+        frames.append({"i": i, "t": i, "url": f"img/{d.name}/{f.name}",
                        "label": e["label"] if e else None, "annotee": e is not None,
                        "votes": e["votes"] if e else {}})
     return {"id": d.name, "meta": m, "cost_usd": v["cost_usd"], "annotators": list(ANNOTATORS), "frames": frames}
