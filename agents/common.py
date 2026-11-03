@@ -11,7 +11,7 @@ CONTEXT = """Projet : un classifieur qui dit si une image de vidéo YouTube cont
 pas de la caméra). Une image par seconde de vidéo. Partout, « chaîne » veut dire chaîne YouTube, et \
 chaque vidéo vient d'une chaîne différente.
 
-Objectif : le meilleur rappel à 95 % de précision (abrégé « rappel à 95 % »), sur des chaînes \
+Objectif : le meilleur rappel à 90 % de précision (abrégé « rappel à 90 % »), sur des chaînes \
 YouTube que le modèle n'a jamais vues. Le temps de calcul ne compte pas.
 
 Données : chaque image est étiquetée par trois LLM de vision, seulement s'ils sont d'accord.
@@ -36,7 +36,7 @@ n'a jamais vu sa chaîne. On décide sur val ; test sert seulement à vérifier 
 val de chaque chaîne, puis moyennée. Elle dit si le modèle reconnaît les ajouts sur des chaînes \
 jamais vues.
 - Meilleur modèle : parmi ceux dont l'AP par chaîne est à moins de 0,005 de la meilleure, celui \
-de meilleur rappel à 95 %. Le code choisit la production ainsi.
+de meilleur rappel à 90 %. Le code choisit la production ainsi.
 - Deux expériences ne se comparent que sur le même split : n'écris jamais d'écart de score entre \
 deux splits. Pour mesurer ce qu'apporte un nouveau split, on y réentraîne la meilleure config \
 d'avant."""
@@ -91,7 +91,7 @@ def list_experiments_tool(lab: Lab, brief: bool = False) -> Tool:
     description = ("Le modèle en production, puis le dernier split : candidat_a_tester (la prochaine "
                    "expérience à passer au test final, choisie par la règle du meilleur modèle) et ses "
                    "expériences : " + shown + ". "
-                   "Une ligne par expérience : config → AP par chaîne, rappel à 95 % (FP, FN), test "
+                   "Une ligne par expérience : config → AP par chaîne, rappel à 90 % (FP, FN), test "
                    "final. Pour chaque ancien split, sa meilleure expérience.")
     return Tool(
         name="list_experiments",
@@ -101,7 +101,7 @@ def list_experiments_tool(lab: Lab, brief: bool = False) -> Tool:
     )
 
 
-PRECISION = {"type": "number", "description": "Précision visée, qui fixe le seuil (défaut 0.95)."}
+PRECISION = {"type": "number", "description": "Précision visée, qui fixe le seuil (défaut 0.9)."}
 
 
 # Analyse visuelle d'analyze_errors, à chaque appel : chaque erreur val est décrite par un LLM de

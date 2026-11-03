@@ -6,7 +6,7 @@ Règles :
 - données : vraies vidéos YouTube (video_source.youtube), une image par seconde ; cible binaire
   label_any (au moins un ajout de montage sur l'image), donnée par l'accord unanime des trois LLM
   d'annotators.ANNOTATORS. Une image sans accord n'est ni entraînée ni mesurée ;
-- métrique principale : rappel à précision fixée (95 % par défaut), seuil choisi sur val ;
+- métrique principale : rappel à précision fixée (90 % par défaut, 95 % avant le 03/11/2026), seuil choisi sur val ;
 - la collecte (generate_data) ignore les splits ; un split est un découpage dev/test nommé et
   figé, fait par chaîne YouTube (make_split, stockés dans data/splits/) : une chaîne garde le
   même habillage d'une vidéo à l'autre, elle ne doit pas être des deux côtés. Les vidéos collectées
@@ -37,6 +37,7 @@ import numpy as np
 from PIL import Image
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -78,6 +79,11 @@ STRATIFY_KEYS = ("orientation", "clip_vide")
 # ni sur val ni sur les chaînes cachées (rappel idéal caché 0.14 en moyenne contre 0.51 en logreg),
 # pour 270 fois le temps d'entraînement ; des arbres conviennent mal à des embeddings denses.
 MODELS = ("logreg", "mlp")
+# mlp (03/11/2026) : arrêté à la meilleure AP par chaîne sur 15 % des chaînes de train mises de
+# côté (avant : 10 % d'images au hasard, de chaînes vues), au plus 200 époques, patience 10 ;
+# classes équilibrées ; alpha par défaut 1 (avant 0.001). Rejoué sur exp_094/131/149 : AP par
+# chaîne +1 à +4 points sur split_003, mais toujours 4 à 5 points sous la logreg équivalente.
+MLP_HOLDOUT, MLP_MAX_EPOCHS, MLP_PATIENCE, MLP_ALPHA = 0.15, 200, 10, 1.0
 # Groupes d'images de train qu'on peut rééchantillonner (paramètre balance) ou pondérer (weights) :
 # positif / negatif = images avec / sans ajout ; clip_vide = images des vidéos sans aucune image
 # avec ajout ; orientation.
@@ -128,14 +134,14 @@ def _image_blocks(path: Path, caption: str) -> list[dict]:
 
 def _compact_val(val: dict) -> dict:
     """Val pour les agents : AP par chaîne (choix du modèle de production ; l'AP globale à défaut),
-    rappel et erreurs au point de précision par défaut (95 %). Ni la précision (au moins 95 % par
+    rappel et erreurs au point de précision par défaut (90 %). Ni la précision (au moins 90 % par
     construction), ni l'AUC et le seuil, qui ne décident de rien ; les volumes du val sont ceux du
     split."""
     out = ({"ap_par_chaine": val["ap_par_chaine"]} if val.get("ap_par_chaine") is not None
            else {"ap": val["ap"]})
     op = val[f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"]
     if not isinstance(op, dict):
-        return {**out, "p95": op}  # "précision non atteinte"
+        return {**out, "p_visee": op}  # "précision non atteinte"
     return {**out, "recall": op["recall"], "fp": op["fp"], "fn": op["fn"]}
 
 
@@ -155,14 +161,14 @@ def _score(e: dict) -> float:
 
 def _one_line(e: dict, test: str | None = None) -> str:
     """Expérience en une ligne, sans hypothèse : sa config (de quoi la refaire ou ne pas la
-    refaire), son résultat val à 95 % de précision et son test final (test : statut, pour une
+    refaire), son résultat val à la précision par défaut et son test final (test : statut, pour une
     expérience d'un ancien split dont seul le statut compte)."""
     c = _config(e)
     parts = ["+".join(c["embeddings"]), " ".join([c["model"], *(f"{k}={v}" for k, v in c.get("params", {}).items())])]
     parts += [f"{k} " + " ".join(f"{g}×{x}" for g, x in c[k].items()) for k in ("balance", "weights") if k in c]
     v = _compact_val(e["val"])
     res = f"AP/chaîne {_score(e)}, " + (f"rappel {v['recall']} (FP {v['fp']}, FN {v['fn']})"
-                                         if "recall" in v else f"95 % : {v['p95']}")
+                                         if "recall" in v else f"{metrics.DEFAULT_PRECISION * 100:g} % : {v['p_visee']}")
     if test:
         res += f" ; test {test}"
     elif "final_test" in e:
@@ -297,9 +303,15 @@ class Lab:
 
     def _folds(self, split_id: str) -> dict[str, int]:
         """Chaîne de dev -> pli de validation croisée, stratifié comme le split (mêmes clés, même
-        graine) : déterministe, donc le même pour toutes les expériences du split."""
+        graine). Enregistré dans le split par make_split : recalculé, il bougerait avec les
+        étiquettes (clip_vide) ou le code de _stratified, et le val avec lui. Les splits d'avant
+        l'enregistrement (split_001 à split_004) n'en ont pas : recalculés."""
         if split_id not in self._folds_cache:
-            params = json.loads((SPLITS_DIR / f"{split_id}.json").read_text(encoding="utf-8"))["params"]
+            sp = json.loads((SPLITS_DIR / f"{split_id}.json").read_text(encoding="utf-8"))
+            if "folds" in sp:
+                self._folds_cache[split_id] = sp["folds"]
+                return sp["folds"]
+            params = sp["params"]
             dev = {s for s, v in self._split_map(split_id).items() if v == "dev"}
             clips = self._channel_traits(dev, params.get("stratify", list(STRATIFY_KEYS)))
             k = min(FOLDS, len(clips))
@@ -574,9 +586,13 @@ class Lab:
         SPLITS_DIR.mkdir(parents=True, exist_ok=True)
         split_id = f"split_{len(list(SPLITS_DIR.glob('split_*.json'))) + 1:03d}"
         params = {"test_ratio": test_ratio, "stratify": stratify, "seed": seed}
-        (SPLITS_DIR / f"{split_id}.json").write_text(json.dumps(
-            {"split_id": split_id, "note": note, "date": time.strftime("%Y-%m-%d %H:%M"), "params": params,
-             "excluded": exclude, "clips": assign}, ensure_ascii=False, indent=2), encoding="utf-8")
+        path = SPLITS_DIR / f"{split_id}.json"
+        sp = {"split_id": split_id, "note": note, "date": time.strftime("%Y-%m-%d %H:%M"), "params": params,
+              "excluded": exclude, "clips": assign}
+        path.write_text(json.dumps(sp, ensure_ascii=False, indent=2), encoding="utf-8")
+        # plis figés avec le split (voir _folds), calculés sur le fichier qui vient d'être écrit
+        sp["folds"] = self._folds(split_id)
+        path.write_text(json.dumps(sp, ensure_ascii=False, indent=2), encoding="utf-8")
         m = self._split_map(split_id)
         return _jsonable({"split_id": split_id, "params": params, "clips_exclus": len(exclude),
                           "plis_de_validation": len(set(self._folds(split_id).values())),
@@ -601,7 +617,7 @@ class Lab:
                 "videos_du_split": sum(split[k] for k in SPLITS) if split else None,
                 "videos_disponibles": available}
 
-    def train_model(self, embeddings: list[str], model: str = "logreg", params: dict | None = None, balance: dict | None = None,
+    def train_model(self, embeddings: list[str], model: str, params: dict | None = None, balance: dict | None = None,
                     weights: dict | None = None, note: str = "") -> dict:
         # Toujours sur le split le plus récent : un ancien split ne se compare plus à rien de récent.
         split_id = self.latest_split()
@@ -609,6 +625,8 @@ class Lab:
             raise ValueError("aucun split : crée-en un avec make_split avant d'entraîner")
         if model not in MODELS:
             raise ValueError(f"model dans {MODELS}")
+        if not embeddings or len(set(embeddings)) < len(embeddings):
+            raise ValueError("embeddings : au moins un, chacun une seule fois")
         dev = self._idx("dev", split_id)
         if not len(dev):
             raise ValueError("dev vide : il faut d'abord collecter des données")
@@ -876,7 +894,16 @@ class Lab:
                   "test": metrics.operating_point(y, probs, op["threshold"]),
                   "test_auc": s["auc"], "test_ap": s["ap"], "final_tests_restants": self.final_tests_left}
         (d / "final_test.json").write_text(json.dumps(_jsonable(result), indent=2), encoding="utf-8")
-        return _jsonable(result)
+        return self.final_test_summary(experiment_id, precision)
+
+    def final_test_summary(self, experiment_id: str, precision: float = metrics.DEFAULT_PRECISION) -> dict:
+        """Réponse de final_test, relue dans final_test.json : le verdict en tête, calculé comme pour
+        le choix de la production (_test_status). Sans lui, l'Evaluator jugeait lui-même (run 010 :
+        « échec relatif » d'un test réussi, parce que le rappel baissait)."""
+        result = json.loads((EXP_DIR / experiment_id / "final_test.json").read_text(encoding="utf-8"))
+        status = self._test_status(experiment_id, precision)["statut"]
+        return _jsonable({"statut": status, "regle": "réussi si la précision visée tient sur test, au seuil "
+                          "choisi sur val ; le rappel n'entre pas dans le verdict", **result})
 
     def save_model(self, experiment_id: str, precision: float, note: str,
                    test: dict | None = None) -> dict:
@@ -993,9 +1020,10 @@ class Lab:
         if model == "logreg":
             clf = LogisticRegression(C=float(params.get("C", 0.1)), max_iter=3000, class_weight="balanced")
         else:
+            # Pas d'early_stopping de sklearn : il met de côté des images au hasard, donc de chaînes
+            # vues à l'entraînement ; _fit_mlp arrête sur des chaînes mises de côté.
             clf = MLPClassifier(hidden_layer_sizes=tuple(params.get("hidden", [256])),
-                                alpha=float(params.get("alpha", 1e-3)), early_stopping=True,
-                                max_iter=300, random_state=0)
+                                alpha=float(params.get("alpha", MLP_ALPHA)), random_state=0)
         return make_pipeline(*steps, clf)
 
     def _fit(self, model: str, params: dict, tr: np.ndarray, balance: dict | None, weights: dict | None,
@@ -1005,8 +1033,50 @@ class Lab:
         tr, report = self._balance(tr, balance or {})
         w = self._weights(tr, weights or {})
         clf = self._make(model, params)
-        clf.fit(X[tr], y[tr], **({} if w is None else {f"{clf.steps[-1][0]}__sample_weight": w}))
+        if model == "mlp":
+            self._fit_mlp(clf, tr, w, X, y)
+        else:
+            clf.fit(X[tr], y[tr], **({} if w is None else {f"{clf.steps[-1][0]}__sample_weight": w}))
         return clf, report, w is not None
+
+    def _fit_mlp(self, clf, tr: np.ndarray, w: np.ndarray | None, X: np.ndarray, y: np.ndarray):
+        """Entraîne le mlp époque par époque et garde l'époque à la meilleure AP par chaîne sur
+        MLP_HOLDOUT des chaînes de tr, jamais vues : la même question que val. Les deux classes
+        pèsent autant au total, comme class_weight="balanced" de la logreg."""
+        chans = np.array([self.rows[i]["source"] for i in tr])
+        names = np.unique(chans)
+        rng = np.random.default_rng(0)
+        held = set(rng.choice(names, max(1, round(MLP_HOLDOUT * len(names))), replace=False)) if len(names) > 1 else set()
+        out = np.isin(chans, list(held))
+        if not (y[tr[out]].any() and (~y[tr[out]].astype(bool)).any()):
+            out[:] = False  # chaînes mises de côté sans les deux classes : pas d'arrêt possible
+        fit_i, w_fit = tr[~out], (np.ones(len(tr)) if w is None else w)[~out]
+        yf = y[fit_i]
+        for c in (0, 1):  # même calcul que class_weight="balanced" : sur les effectifs, puis x weights
+            m = yf == c
+            if m.any():
+                w_fit = np.where(m, w_fit * len(yf) / (2 * m.sum()), w_fit)
+        *prep, (_, mlp) = clf.steps
+        Xf, Xo = X[fit_i], X[tr[out]]
+        for _, step in prep:
+            Xf = step.fit_transform(Xf)
+            Xo = step.transform(Xo) if out.any() else Xo
+        best, best_ap, stale = None, -1.0, 0
+        for _ in range(MLP_MAX_EPOCHS):
+            mlp.partial_fit(Xf, yf, sample_weight=w_fit, classes=np.array([0, 1]))
+            if not out.any():
+                continue
+            p = mlp.predict_proba(Xo)[:, 1]
+            ap = metrics.group_ap(y[tr[out]], p, chans[out])
+            ap = average_precision_score(y[tr[out]], p) if ap is None else ap
+            if ap > best_ap + 1e-4:
+                best, best_ap, stale = pickle.dumps(mlp), ap, 0
+            else:
+                stale += 1
+                if stale >= MLP_PATIENCE:
+                    break
+        if best is not None:
+            clf.steps[-1] = (clf.steps[-1][0], pickle.loads(best))
 
     def _balance_groups(self, r: dict) -> set[str]:
         """Groupes de rééquilibrage d'une frame (voir BALANCE_GROUPS)."""

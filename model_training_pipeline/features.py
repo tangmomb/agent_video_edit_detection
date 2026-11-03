@@ -9,7 +9,12 @@ Vues :
           pour mieux voir les petits overlays ;
 - bands : l'image entière + son tiers bas + son tiers haut (pleine largeur, étirés en carré),
           concaténés (3x la dimension) : bandeaux de nom, sous-titres et titres y pèsent plus que
-          dans l'image entière, où la scène domine (un plan de conférence brut pris pour monté).
+          dans l'image entière, où la scène domine (un plan de conférence brut pris pour monté) ;
+- quads : les 4 quadrants seuls (4x), et tb : le tiers bas + le tiers haut seuls (2x). Sans
+          l'image entière, pour la combiner avec full sans l'avoir deux fois (full + grid2 la
+          doublait). Pas de cache propre : tranches de grid2 et bands, sans leur image entière.
+          Proposées à l'agent à la place de grid2 et bands (03/11/2026), gardées pour les
+          anciennes expériences.
 """
 
 import json
@@ -30,7 +35,9 @@ EXTRACTORS = {
     "dinov2_s": ("dino", "facebook/dinov2-small"),
     "dinov2_b": ("dino", "facebook/dinov2-base"),
 }
-VIEWS = {"full": 1, "grid2": 5, "bands": 3}  # vue -> nombre d'images par frame
+VIEWS = {"full": 1, "grid2": 5, "bands": 3, "quads": 4, "tb": 2}  # vue -> nombre d'images par frame
+AGENT_VIEWS = ("full", "quads", "tb")
+DERIVED = {"quads": "grid2", "tb": "bands"}  # vue -> vue en cache dont elle est la fin
 INPUT = 224
 
 _encoders: dict = {}
@@ -67,11 +74,11 @@ def _encoder(name: str, device: str):
 
 
 def _views(img: Image.Image, view: str) -> list[Image.Image]:
-    crops = [img]
+    crops = [] if view in DERIVED else [img]
     w, h = img.size
-    if view == "grid2":
+    if view in ("grid2", "quads"):
         crops += [img.crop((x, y, x + w // 2, y + h // 2)) for y in (0, h // 2) for x in (0, w // 2)]
-    elif view == "bands":
+    elif view in ("bands", "tb"):
         crops += [img.crop((0, h - h // 3, w, h)), img.crop((0, 0, w, h // 3))]
     return [c.resize((INPUT, INPUT), Image.BICUBIC) for c in crops]
 
@@ -104,7 +111,11 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
     vidéo en clip_b32:full)."""
     if extractor not in EXTRACTORS or view not in VIEWS:
         raise ValueError(f"embedding inconnu : {extractor}:{view} ; extracteurs {', '.join(EXTRACTORS)}, "
-                         f"vues {', '.join(VIEWS)} (grid2 couvre les coins)")
+                         f"vues {', '.join(AGENT_VIEWS)} (quads couvre les coins)")
+    if view in DERIVED:
+        parent = DERIVED[view]
+        base = get_features(rows, extractor, parent, frames_dir, batch_size)
+        return None if base is None else base[:, base.shape[1] // VIEWS[parent]:]
     cdir = _cache_dir(frames_dir, extractor, view)
     cdir.mkdir(parents=True, exist_ok=True)
     by_sample: dict[str, list[int]] = defaultdict(list)
@@ -145,6 +156,9 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
 
 
 def extraction_cost(extractor: str, view: str, frames_dir: Path = FRAMES_DIR) -> float | None:
+    if view in DERIVED:  # au prorata des images encodées
+        parent = extraction_cost(extractor, DERIVED[view], frames_dir)
+        return None if parent is None else parent * VIEWS[view] / VIEWS[DERIVED[view]]
     meta = _cache_dir(frames_dir, extractor, view) / "meta.json"
     return json.loads(meta.read_text())["ms_per_frame"] if meta.exists() else None
 
@@ -161,7 +175,7 @@ def precompute(extractors: list[str] | None = None, views: list[str] | None = No
     labeled = [r for r in rows if r["label_any"] is not None]
     out = []
     for ext in extractors or list(EXTRACTORS):
-        for view in views or list(VIEWS):
+        for view in views or list(AGENT_VIEWS):
             want = rows if (ext, view) == SKIP_FEATURES else labeled
             print(f"[features] {ext}:{view} : {len(want)} images…", flush=True)
             t0 = time.time()

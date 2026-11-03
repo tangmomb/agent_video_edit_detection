@@ -21,7 +21,8 @@ import numpy as np
 from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
 
 PRECISION_TARGETS = (0.9, 0.95, 0.99)
-DEFAULT_PRECISION = 0.95
+# 0.95 jusqu'au 03/11/2026 : à 90 %, exp_151 passait de 85,9 à 91,3 % de rappel val (40 -> 99 FP).
+DEFAULT_PRECISION = 0.9
 BOOTSTRAP_DRAWS = 200
 BOOTSTRAP_QUANTILE = 80  # centile des seuils tirés : plus haut = plus prudent
 

@@ -15,7 +15,7 @@ Chaque run part de base/data, sans collecte (--data-budget 0), avec le même bud
 budget large teste la qualité pure, le coût réel est noté à côté. La note vient du jeu caché : le
 modèle de production choisi en fin de run (production.json) y est mesuré au seuil fixé sur val,
 avec les mêmes embeddings qu'à l'entraînement : rappel et précision à ce seuil (la précision
-visée tient-elle sur des chaînes jamais vues ?), AP, et rappel idéal à 95 % (meilleur seuil
+visée tient-elle sur des chaînes jamais vues ?), AP, et rappel idéal à 90 % (meilleur seuil
 possible sur le jeu caché : qualité du modèle sans l'erreur de seuil). Le comportement vient de pipeline.json (coût,
 durée, outils en échec, expériences, test final). Les images sont des liens physiques vers le
 dataset (jamais réécrites) ; les fichiers texte, réécrits par le labo, sont copiés.
@@ -37,7 +37,7 @@ BENCH_DIR = ROOT / "bench"
 MODELS = ["anthropic/claude-haiku-5-5", "mistral/deepseek-v4-1-flash-1017", "mistral/mistral-large-4-0", "mistral/mistral-large-2512",
           "mistral/zai-glm-5-3-flash", "openai/gpt-5.6-luna", "openai/gpt-6-luna"]
 GOAL = "Lance une session d'amélioration du classifieur d'ajouts de montage."
-TARGET = 0.95  # précision visée (metrics.DEFAULT_PRECISION, sans importer sklearn ici)
+TARGET = 0.9  # précision visée (metrics.DEFAULT_PRECISION, sans importer sklearn ici)
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
