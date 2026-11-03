@@ -18,6 +18,8 @@ def main() -> None:
                         "(ex. openai/gpt-5.6-luna, anthropic/claude-haiku-5-5) ; défaut : mistral/mistral-large-4-0")
     p.add_argument("--direct-annotation", action="store_true",
                    help="annotation en appels directs (prix plein, sans attente) au lieu des batchs (-50 %%)")
+    p.add_argument("--direct-agents", action="store_true",
+                   help="agents en appels directs (prix plein, sans attente) au lieu des batchs Mistral (-50 %%)")
     a = p.parse_args()
     # Des votes encore dans des batchs : le dataset que verraient les agents serait incomplet.
     pending = batch.in_flight()
@@ -25,7 +27,7 @@ def main() -> None:
         raise SystemExit(f"{len(pending)} batch(s) d'annotation pas encore récupéré(s) : lance d'abord "
                          "`python -m model_training_pipeline batch collect` (batch status pour suivre).")
     run(a.goal, a.budget_usd, a.data_budget, a.final_tests, a.annotation_usd, model=a.agent_model,
-        direct_annotation=a.direct_annotation)
+        direct_annotation=a.direct_annotation, direct_agents=a.direct_agents)
 
 
 if __name__ == "__main__":

@@ -151,12 +151,17 @@ def _supports_reasoning(model: str) -> bool:
 
 class Session:
     def __init__(self, budget_usd: float, completion=None, run_dir: Path | None = None, verbose: bool = True,
-                 params: dict | None = None, report_reserve_usd: float | None = None, model: str | None = None):
+                 params: dict | None = None, report_reserve_usd: float | None = None, model: str | None = None,
+                 batch_agents: bool = False):
         if completion is None:
             import litellm
             litellm.suppress_debug_info = True
             completion = litellm.completion  # clés lues dans l'environnement (.env : MISTRAL_API_KEY…)
+            if batch_agents:
+                from .batch_agents import completion as in_batch
+                completion = in_batch(completion)
         self.completion = completion
+        self.batch_agents = batch_agents
         self.model = model  # même modèle pour tous les agents ; None : celui de chaque agent
         if model:
             price(model)
@@ -189,8 +194,12 @@ class Session:
         """Le budget hors réserve est consommé : plus de délégation, place au rapport final."""
         return self.spent >= self.budget_usd - self.reserve_usd
 
-    @staticmethod
-    def _cost(model: str, tokens: dict) -> float:
+    def _cost(self, model: str, tokens: dict) -> float:
+        if self.batch_agents and model.startswith("mistral/"):
+            from .batch_agents import DISCOUNT
+            # Facture du cache en batch non vérifiée : pire cas, sans tarif cache (batch_agents.py).
+            p = price(model)
+            return (tokens["input"] * p["input"] + tokens["output"] * p["output"]) * DISCOUNT / 1e6
         p = price(model)
         cached = tokens["cached_input"] if "cached_input" in p else 0
         return ((tokens["input"] - cached) * p["input"] + cached * p.get("cached_input", 0)

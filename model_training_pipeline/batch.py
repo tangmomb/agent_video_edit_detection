@@ -206,7 +206,10 @@ def heartbeat() -> None:
     """Signal de vie pendant l'attente d'un batch : le journal du run ne bouge plus, parfois des
     heures ; les interfaces lisent cette date pour ne pas le croire interrompu."""
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.touch()
+    if STATE.exists():
+        STATE.touch()
+    else:  # jamais un fichier vide : _load le relit en JSON
+        STATE.write_text("{}", encoding="utf-8")
 
 
 def wait(job_ids: set[str], every_s: float = 180, apis: dict | None = None) -> None:
