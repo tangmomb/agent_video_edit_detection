@@ -8,7 +8,6 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/srv/agent_mots_cles
 Environment=INTERFACE_PROXIED=1
-Environment=HF_HOME=/srv/agent_mots_cles/.cache/huggingface
 ExecStart=/srv/agent_mots_cles/.venv/bin/python interface/%i/server.py
 Restart=always
 RestartSec=5
