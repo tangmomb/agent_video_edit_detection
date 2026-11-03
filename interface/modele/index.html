@@ -6,185 +6,232 @@
 <title>Détecteur d'ajouts</title>
 <style>
 :root {
-  --bg: #f6f5f2; --panel: #ffffff; --fg: #1c1c1e; --muted: #6e6e73; --line: #dedcd6;
-  --soft: #efede8; --accent: #e5402d; --accent-soft: #fde4df; --ok: #2f7d4f; --bar: #c9c6be;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141416; --panel: #1d1d20; --fg: #ececee; --muted: #9a9aa1; --line: #33333a;
-    --soft: #26262b; --accent: #ff6a55; --accent-soft: #3b211d; --ok: #5cc48a; --bar: #4a4a52;
-  }
+  color-scheme: dark;
+  --bg: #141416; --panel: #1d1d20; --sunk: #252529; --fg: #ececee; --muted: #a2a2a8;
+  --faint: #6e6e75; --line: #333338;
+  --hit: #ff7a5c; --hit-soft: color-mix(in srgb, var(--hit) 16%, transparent);
+  --info: #8aa6ff; --bar: #4a4a52;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 64px; }
-header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
-h1 { font-size: 22px; margin: 0; }
-.model { color: var(--muted); font-size: 13px; }
-.model b { color: var(--fg); font-weight: 600; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-#drop { border: 2px dashed var(--line); border-radius: 12px; padding: 36px 16px; text-align: center;
-  cursor: pointer; transition: border-color .15s, background .15s; background: var(--panel); }
-#drop.over { border-color: var(--accent); background: var(--accent-soft); }
-#drop strong { display: block; font-size: 16px; margin-bottom: 4px; }
+code { font: 12.5px ui-monospace, "Cascadia Code", Consolas, monospace; background: var(--sunk);
+  padding: 1px 6px; border-radius: 5px; color: var(--fg); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- en-tête ---------- */
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--hit); }
+h1 { font-size: 26px; margin: 2px 0 4px; letter-spacing: -.01em; }
+.lede { color: var(--muted); margin: 0 0 18px; max-width: 760px; }
+.model-card { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px;
+  background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.model-card > div { background: var(--panel); padding: 10px 14px; min-width: 0; }
+.model-card .k { font-size: 11.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.model-card .v { font-size: 16px; font-weight: 650; margin-top: 2px; overflow-wrap: anywhere; }
+.model-card .s { font-size: 12.5px; color: var(--muted); }
+#model-err { color: var(--hit); font-size: 14px; }
+
+/* ---------- dépôt ---------- */
+#drop { margin-top: 20px; border: 2px dashed var(--line); border-radius: 14px; padding: 40px 16px;
+  text-align: center; cursor: pointer; background: var(--panel);
+  transition: border-color .15s, background .15s, padding .15s; }
+#drop:hover, #drop:focus-visible { border-color: var(--muted); outline: none; }
+#drop.over { border-color: var(--hit); background: var(--hit-soft); }
+#drop .icon { font-size: 28px; line-height: 1; margin-bottom: 8px; }
+#drop strong { display: block; font-size: 16px; margin-bottom: 2px; }
 #drop span { color: var(--muted); font-size: 14px; }
-#status { margin: 14px 0 0; color: var(--muted); min-height: 1.5em; }
-#status.err { color: var(--accent); }
+#drop.compact { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  padding: 10px 14px; text-align: left; border-width: 1px; border-style: solid; }
+#drop.compact .icon { display: none; }
+#drop.compact strong { font-size: 14px; margin: 0; }
+#drop.compact span { font-size: 13px; }
+#drop .again { display: none; }
+#drop.compact .again { display: inline-block; white-space: nowrap; }
+#drop.compact .first { display: none; }
+#status { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+#status:empty { display: none; }
+#status.err { color: var(--hit); }
 .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line);
-  border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+  border-top-color: var(--hit); border-radius: 50%; animation: spin .8s linear infinite;
   vertical-align: -2px; margin-right: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-#results { display: none; margin-top: 18px; }
-.top { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
-@media (max-width: 820px) { .top { grid-template-columns: 1fr; } }
-video { width: 100%; max-height: 420px; background: #000; border-radius: 8px; display: block; }
-.stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.stat { background: var(--soft); border-radius: 8px; padding: 8px 12px; min-width: 110px; }
-.stat .v { font-size: 20px; font-weight: 650; }
-.stat .k { font-size: 12px; color: var(--muted); }
-h2 { font-size: 14px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-#segments { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
-#segments li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px;
-  border-radius: 6px; cursor: pointer; font-variant-numeric: tabular-nums; }
-#segments li:hover { background: var(--soft); }
-#segments .p { color: var(--muted); font-size: 13px; }
-.empty { color: var(--muted); font-size: 14px; }
-.controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0 10px; }
-.controls label { font-size: 14px; color: var(--muted); }
-input[type=range] { width: 220px; accent-color: var(--accent); }
-#thr-val { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 46px; display: inline-block; }
-button, .seg button { font: inherit; font-size: 13px; padding: 5px 11px; border: 1px solid var(--line);
-  background: var(--panel); color: var(--fg); border-radius: 6px; cursor: pointer; }
+
+/* ---------- résultats ---------- */
+#results { display: none; margin-top: 16px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+#results > .panel { margin-top: 16px; }
+h2 { font-size: 12px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+h2 .count { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--faint); font-size: 12.5px; }
+.top { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .top { grid-template-columns: 1fr; } }
+.video-panel { padding: 10px; }
+video { width: 100%; max-height: 440px; background: #000; border-radius: 8px; display: block; }
+
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+@media (max-width: 520px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { background: var(--sunk); border-radius: 9px; padding: 9px 11px; min-width: 0; }
+.tile .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .meter { height: 4px; border-radius: 2px; background: var(--line); margin-top: 6px; overflow: hidden; }
+.tile .meter i { display: block; height: 100%; background: var(--hit); border-radius: 2px; }
+
+#segments { list-style: none; margin: 0; padding: 0; max-height: 230px; overflow: auto; }
+#segments li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 7px; cursor: pointer; font-variant-numeric: tabular-nums; font-size: 14px; }
+#segments li:hover { background: var(--sunk); }
+#segments .where { position: relative; height: 6px; border-radius: 3px; background: var(--sunk); }
+#segments li:hover .where { background: var(--line); }
+#segments .where i { position: absolute; top: 0; bottom: 0; background: var(--hit); border-radius: 3px; min-width: 3px; }
+#segments .p { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.empty { color: var(--muted); font-size: 14px; padding: 6px 8px; }
+
+/* ---------- frise ---------- */
+.controls { display: flex; align-items: center; gap: 12px 18px; flex-wrap: wrap; margin-bottom: 14px; }
+.thr { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.thr label { font-size: 13px; color: var(--muted); }
+.slider { position: relative; width: 240px; }
+input[type=range] { width: 100%; accent-color: var(--hit); margin: 0; display: block; }
+#thr-mark { position: absolute; top: -6px; width: 2px; height: 6px; background: var(--fg); opacity: .7;
+  pointer-events: none; transform: translateX(-1px); }
+#thr-val { font-variant-numeric: tabular-nums; font-weight: 650; min-width: 46px; display: inline-block; }
+button { font: inherit; font-size: 13px; padding: 5px 11px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--fg); border-radius: 7px; cursor: pointer; }
 button:hover { border-color: var(--muted); }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
-.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-left: auto; }
+.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line); background: var(--panel); }
 .seg button:last-child { border-right: 0; }
 .seg button.on { background: var(--fg); color: var(--bg); }
-#timeline { position: relative; height: 64px; display: flex; align-items: flex-end; gap: 1px;
-  background: var(--soft); border-radius: 8px; padding: 4px; cursor: pointer; }
-#timeline .b { flex: 1 1 0; min-width: 1px; background: var(--bar); border-radius: 2px 2px 0 0; }
-#timeline .b.on { background: var(--accent); }
-#timeline .b.cur { outline: 2px solid var(--fg); }
-#thr-line { position: absolute; left: 4px; right: 4px; border-top: 1px dashed var(--fg); opacity: .55;
+@media (max-width: 620px) { .seg { margin-left: 0; } }
+
+#timeline { position: relative; height: 84px; display: flex; align-items: flex-end; gap: 1px;
+  background: var(--sunk); border-radius: 8px; padding: 6px 6px 4px; cursor: pointer; }
+#timeline .b { flex: 1 1 0; min-width: 0; background: var(--bar); border-radius: 2px 2px 0 0; }
+#timeline .b.on { background: var(--hit); }
+#timeline .b.cur { box-shadow: 0 0 0 2px var(--fg); }
+@media (max-width: 620px) { #timeline { gap: 0; } }
+#thr-line { position: absolute; left: 6px; right: 6px; border-top: 1px dashed var(--fg); opacity: .55;
   pointer-events: none; }
-.axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
-#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-top: 14px; }
-.card { border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: var(--panel);
-  cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
-.card.on { border-color: var(--accent); box-shadow: none; }
-.card.cur { outline: 2px solid var(--fg); outline-offset: 2px; }
+#thr-line span { position: absolute; right: 0; top: -17px; font-size: 11px; color: var(--muted);
+  background: var(--sunk); padding: 0 4px; border-radius: 3px; }
+#playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--info); opacity: 0;
+  pointer-events: none; transition: left .2s linear; }
+#playhead.on { opacity: .9; }
+.axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint);
+  margin-top: 4px; font-variant-numeric: tabular-nums; }
+.hint { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+
+/* ---------- images ---------- */
+#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; }
+@media (max-width: 520px) { #grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+.card { border-radius: 10px; overflow: hidden; background: var(--sunk); cursor: pointer;
+  box-shadow: 0 0 0 1px var(--line); transition: box-shadow .12s; }
+.card:hover { box-shadow: 0 0 0 1px var(--muted); }
+.card.on { box-shadow: 0 0 0 2px var(--hit); }
+.card.cur { outline: 2px solid var(--fg); outline-offset: 3px; }
 .card img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
-.card .meta { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px;
-  font-size: 13px; font-variant-numeric: tabular-nums; }
-.badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; }
-.card.on .badge { background: var(--accent); color: #fff; }
-.card:not(.on) .badge { background: var(--soft); color: var(--muted); }
-.hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
-#truth { display: none; gap: 1px; padding: 0 4px; margin-top: 3px; height: 8px; }
-#truth .c { flex: 1 1 0; min-width: 1px; background: var(--soft); border-radius: 1px; }
-#truth .c.on { background: var(--ok); }
-#annot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
-#annot-status { font-size: 13px; color: var(--muted); }
-#annot-status.err { color: var(--accent); }
-#cmp { display: none; }
-.card.miss { border-color: #d98a1f; box-shadow: none; }
-.card.fa { border-color: #7a5bd6; box-shadow: none; }
-.card .ref { display: flex; justify-content: space-between; align-items: center; gap: 6px;
-  padding: 0 8px 7px; font-size: 12px; color: var(--muted); }
-.card .ref button { font-size: 11px; padding: 1px 7px; }
-.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
-.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.card .meta { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px;
+  padding: 7px 9px 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.card .pbar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.card .pbar i { display: block; height: 100%; background: var(--bar); }
+.card.on .pbar i { background: var(--hit); }
+.badge { font-size: 11px; font-weight: 650; padding: 1px 7px; border-radius: 10px; }
+.card.on .badge { background: var(--hit); color: #1a0d09; }
+.card:not(.on) .badge { background: var(--panel); color: var(--muted); }
+.card .p { color: var(--muted); font-size: 12px; padding: 0 9px 7px; }
 </style>
 </head>
 <body>
 <main>
   <header>
+    <div class="eyebrow">Modèle en production</div>
     <h1>Détecteur d'ajouts de montage</h1>
-    <div class="model" id="model">chargement du modèle…</div>
+    <p class="lede">Envoie une vidéo : le modèle note une image par seconde et signale celles qui ont un
+      ajout de montage (texte, logo, bandeau, incrustation…). Le seuil peut se déplacer pour voir ce
+      qui change.</p>
+    <div class="model-card" id="model"><div><div class="k">Modèle</div><div class="v">chargement…</div></div></div>
   </header>
 
-  <div id="drop" tabindex="0">
-    <strong>Dépose une vidéo ici</strong>
-    <span>ou clique pour en choisir une (mp4, mov, webm…)</span>
+  <div id="drop" tabindex="0" role="button" aria-label="Choisir une vidéo à analyser">
+    <div class="icon">🎞</div>
+    <div>
+      <strong id="drop-title">Dépose une vidéo ici</strong>
+      <span class="first">ou clique pour en choisir une (mp4, mov, webm…)</span>
+      <span class="again" id="drop-sub"></span>
+    </div>
+    <button class="again" type="button" tabindex="-1">Analyser une autre vidéo</button>
     <input type="file" id="file" accept="video/*" hidden>
   </div>
   <div id="status"></div>
 
   <section id="results">
     <div class="top">
-      <div class="panel"><video id="video" controls muted></video></div>
+      <div class="panel video-panel"><video id="video" controls muted preload="metadata"></video></div>
       <div class="panel">
-        <div class="stats">
-          <div class="stat"><div class="v" id="s-flag">–</div><div class="k">images avec ajout</div></div>
-          <div class="stat"><div class="v" id="s-share">–</div><div class="k">de la vidéo</div></div>
-          <div class="stat"><div class="v" id="s-time">–</div><div class="k">temps d'analyse</div></div>
+        <h2>Résumé <span class="count">au seuil courant</span></h2>
+        <div class="tiles">
+          <div class="tile"><div class="v" id="s-flag">–</div><div class="k">images avec ajout</div></div>
+          <div class="tile"><div class="v" id="s-share">–</div><div class="k">de la vidéo</div>
+            <div class="meter"><i id="s-share-bar"></i></div></div>
+          <div class="tile"><div class="v" id="s-time">–</div><div class="k">temps d'analyse</div></div>
         </div>
-        <div class="stats" id="cmp">
-          <div class="stat"><div class="v" id="c-recall">–</div><div class="k">rappel vs étiquettes</div></div>
-          <div class="stat"><div class="v" id="c-prec">–</div><div class="k">précision vs étiquettes</div></div>
-          <div class="stat"><div class="v" id="c-miss">–</div><div class="k">ajouts ratés</div></div>
-          <div class="stat"><div class="v" id="c-fa">–</div><div class="k">fausses alertes</div></div>
-        </div>
-        <h2>Passages détectés</h2>
+        <h2>Passages détectés <span class="count" id="seg-count"></span></h2>
         <ul id="segments"></ul>
       </div>
     </div>
 
-    <div class="controls">
-      <label for="thr">Seuil</label>
-      <input type="range" id="thr" min="0" max="1" step="0.005">
-      <span id="thr-val"></span>
-      <button id="thr-reset" title="Seuil choisi sur val pour la précision visée">Seuil du modèle</button>
-      <div class="seg" id="filter">
-        <button data-f="all" class="on">Toutes</button>
-        <button data-f="on">Avec ajout</button>
-        <button data-f="off">Sans ajout</button>
-        <button data-f="diff" id="f-diff" hidden>Désaccords</button>
+    <div class="panel">
+      <div class="controls">
+        <div class="thr">
+          <label for="thr">Seuil</label>
+          <div class="slider"><input type="range" id="thr" min="0" max="1" step="0.005"><div id="thr-mark" title="seuil du modèle"></div></div>
+          <span id="thr-val"></span>
+          <button id="thr-reset" title="Seuil choisi sur val pour la précision visée">Seuil du modèle</button>
+        </div>
+        <div class="seg" id="filter">
+          <button data-f="all" class="on">Toutes</button>
+          <button data-f="on">Avec ajout</button>
+          <button data-f="off">Sans ajout</button>
+        </div>
       </div>
+      <div id="timeline"><div id="thr-line"><span>seuil</span></div><div id="playhead"></div></div>
+      <div class="axis"><span>0:00</span><span id="axis-mid"></span><span id="axis-end"></span></div>
+      <div class="hint">Une barre par image (1 par seconde), hauteur = probabilité d'ajout ; en couleur
+        au-dessus du seuil. Clique pour aller à cet instant de la vidéo.</div>
     </div>
 
-    <div id="timeline"><div id="thr-line"></div></div>
-    <div id="truth"></div>
-    <div class="axis"><span>0:00</span><span id="axis-end"></span></div>
-    <div class="hint">Une barre par image analysée (1 par seconde), hauteur = probabilité d'ajout. Clique pour aller à l'instant dans la vidéo.</div>
-
-    <div id="annot">
-      <button id="annot-btn">Annoter avec Mistral Large 4</button>
-      <span id="annot-status">Appel payant, plafonné à 0,50 $ par vidéo. Les étiquettes servent à mesurer le modèle sur du réel, jamais à l'entraîner.</span>
+    <div class="panel">
+      <h2>Images <span class="count" id="grid-count"></span></h2>
+      <div id="grid"></div>
     </div>
-    <div class="legend" id="legend" hidden>
-      <span><i style="background: var(--ok)"></i>étiquette : ajout (bande sous la frise)</span>
-      <span><i style="background: #d98a1f"></i>ajout raté par le modèle</span>
-      <span><i style="background: #7a5bd6"></i>fausse alerte du modèle</span>
-    </div>
-
-    <div id="grid"></div>
   </section>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let model = null, data = null, threshold = 0.5, filter = "all", cur = -1, labels = null;
-// Étiquette retenue d'une image : la correction manuelle si elle existe, sinon celle des annotateurs
-// (null : désaccord des annotateurs, image non comptée dans la comparaison).
-const truth = (i) => labels && (labels.frames[i].manuel ?? labels.frames[i].ajout);
-const known = (i) => labels && i < labels.frames.length && truth(i) !== null;
+let model = null, data = null, threshold = 0.5, filter = "all", cur = -1;
 
 const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
-const pct = (x) => `${Math.round(x * 1000) / 10} %`;
+const pct = (x) => `${(Math.round(x * 1000) / 10).toLocaleString("fr-FR")} %`;
+const dec = (x, n = 3) => x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n });
 
 fetch("/api/model").then((r) => r.json()).then((m) => {
   model = m;
   threshold = m.threshold;
-  const test = m.test ? ` · test : précision <b>${pct(m.test.precision)}</b>, rappel <b>${pct(m.test.recall)}</b>` : "";
-  $("model").innerHTML = `modèle <b>${m.experiment_id}</b> · ${m.features.join(" + ")}`
-    + ` · ${m.model} · seuil <b>${m.threshold.toFixed(3)}</b> (précision visée ${pct(m.precision_visee)})${test} · ${m.device}`;
-}).catch(() => { $("model").textContent = "serveur injoignable"; });
+  const tile = (k, v, s = "") => `<div><div class="k">${k}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
+  $("model").innerHTML = tile("Modèle", m.experiment_id, `${m.model} · ${m.split_id || ""}`)
+    + tile("Embeddings", m.features.map((f) => `<code>${f}</code>`).join(" "))
+    + tile("Seuil", dec(m.threshold), `précision visée ${pct(m.precision_visee)}`)
+    + (m.test ? tile("Test", `${pct(m.test.precision)}`, `précision · rappel ${pct(m.test.recall)}`) : "")
+    + tile("Calcul", m.device === "cuda" ? "GPU" : "CPU", m.device);
+  if (data) render();
+}).catch(() => { $("model").innerHTML = '<div><span id="model-err">Serveur du modèle injoignable.</span></div>'; });
 
 const drop = $("drop"), input = $("file");
 drop.onclick = () => input.click();
-drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") input.click(); };
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } };
 input.onchange = () => input.files[0] && analyze(input.files[0]);
 ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
@@ -195,23 +242,40 @@ async function analyze(file) {
   st.className = "";
   st.innerHTML = `<span class="spinner"></span>Analyse de « ${file.name} » : extraction des images et passage dans le modèle…`;
   $("results").style.display = "none";
-  $("video").src = URL.createObjectURL(file);
   try {
     const r = await fetch("/api/analyze", { method: "POST", body: file,
       headers: { "X-Filename": encodeURIComponent(file.name) } });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.statusText);
-    data = j;
-    setLabels(null);
-    st.textContent = "";
-    $("thr").value = threshold;
-    $("results").style.display = "block";
-    buildTimeline();
-    render();
+    show(j, URL.createObjectURL(file), file.name);
+    history.replaceState(null, "", `#job=${j.job}`);
   } catch (e) {
     st.className = "err";
     st.textContent = `Échec de l'analyse : ${e.message}`;
   }
+}
+
+// Une analyse déjà faite se rouvre par l'adresse (#job=…) : lecture seule, aucun appel payant.
+async function reopen(job) {
+  try {
+    const r = await fetch(`/jobs/${job}/result.json`);
+    if (!r.ok) return;
+    show(await r.json(), `/jobs/${job}/video.mp4`, job);
+  } catch (e) { /* analyse introuvable : on reste sur le dépôt */ }
+}
+
+function show(result, src, name) {
+  data = result;
+  cur = -1;
+  $("video").src = src;
+  $("status").textContent = "";
+  $("thr").value = threshold;
+  $("results").style.display = "block";
+  drop.classList.add("compact");
+  $("drop-title").textContent = name;
+  $("drop-sub").textContent = `${data.frames.length} images · analysé par ${data.model.experiment_id}`;
+  buildTimeline();
+  render();
 }
 
 function buildTimeline() {
@@ -221,58 +285,13 @@ function buildTimeline() {
     const b = document.createElement("div");
     b.className = "b";
     b.style.height = `${Math.max(2, f.prob * 100)}%`;
-    b.title = `${fmt(f.t)} · p = ${f.prob.toFixed(3)}`;
+    b.title = `${fmt(f.t)} · p = ${dec(f.prob)}`;
     b.onclick = (e) => { e.stopPropagation(); seek(i); };
     tl.appendChild(b);
   });
-  const last = data.frames[data.frames.length - 1];
-  $("axis-end").textContent = fmt(last ? last.t : 0);
-}
-
-function setLabels(l) {
-  labels = l;
-  const has = !!labels;
-  $("cmp").style.display = has ? "flex" : "none";
-  $("truth").style.display = has ? "flex" : "none";
-  $("legend").hidden = !has;
-  $("f-diff").hidden = !has;
-  $("annot-btn").hidden = has;
-  const tr = $("truth");
-  tr.innerHTML = "";
-  if (has) {
-    data.frames.forEach(() => tr.appendChild(Object.assign(document.createElement("div"), { className: "c" })));
-    const done = labels.frames.length, total = data.frames.length;
-    $("annot-status").className = "";
-    $("annot-status").textContent = `Étiquettes ${labels.model} · ${labels.cost_usd.toFixed(3)} $`
-      + (labels.complete ? "" : ` · incomplètes (${done} / ${total} images, plafond atteint)`)
-      + " · clique « corriger » sur une image pour inverser son étiquette.";
-  }
-}
-
-async function annotate() {
-  const st = $("annot-status"), btn = $("annot-btn");
-  btn.disabled = true;
-  st.className = "";
-  st.innerHTML = `<span class="spinner"></span>Annotation des ${data.frames.length} images par les 3 LLM annotateurs…`;
-  try {
-    const r = await fetch("/api/annotate", { method: "POST", body: JSON.stringify({ job: data.job }) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || r.statusText);
-    setLabels(j);
-    render();
-  } catch (e) {
-    st.className = "err";
-    st.textContent = `Échec de l'annotation : ${e.message}`;
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-async function correct(i) {
-  const f = labels.frames[i], want = !truth(i);
-  const r = await fetch("/api/label", { method: "POST",
-    body: JSON.stringify({ job: data.job, i, value: want === f.ajout ? null : want }) });
-  if (r.ok) { setLabels(await r.json()); render(); }
+  const last = data.frames[data.frames.length - 1], end = last ? last.t : 0;
+  $("axis-mid").textContent = fmt(end / 2);
+  $("axis-end").textContent = fmt(end);
 }
 
 function segments() {
@@ -288,64 +307,48 @@ function segments() {
 
 function render() {
   const frames = data.frames, on = frames.map((f) => f.prob >= threshold);
-  const n = on.filter(Boolean).length;
-  $("thr-val").textContent = threshold.toFixed(3);
+  const n = on.filter(Boolean).length, share = frames.length ? n / frames.length : 0;
+  $("thr-val").textContent = dec(threshold);
+  if (model) $("thr-mark").style.left = `${model.threshold * 100}%`;
   $("s-flag").textContent = `${n} / ${frames.length}`;
-  $("s-share").textContent = frames.length ? pct(n / frames.length) : "–";
-  $("s-time").textContent = `${data.duration_s.toFixed(1)} s`;
+  $("s-share").textContent = frames.length ? pct(share) : "–";
+  $("s-share-bar").style.width = `${share * 100}%`;
+  $("s-time").textContent = `${dec(data.duration_s, 1)} s`;
 
   const tl = $("timeline"), bars = tl.querySelectorAll(".b");
   bars.forEach((b, i) => { b.classList.toggle("on", on[i]); b.classList.toggle("cur", i === cur); });
-  $("thr-line").style.bottom = `calc(4px + ${threshold} * (100% - 8px))`;
+  $("thr-line").style.bottom = `calc(4px + ${threshold} * (100% - 10px))`;
 
-  // Comparaison aux étiquettes, au seuil courant (images annotées seulement).
-  const n_lab = labels ? labels.frames.length : 0;
-  const err = frames.map((f, i) => !known(i) ? "" : truth(i) && !on[i] ? "miss" : !truth(i) && on[i] ? "fa" : "");
-  if (labels) {
-    $("truth").querySelectorAll(".c").forEach((c, i) => c.classList.toggle("on", i < n_lab && truth(i) === true));
-    let tp = 0, fp = 0, fn = 0;
-    for (let i = 0; i < n_lab; i++) {
-      if (!known(i)) continue;
-      if (on[i] && truth(i)) tp++; else if (on[i]) fp++; else if (truth(i)) fn++;
-    }
-    $("c-recall").textContent = tp + fn ? pct(tp / (tp + fn)) : "–";
-    $("c-prec").textContent = tp + fp ? pct(tp / (tp + fp)) : "–";
-    $("c-miss").textContent = `${fn} / ${tp + fn}`;
-    $("c-fa").textContent = `${fp}`;
-  }
-
-  const segs = segments(), ul = $("segments");
+  const segs = segments(), ul = $("segments"), total = frames.length;
+  $("seg-count").textContent = segs.length ? `${segs.length}` : "";
   ul.innerHTML = segs.length ? "" : '<li class="empty">Aucun ajout détecté à ce seuil.</li>';
   segs.forEach((s) => {
     const li = document.createElement("li");
     const a = frames[s.start].t, b = frames[s.end].t + 1 / data.fps;
-    li.innerHTML = `<span>${fmt(a)} → ${fmt(b)}</span><span class="p">${s.end - s.start + 1} image(s) · max ${s.max.toFixed(2)}</span>`;
+    const left = (s.start / total) * 100, width = ((s.end - s.start + 1) / total) * 100;
+    li.innerHTML = `<span>${fmt(a)} → ${fmt(b)}</span>
+      <span class="where"><i style="left:${left}%;width:${width}%"></i></span>
+      <span class="p">${s.end - s.start + 1} img · max ${dec(s.max, 2)}</span>`;
     li.onclick = () => seek(s.start);
     ul.appendChild(li);
   });
 
   const grid = $("grid");
   grid.innerHTML = "";
+  let shown = 0;
   frames.forEach((f, i) => {
-    if ((filter === "on" && !on[i]) || (filter === "off" && on[i]) || (filter === "diff" && !err[i])) return;
+    if ((filter === "on" && !on[i]) || (filter === "off" && on[i])) return;
+    shown++;
     const c = document.createElement("div");
-    c.className = "card" + (on[i] ? " on" : "") + (i === cur ? " cur" : "") + (err[i] ? ` ${err[i]}` : "");
-    let ref = "";
-    if (labels && i < n_lab) {
-      const l = labels.frames[i], who = l.manuel === null ? "LLM" : "corrigé";
-      const what = truth(i) === null ? "désaccord" : truth(i) ? `ajout${l.manuel === null && l.types.length ? ` (${l.types.join(", ")})` : ""}` : "rien";
-      ref = `<div class="ref" title="${(l.description || "").replace(/"/g, "&quot;")}"><span>${who} : ${what}</span>
-        <button data-fix="${i}">corriger</button></div>`;
-    }
+    c.className = "card" + (on[i] ? " on" : "") + (i === cur ? " cur" : "");
     c.innerHTML = `<img loading="lazy" src="${f.url}" alt="image à ${fmt(f.t)}">
-      <div class="meta"><span>${fmt(f.t)}</span><span>p ${f.prob.toFixed(2)}</span>
-      <span class="badge">${on[i] ? "ajout" : "rien"}</span></div>${ref}`;
-    c.onclick = (e) => {
-      const fix = e.target.closest("[data-fix]");
-      if (fix) { e.stopPropagation(); correct(i); } else seek(i);
-    };
+      <div class="meta"><span>${fmt(f.t)}</span><span class="pbar"><i style="width:${f.prob * 100}%"></i></span>
+      <span class="badge">${on[i] ? "ajout" : "rien"}</span></div>
+      <div class="p">p = ${dec(f.prob, 2)}</div>`;
+    c.onclick = () => seek(i);
     grid.appendChild(c);
   });
+  $("grid-count").textContent = `${shown} sur ${frames.length}`;
 }
 
 function seek(i) {
@@ -354,10 +357,18 @@ function seek(i) {
   v.currentTime = data.frames[i].t;
   v.pause();
   render();
-  $("video").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  v.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-$("annot-btn").onclick = annotate;
+// Tête de lecture sur la frise, qui suit la vidéo.
+$("video").addEventListener("timeupdate", () => {
+  if (!data || !data.frames.length) return;
+  const last = data.frames[data.frames.length - 1].t + 1 / data.fps;
+  const ph = $("playhead");
+  ph.classList.add("on");
+  ph.style.left = `calc(6px + ${Math.min($("video").currentTime / last, 1)} * (100% - 12px))`;
+});
+
 $("thr").oninput = (e) => { threshold = parseFloat(e.target.value); render(); };
 $("thr-reset").onclick = () => { threshold = model.threshold; $("thr").value = threshold; render(); };
 $("filter").onclick = (e) => {
@@ -372,6 +383,9 @@ $("timeline").onclick = (e) => {
   const i = Math.floor(((e.clientX - r.left) / r.width) * data.frames.length);
   seek(Math.min(Math.max(i, 0), data.frames.length - 1));
 };
+
+const job = new URLSearchParams(location.hash.slice(1)).get("job");
+if (job) reopen(job);
 </script>
 </body>
 </html>

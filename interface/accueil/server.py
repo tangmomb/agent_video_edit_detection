@@ -25,8 +25,8 @@ INTERFACE = HERE.parent
 TOOLS = [
     {"id": "modele", "name": "Modèle en production", "icon": "▶", "url": "http://localhost:8780/",
      "check": "http://localhost:8780/",
-     "desc": "Envoie une vidéo et vois les images où le classifieur détecte un ajout de montage ; annotation "
-             "par les trois LLM et correction à la main. Le modèle met quelques secondes à se charger."},
+     "desc": "Envoie une vidéo et vois les images où le classifieur détecte un ajout de montage, avec un "
+             "seuil réglable. Le modèle met quelques secondes à se charger."},
     {"id": "conversations", "name": "Conversations des runs", "icon": "💬", "url": "http://localhost:8820/",
      "check": "http://localhost:8820/",
      "desc": "Relis un run comme une discussion entre les agents ; clique une bulle pour voir l'appel complet "
@@ -34,8 +34,9 @@ TOOLS = [
     {"id": "agents", "name": "Agents et outils", "icon": "🌳", "url": "/agents_tree.html",
      "desc": "L'arbre des agents, ce que reçoit chaque modèle et des exemples d'appels réels. Régénéré par "
              "interface/agents_tree/agents_tree.py."},
-    {"id": "production", "name": "Choix de la production", "icon": "🏁", "url": "/choix_production.html",
-     "desc": "Comment le code choisit le modèle mis en production à la fin d'un run."},
+    {"id": "production", "name": "Le parcours jusqu'au modèle de production", "icon": "🏁",
+     "url": "/choix_production.html",
+     "desc": "Du split créé par les agents au modèle que le code met en production à la fin d'un run."},
     {"id": "dataset", "name": "Visionneuse du dataset", "icon": "🎞", "url": "http://localhost:8800/",
      "check": "http://localhost:8800/",
      "desc": "Parcours les vidéos du dataset : étiquette et votes des trois annotateurs pour chaque image."},

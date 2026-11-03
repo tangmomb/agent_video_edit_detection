@@ -2,29 +2,15 @@
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Conversations des runs</title>
 <style>
-:root{
-  --side:#ffffff;--side-hover:#f5f6f6;--side-active:#ebedef;--line:#e7e9ea;--fg:#111b21;--muted:#667781;
-  --chat:#f0f2f5;--bubble:#ffffff;--me:#d9fdd3;--sys:#ffffffd9;--sys-fg:#54656f;--code:#f0f2f5;--accent:#00a884;
-  --shadow:0 1px .5px rgba(11,20,26,.13);
-  --orchestrator:#0b7d5a;--dataset_builder:#c4620a;--model_researcher:#7c4dcf;--evaluator:#0a7cb0;--toi:#00a884;
+:root{color-scheme:dark;
+  --side:#111b21;--side-hover:#202c33;--side-active:#2a3942;--line:#222d34;--fg:#e9edef;--muted:#8696a0;
+  --chat:#0b141a;--bubble:#202c33;--me:#005c4b;--sys:#182229;--sys-fg:#8696a0;--code:#111b21;--accent:#00a884;
+  --shadow:0 1px .5px rgba(0,0,0,.4);
+  --orchestrator:#25d366;--dataset_builder:#ffa458;--model_researcher:#b69cff;--evaluator:#5cc4f2;--toi:#00a884;
   --err:#d93a3a;--run:#e89a00;
-  --deleg-bg:#fff8e1;--deleg-line:#f0dfa6;--deleg-fg:#8a6500;
-  --b-orchestrator:#d9fdd3;--b-dataset_builder:#fdecd8;--b-model_researcher:#ede6fc;--b-evaluator:#dcf0fb;
+  --deleg-bg:#2b2611;--deleg-line:#4a4120;--deleg-fg:#e8c55a;
+  --b-orchestrator:#005c4b;--b-dataset_builder:#4a3218;--b-model_researcher:#33284f;--b-evaluator:#173a4d;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --side:#111b21;--side-hover:#202c33;--side-active:#2a3942;--line:#222d34;--fg:#e9edef;--muted:#8696a0;
-  --chat:#0b141a;--bubble:#202c33;--me:#005c4b;--sys:#182229;--sys-fg:#8696a0;--code:#111b21;--accent:#00a884;
-  --shadow:0 1px .5px rgba(0,0,0,.4);
-  --orchestrator:#25d366;--dataset_builder:#ffa458;--model_researcher:#b69cff;--evaluator:#5cc4f2;--toi:#00a884;
-  --deleg-bg:#2b2611;--deleg-line:#4a4120;--deleg-fg:#e8c55a;
-  --b-orchestrator:#005c4b;--b-dataset_builder:#4a3218;--b-model_researcher:#33284f;--b-evaluator:#173a4d}}
-:root[data-theme="dark"]{
-  --side:#111b21;--side-hover:#202c33;--side-active:#2a3942;--line:#222d34;--fg:#e9edef;--muted:#8696a0;
-  --chat:#0b141a;--bubble:#202c33;--me:#005c4b;--sys:#182229;--sys-fg:#8696a0;--code:#111b21;--accent:#00a884;
-  --shadow:0 1px .5px rgba(0,0,0,.4);
-  --orchestrator:#25d366;--dataset_builder:#ffa458;--model_researcher:#b69cff;--evaluator:#5cc4f2;--toi:#00a884;
-  --deleg-bg:#2b2611;--deleg-line:#4a4120;--deleg-fg:#e8c55a;
-  --b-orchestrator:#005c4b;--b-dataset_builder:#4a3218;--b-model_researcher:#33284f;--b-evaluator:#173a4d}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden}
 body{background:var(--chat);color:var(--fg);font:14.2px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif;display:flex}

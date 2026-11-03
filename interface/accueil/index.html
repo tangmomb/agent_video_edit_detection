@@ -2,13 +2,8 @@
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Panneau de contrôle</title>
 <style>
-:root{--bg:#f7f6f3;--panel:#ffffff;--fg:#1d1d1f;--muted:#6b6b70;--line:#e2e0db;--hover:#f2f1ee;--active:#e8eefc;
-  --accent:#2f5bd3;--ok:#2e9d5b;--off:#b5b3ad;--shadow:0 8px 30px rgba(0,0,0,.18)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111214;--panel:#1c1d21;--fg:#ececee;
-  --muted:#9a9aa0;--line:#2e2f35;--hover:#26272c;--active:#26324f;--accent:#7d9cff;--ok:#4fd18b;--off:#55565c;
-  --shadow:0 8px 30px rgba(0,0,0,.5)}}
-:root[data-theme="dark"]{--bg:#111214;--panel:#1c1d21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2f35;--hover:#26272c;
-  --active:#26324f;--accent:#7d9cff;--ok:#4fd18b;--off:#55565c;--shadow:0 8px 30px rgba(0,0,0,.5)}
+:root{color-scheme:dark;--bg:#111214;--panel:#1c1d21;--fg:#ececee;--muted:#9a9aa0;--line:#2e2f35;--hover:#26272c;--active:#26324f;
+  --accent:#7d9cff;--ok:#4fd18b;--off:#55565c;--shadow:0 8px 30px rgba(0,0,0,.5)}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--fg);font:14.5px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif}

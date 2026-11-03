@@ -2,15 +2,12 @@
 
     .venv/Scripts/python.exe interface/server.py [--exp exp_037] [--port 8780]
 
-Sans --exp, utilise le modèle désigné dans model_results/production.json (et son seuil). La vidéo
+Sans --exp, utilise le modèle désigné dans model_results/production.json (et son seuil), rechargé
+quand ce fichier change. La vidéo
 est traitée exactement comme à l'entraînement : frames à FPS par seconde (frames.extract), mêmes
 embeddings (features, lab._X), même classifieur.
 Fichiers de travail dans interface/modele/_jobs/<id>/ (frames + résultat), effaçables à tout moment.
-
-Une vidéo peut ensuite être annotée par les trois LLM annotateurs du dataset (bouton de la page,
-appels payants, plafonnés par vidéo ; une image n'a d'étiquette que s'ils sont d'accord) puis
-corrigée à la main : elle est alors rangée dans data/real_videos/<id>/ (voir annotate.py)
-et la page compare le modèle à ces étiquettes.
+Aucun appel payant : l'annotation par les LLM a été retirée de cette page (03/11/2026).
 """
 
 import argparse
@@ -38,8 +35,6 @@ from model_training_pipeline.lab import EXP_DIR  # noqa: E402
 from interface import dev_reload  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import annotate  # noqa: E402
 JOBS = HERE / "_jobs"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 _gpu = Lock()  # une analyse à la fois sur le GPU
@@ -105,8 +100,28 @@ def analyze(model: Model, video: Path, job: Path) -> dict:
     return result
 
 
+def _prod_mtime() -> float | None:
+    path = EXP_DIR / "production.json"
+    return path.stat().st_mtime if path.exists() else None
+
+
 class Handler(SimpleHTTPRequestHandler):
     model: Model
+    exp_forced: str | None = None  # --exp : modèle fixe, production.json ignoré
+    prod_mtime: float | None = None
+    _reload = Lock()
+
+    @classmethod
+    def current_model(cls) -> Model:
+        """Le modèle à jour : rechargé quand production.json change (fin de run), sans redémarrer."""
+        if cls.exp_forced is None and _prod_mtime() != cls.prod_mtime:
+            with cls._reload:
+                mtime = _prod_mtime()
+                if mtime != cls.prod_mtime:
+                    cls.model = Model(None)
+                    cls.prod_mtime = mtime
+                    print(f"production.json modifié : modèle {cls.model.exp_id} chargé", flush=True)
+        return cls.model
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(HERE), **kwargs)
@@ -136,40 +151,14 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path in ("/", "/index.html"):
                 return self._page(dev_reload.page(HERE / "index.html"))
         if self.path == "/api/model":
-            return self._json(HTTPStatus.OK, self.model.info())
+            return self._json(HTTPStatus.OK, self.current_model().info())
         if self.path.startswith("/jobs/"):
             self.path = "/_jobs/" + self.path[len("/jobs/"):]
         elif self.path.startswith("/_jobs"):
             return self.send_error(HTTPStatus.NOT_FOUND)
         return super().do_GET()
 
-    def _body(self) -> dict:
-        size = int(self.headers.get("Content-Length") or 0)
-        return json.loads(self.rfile.read(size) or b"{}")
-
-    def _annotate(self):
-        """Étiquettes LLM de la vidéo d'un job (appels payants aux trois annotateurs la première fois seulement)."""
-        job = JOBS / Path(self._body().get("job", "")).name
-        if not (job / "result.json").exists():
-            return self._json(HTTPStatus.NOT_FOUND, {"error": "analyse introuvable"})
-        labels = annotate.load(job.name)
-        if labels is None:
-            result = json.loads((job / "result.json").read_text(encoding="utf-8"))
-            annotate.save(job, result, annotate.annotate_video(result, job))
-            labels = annotate.load(job.name)
-        return self._json(HTTPStatus.OK, labels)
-
-    def _label(self):
-        b = self._body()
-        return self._json(HTTPStatus.OK, annotate.set_manual(b["job"], int(b["i"]), b.get("value")))
-
     def do_POST(self):
-        routes = {"/api/annotate": self._annotate, "/api/label": self._label}
-        if self.path in routes:
-            try:
-                return routes[self.path]()
-            except Exception as e:
-                return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(e).__name__}: {e}"})
         if self.path != "/api/analyze":
             return self.send_error(HTTPStatus.NOT_FOUND)
         size = int(self.headers.get("Content-Length") or 0)
@@ -188,7 +177,7 @@ class Handler(SimpleHTTPRequestHandler):
                 fh.write(chunk)
                 left -= len(chunk)
         try:
-            self._json(HTTPStatus.OK, analyze(self.model, video, job))
+            self._json(HTTPStatus.OK, analyze(self.current_model(), video, job))
         except Exception as e:
             self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(e).__name__}: {e}"})
 
@@ -199,6 +188,7 @@ def main() -> None:
     p.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8780)))
     a = p.parse_args()
     print(f"chargement du modèle ({DEVICE})…", flush=True)
+    Handler.exp_forced, Handler.prod_mtime = a.exp, _prod_mtime()
     Handler.model = Model(a.exp)
     print(f"modèle {Handler.model.exp_id} prêt — http://localhost:{a.port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", a.port), Handler).serve_forever()

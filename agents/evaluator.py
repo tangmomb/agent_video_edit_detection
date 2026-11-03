@@ -20,15 +20,45 @@ au hasard (order hasard), et n'appelle un motif fréquent que s'il revient sur p
 Signale les images mal étiquetées au lieu de les compter comme erreurs du modèle.
 - Signale un split créé après l'analyse d'erreurs d'un modèle : il ferait monter le score sans que \
 le modèle change.
-- final_test : seulement sur candidat_a_tester (list_experiments), un à la fois. S'il échoue, \
-relis list_experiments : le candidat suivant y apparaît. Arrête-toi au premier test réussi. Dis \
-clairement si le test confirme val (précision visée tenue). Tu ne mets rien en production : le \
-code choisit parmi les modèles qui ont réussi leur test.
+- final_test : seulement sur candidat_a_tester (list_experiments), un à la fois ; l'outil refuse \
+toute autre expérience. S'il échoue, \
+relis list_experiments : le candidat suivant y apparaît. Arrête-toi au premier test réussi. Donne \
+le statut renvoyé par final_test tel quel (réussi ou échoué) ; tu peux commenter l'écart de rappel, \
+pas changer le verdict. Tu ne mets rien en production : le code choisit parmi les modèles qui ont \
+réussi leur test.
 
 Rapport final, court, en français : chiffres clés par expérience, erreurs dominantes et leur cause \
 probable, verdict sur l'amélioration (contre une référence du même split), recommandations \
 concrètes (vidéos à collecter, pistes de modèle)."""
 
+
+
+def _final_test_tool(lab: Lab) -> Tool:
+    """final_test verrouillé sur candidat_a_tester et la précision par défaut : le code choisit ce
+    qui passe au test, l'agent ne fait que le lancer. Sans verrou, split_001 et split_002 ont eu
+    chacun deux modèles réussis, testés au choix de l'Evaluator."""
+    def fn(experiment_id: str) -> dict:
+        split_id = lab.latest_split()
+        candidate = lab.candidate_to_test(split_id) if split_id else None
+        if candidate is None:
+            return {"error": "aucun candidat à tester sur le dernier split (un test y a déjà réussi, ou "
+                             "aucune expérience non testée) : pas de final_test"}
+        if experiment_id != candidate:
+            return {"error": f"final_test n'accepte que candidat_a_tester, ici {candidate}"}
+        return lab.final_test(experiment_id)
+
+    return Tool(
+        name="final_test",
+        description="Mesure candidat_a_tester (list_experiments) sur le test de son split, au seuil "
+                    "choisi sur val : statut (réussi si la précision visée tient), rappel, précision, "
+                    "TP/FP/FN. Refuse toute autre expérience. Nombre limité par session.",
+        input_schema={
+            "type": "object",
+            "properties": {"experiment_id": {"type": "string", "description": "candidat_a_tester."}},
+            "required": ["experiment_id"],
+        },
+        fn=fn,
+    )
 
 
 def make(lab: Lab, session=None) -> Agent:
@@ -63,16 +93,6 @@ def make(lab: Lab, session=None) -> Agent:
                 },
                 fn=lab.show_examples,
             ),
-            Tool(
-                name="final_test",
-                description="Mesure une expérience sur le test de son split, au seuil choisi sur val : "
-                            "rappel, précision, TP/FP/FN. Nombre limité par session.",
-                input_schema={
-                    "type": "object",
-                    "properties": {"experiment_id": {"type": "string"}, "precision": PRECISION},
-                    "required": ["experiment_id"],
-                },
-                fn=lab.final_test,
-            ),
+            _final_test_tool(lab),
         ],
     )

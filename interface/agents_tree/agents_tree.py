@@ -27,15 +27,9 @@ from agents import orchestrator  # noqa: E402
 from model_training_pipeline.lab import Lab  # noqa: E402
 
 CSS = """
-:root{--bg:#f7f6f3;--panel:#fff;--fg:#1d1d1f;--muted:#6b6b70;--line:#d9d7d1;--code:#f0eee9;
---agent:#2f5bd3;--tool:#2e7d4f;--deleg:#b35c00;--req:#c0392b;
---sys-fg:#5b35b0;--user-fg:#1f7a45;--tools-fg:#9a5200}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151517;--panel:#1e1e21;
---fg:#ececee;--muted:#9a9aa0;--line:#34343a;--code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;
---deleg:#f0a24a;--req:#ff7a6b;--sys-fg:#c4adff;--user-fg:#8fe0b0;--tools-fg:#f2b36b}}
-:root[data-theme="dark"]{--bg:#151517;--panel:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#34343a;
---code:#2a2a2f;--agent:#7d9cff;--tool:#5fc58a;--deleg:#f0a24a;--req:#ff7a6b;--sys-fg:#c4adff;
---user-fg:#8fe0b0;--tools-fg:#f2b36b}
+:root{color-scheme:dark;--bg:#151517;--panel:#1e1e21;--fg:#ececee;--muted:#9a9aa0;--line:#34343a;--code:#2a2a2f;
+--agent:#7d9cff;--tool:#5fc58a;--deleg:#f0a24a;--req:#ff7a6b;
+--sys-fg:#c4adff;--user-fg:#8fe0b0;--tools-fg:#f2b36b}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:1000px;margin:0 auto;padding:32px 16px 64px}
@@ -71,6 +65,12 @@ summary code{background:none;padding:0;font-size:14px}
 .body pre.llm{max-height:640px}
 .llm b{display:block;margin:10px 0 2px;font-weight:700}.llm b:first-child{margin-top:0}
 .legend2{font-size:12px;margin:6px 0 2px}.legend2 span{font-weight:600}
+ul.params{margin:0 0 6px;padding-left:18px;font-size:14px}
+ul.params li{margin:3px 0}
+.ptype{color:var(--muted);font-size:13px}
+.req{color:var(--req);font-size:11px;margin-left:6px;text-transform:uppercase}
+.pdesc{color:var(--muted);font-size:13px}
+.noparam{color:var(--muted);font-size:13px;font-style:italic;margin:0 0 6px}
 .exlabel{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px}
 """
 
@@ -125,11 +125,31 @@ def _delegation(ex: dict | None, sub) -> str:
     return out + f'<div class="exlabel">Réponse</div><pre>{e(resp)}</pre>'
 
 
+def _params(tool) -> str:
+    """Les options de l'appel : nom, type, requis, valeurs permises et description (schéma de l'outil)."""
+    props = tool.input_schema.get("properties", {})
+    if not props:
+        return '<div class="exlabel">Options</div><p class="noparam">aucune</p>'
+    req = set(tool.input_schema.get("required", []))
+    rows = []
+    for name, spec in props.items():
+        kind = spec.get("type", "")
+        if kind == "array" and "items" in spec:
+            kind += f" de {spec['items'].get('type', '')}"
+        enum = spec.get("enum") or spec.get("items", {}).get("enum")
+        values = (" · " + " | ".join(map(str, enum)) if enum else
+                  f" · {spec.get('minimum', '')}…{spec.get('maximum', '')}" if "minimum" in spec or "maximum" in spec else "")
+        rows.append(f'<li><code>{e(name)}</code>' + ('<span class="req">requis</span>' if name in req else "")
+                    + f' <span class="ptype">{e(kind)}{e(values)}</span>'
+                    + (f'<div class="pdesc">{e(spec["description"])}</div>' if spec.get("description") else "") + "</li>")
+    return f'<div class="exlabel">Options</div><ul class="params">{"".join(rows)}</ul>'
+
+
 def _tool(tool, kind: str, examples: dict, note: str, child: str = "", agent: str = "",
           sub=None) -> str:
     badge = "délègue" if kind == "delegate" else "outil"
     ex = examples.get(f"{agent}.{tool.name}") or examples.get(tool.name)
-    body = _delegation(ex, sub) if kind == "delegate" else _example(ex, note)
+    body = _params(tool) + (_delegation(ex, sub) if kind == "delegate" else _example(ex, note))
     return (f'<li class="node {kind}"><details><summary>'
             f'<span class="badge {kind}">{badge}</span><code class="tname">{e(tool.name)}</code></summary>'
             f'<div class="body">{body}</div></details>{child}</li>')
@@ -253,7 +273,8 @@ def examples_from_run(run_dir: Path) -> dict:
 READ_ONLY = {"global_status", "list_experiments", "dataset_info", "data_requested_history",
              "analyze_errors", "show_examples"}
 # Outils à effet dont la réponse se relit dans ce qu'ils ont écrit : recalculée sans les rejouer.
-REREAD = {"train_model": lambda lab, ex: lab.train_summary(ex["response"]["experiment_id"])}
+REREAD = {"train_model": lambda lab, ex: lab.train_summary(ex["response"]["experiment_id"]),
+          "final_test": lambda lab, ex: lab.final_test_summary(**ex["call"])}
 
 
 def refresh(examples: dict, summary_usd: float = 0.0) -> list[str]:

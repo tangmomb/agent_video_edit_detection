@@ -394,6 +394,26 @@
         font-size: 16px;
         color: var(--fg);
       }
+      .math.noted {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 10px 28px;
+      }
+      .math.noted em {
+        font-family: system-ui, sans-serif;
+        font-style: normal;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      @media (max-width: 560px) {
+        .math.noted {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+        .math.noted em {
+          margin-bottom: 8px;
+        }
+      }
       .math > span {
         display: inline-block;
         white-space: nowrap;
@@ -488,9 +508,55 @@
         color: var(--faint);
         font-size: 11.5px;
       }
-      .emb-table.draws td:first-child {
-        width: 34%;
-        color: var(--muted);
+      table.mini.folds th:first-child {
+        width: 56px;
+      }
+      table.mini.folds tr.total td {
+        border-top: 1px solid var(--line);
+        font-weight: 600;
+      }
+      .seqs {
+        display: grid;
+        gap: 6px;
+        margin: 8px 0 4px;
+        font-size: 13px;
+      }
+      .seqs > div {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+      }
+      .seq {
+        display: inline-flex;
+        gap: 3px;
+      }
+      .seq i,
+      .aprank i {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        font-style: normal;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--fg);
+      }
+      .seq i.a,
+      .aprank i.a {
+        background: color-mix(in srgb, var(--ok) 35%, transparent);
+      }
+      .seq i.s,
+      .aprank i.s {
+        background: color-mix(in srgb, var(--ko) 30%, transparent);
+      }
+      table.mini.aprank td {
+        padding-top: 2px;
+        padding-bottom: 2px;
+      }
+      table.mini.aprank tr.total td {
+        white-space: normal;
       }
       .emb-note {
         margin: 8px 0 0;
@@ -559,6 +625,9 @@
       }
       .twosteps li.s-dev {
         border-color: var(--test);
+      }
+      .twosteps li.spaced {
+        margin: 14px 0;
       }
       .twosteps li.s-fold {
         border-color: var(--dev);
@@ -648,6 +717,9 @@
         border-radius: 10px;
         text-align: center;
         background: var(--panel);
+      }
+      .card + .question {
+        margin-top: 20px;
       }
       .question.sub {
         font-weight: 500;
@@ -1322,10 +1394,10 @@
                   </ul>
                   <div class="example-note">
                     <span class="ex-tag">Exemple</span>
-                    le modèle en production, <code>exp_151</code>, est une
-                    logreg à <code>C</code> = 0,02 sur CLIP (image entière et
-                    ses 4 quadrants). 24 des 25 expériences de
-                    <code>split_004</code> sont des logreg.
+                    le modèle en production, <code>exp_215</code>, est une
+                    logreg à <code>C</code> = 0,02 sur CLIP, image entière
+                    (<code>clip_b32:full</code>). 72 des 78 expériences de
+                    <code>split_005</code> sont des logreg.
                   </div>
                 </div>
                 <div class="subbox">
@@ -1376,13 +1448,137 @@
                   </ul>
                   <div class="example-note">
                     <span class="ex-tag">Exemple</span>
-                    une seule expérience <code>mlp</code> sur les 25 de
-                    <code>split_004</code>. Les 8 mlp essayés ont tous perdu
-                    contre la logreg équivalente ; même avec l'arrêt par chaîne
-                    (03/11), ils restent 4 à 5 points d'AP par chaîne en
-                    dessous.
+                    6 expériences <code>mlp</code> sur les 78 de
+                    <code>split_005</code> (run 012, à égalité avec la logreg) :
+                    toutes perdent, la meilleure à 0,8977 d'AP par chaîne contre
+                    0,9266 pour la meilleure logreg.
                   </div>
                 </div>
+              </div>
+              <div class="subbox">
+                <h4>
+                  Comment val est mesuré · chiffres de <code>exp_151</code>
+                </h4>
+                <ol>
+                  <li>
+                    <b>5 entraînements.</b> Pour chaque pli, un modèle est
+                    entraîné sur les 4 autres et prédit les images de ce pli,
+                    dont il n'a jamais vu les chaînes.
+                  </li>
+                  <li>
+                    <b>Les prédictions sont réunies.</b> Chaque image de dev a
+                    exactement un score, venu du modèle qui ne l'a pas vue : 1
+                    833 scores, 58 chaînes.
+                  </li>
+                  <li>
+                    <b>Tout se mesure sur l'ensemble réuni</b>, pas pli par pli
+                    puis moyenné. Au seuil choisi, on compte sur les 1 833
+                    images : <i>VP</i> = 1 156 ajouts trouvés (vrais positifs),
+                    <i>FP</i> = 99 fausses alertes, <i>FN</i> = 110 ajouts
+                    ratés.
+                    <div class="math noted">
+                      <span
+                        >précision =
+                        <span class="frac"
+                          ><span><i>VP</i></span
+                          ><span><i>VP</i> + <i>FP</i></span></span
+                        >
+                        =
+                        <span class="frac"
+                          ><span>1 156</span><span>1 156 + 99</span></span
+                        >
+                        = <b>92,1 %</b></span
+                      >
+                      <em
+                        >la part des images signalées qui a vraiment un
+                        ajout</em
+                      >
+                      <span
+                        >rappel =
+                        <span class="frac"
+                          ><span><i>VP</i></span
+                          ><span><i>VP</i> + <i>FN</i></span></span
+                        >
+                        =
+                        <span class="frac"
+                          ><span>1 156</span><span>1 156 + 110</span></span
+                        >
+                        = <b>91,3 %</b></span
+                      >
+                      <em>la part des 1 266 ajouts qui est trouvée</em>
+                    </div>
+                  </li>
+                  <li>
+                    <b>Le modèle gardé est un ensemble de 5 modèles</b> : les 5
+                    modèles de plis, rangés tels quels dans
+                    <code>model.pkl</code>, chacun avec sa propre mise à
+                    l'échelle. Une nouvelle image passe dans les 5, et son score
+                    est la <b>moyenne des 5 scores</b>. Chacun des 5 a vu 80 %
+                    des chaînes de dev ; ensemble, ils les couvrent toutes.
+                  </li>
+                </ol>
+                <table class="mini folds">
+                  <thead>
+                    <tr>
+                      <th>pli</th>
+                      <th>chaînes</th>
+                      <th>images</th>
+                      <th>ajouts</th>
+                      <th>précision</th>
+                      <th>rappel</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>1</td>
+                      <td>12</td>
+                      <td>349</td>
+                      <td>217</td>
+                      <td>86,2 %</td>
+                      <td>80,6 %</td>
+                    </tr>
+                    <tr>
+                      <td>2</td>
+                      <td>12</td>
+                      <td>297</td>
+                      <td>184</td>
+                      <td>98,0 %</td>
+                      <td>78,8 %</td>
+                    </tr>
+                    <tr>
+                      <td>3</td>
+                      <td>12</td>
+                      <td>298</td>
+                      <td>216</td>
+                      <td>90,6 %</td>
+                      <td>98,6 %</td>
+                    </tr>
+                    <tr>
+                      <td>4</td>
+                      <td>12</td>
+                      <td>393</td>
+                      <td>257</td>
+                      <td>84,8 %</td>
+                      <td>91,1 %</td>
+                    </tr>
+                    <tr>
+                      <td>5</td>
+                      <td>10</td>
+                      <td>496</td>
+                      <td>392</td>
+                      <td>99,0 %</td>
+                      <td>99,2 %</td>
+                    </tr>
+                    <tr class="total">
+                      <td>réunis</td>
+                      <td>58</td>
+                      <td>1 833</td>
+                      <td>1 266</td>
+                      <td>92,1 %</td>
+                      <td>91,3 %</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
               <p>
                 Dans les deux cas, le code fixe ensuite le <b>seuil</b> prudent
@@ -1392,73 +1588,71 @@
                 centile), enregistré avec l'expérience.
               </p>
               <div class="subbox">
-                <h4>Le seuil prudent, pas à pas · chiffres de <code>exp_151</code></h4>
+                <h4>
+                  Le seuil prudent, pas à pas · chiffres de <code>exp_151</code>
+                </h4>
                 <ol>
                   <li>
-                    <b>Le but.</b> Le modèle donne un score entre 0 et 1 ; au-dessus
-                    du <b>seuil</b>, l'image est signalée « avec ajout ». On veut
-                    qu'au moins <b>90 %</b> des images signalées en aient vraiment un
-                    (précision), et en trouver le plus possible (rappel). Monter le
-                    seuil gagne de la précision et perd du rappel.
+                    <b>Le but.</b> Le modèle donne un score entre 0 et 1 ;
+                    au-dessus du <b>seuil</b>, l'image est signalée « avec ajout
+                    ». On veut qu'au moins <b>90 %</b> des images signalées en
+                    aient vraiment un (précision), et en trouver le plus
+                    possible (rappel). Monter le seuil gagne de la précision et
+                    perd du rappel.
                   </li>
                   <li>
-                    <b>Le seuil simple.</b> Sur les prédictions val (1 833 images,
-                    58 chaînes), le seuil le plus bas qui tient 90 % :
-                    <b>0,321</b>. Mais il tient pile sur <i>ces</i> chaînes : chaque
-                    chaîne a son habillage, qui décale les scores. Le banc b1 a vu
-                    de 53 % à 100 % de précision sur des chaînes cachées pour 95 %
-                    visés.
+                    <b>Le seuil simple.</b> Sur les prédictions val (1 833
+                    images, 58 chaînes), le seuil le plus bas qui tient 90 % :
+                    <b>0,321</b>. Mais il tient pile sur <i>ces</i> chaînes :
+                    chaque chaîne a son habillage, qui ré-organise l'espace
+                    vectoriel.
                   </li>
                   <li>
                     <b>200 tirages de chaînes.</b> On simule d'autres jeux de
                     chaînes : on pioche 58 fois une chaîne parmi les 58,
                     <b>avec remise</b> (une chaîne peut sortir plusieurs fois,
-                    d'autres pas du tout), et on recalcule le seuil qui tient 90 %
-                    sur ce jeu. 200 fois. Les seuils obtenus vont de
-                    <b>0,04 à 0,78</b> (milieu 0,31) : le bon seuil dépend
+                    d'autres pas du tout), et on recalcule le seuil qui tient 90
+                    % de précision sur ce jeu. 200 fois. Les seuils obtenus vont
+                    de <b>0,04 à 0,78</b> (milieu 0,31) : le bon seuil dépend
                     beaucoup des chaînes.
                   </li>
                   <li>
-                    <b>Le 80<sup>e</sup> centile.</b> On trie les 200 seuils et on
-                    garde celui que seuls 20 % dépassent : <b>0,509</b>. Il aurait
-                    tenu 90 % sur environ 80 % des jeux de chaînes simulés. Plus
-                    haut serait plus prudent, avec moins de rappel.
+                    <b>Le 80<sup>e</sup> centile.</b> On trie les 200 seuils et
+                    on garde celui que seuls 20 % dépassent : <b>0,509</b>. Il
+                    aurait tenu 90 % sur environ 80 % des jeux de chaînes
+                    simulés. Plus haut serait plus prudent, avec moins de
+                    rappel.
                   </li>
                   <li>
                     <b>Enregistré.</b> Ce seuil est écrit dans
-                    <code>metrics.json</code> et appliqué tel quel sur test puis en
-                    production, jamais recalculé.
+                    <code>metrics.json</code> et appliqué tel quel sur test puis
+                    en production, jamais recalculé.
                   </li>
                 </ol>
                 <table class="mini">
                   <thead>
-                    <tr><th style="width: auto">seuil</th><th>précision val</th><th>rappel val</th></tr>
+                    <tr>
+                      <th style="width: auto">seuil</th>
+                      <th>précision val</th>
+                      <th>rappel val</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    <tr><td>simple · 0,321</td><td>90,0 %</td><td>94,3 %</td></tr>
-                    <tr><td>prudent · 0,509</td><td>92,1 %</td><td>91,3 %</td></tr>
+                    <tr>
+                      <td>simple · 0,321</td>
+                      <td>90,0 %</td>
+                      <td>94,3 %</td>
+                    </tr>
+                    <tr>
+                      <td>prudent · 0,509</td>
+                      <td>92,1 %</td>
+                      <td>91,3 %</td>
+                    </tr>
                   </tbody>
                 </table>
                 <p class="emb-note">
-                  Environ 3 points de rappel sacrifiés pour mieux tenir 90 % sur des
-                  chaînes nouvelles.
-                </p>
-                <h4 class="emb-h">Combien de fois une chaîne sort dans un tirage</h4>
-                <table class="emb-table draws">
-                  <tbody>
-                    <tr><td>0 fois (absente)</td><td><div class="hbar c"><i style="width: 96.8%"></i><span>36 %</span></div></td></tr>
-                    <tr><td>1 fois</td><td><div class="hbar c"><i style="width: 100%"></i><span>37 %</span></div></td></tr>
-                    <tr><td>2 fois</td><td><div class="hbar c"><i style="width: 51.2%"></i><span>19 %</span></div></td></tr>
-                    <tr><td>3 fois</td><td><div class="hbar c"><i style="width: 15%"></i><span>6 %</span></div></td></tr>
-                    <tr><td>4 fois</td><td><div class="hbar c"><i style="width: 3.8%"></i><span>1,4 %</span></div></td></tr>
-                    <tr><td>5 à 6 fois</td><td><div class="hbar c"><i style="width: 1.1%"></i><span>0,4 %</span></div></td></tr>
-                  </tbody>
-                </table>
-                <p class="emb-note">
-                  Sur les 200 tirages de <code>exp_151</code> (même graine que le
-                  code). Pas de maximum en théorie ; 6 au plus ici. Chaque tirage
-                  laisse de côté environ un tiers des chaînes et en double
-                  d'autres : c'est ce qui fait varier le seuil.
+                  Environ 3 points de rappel sacrifiés pour mieux tenir 90 % sur
+                  des chaînes nouvelles.
                 </p>
               </div>
             </div>
@@ -1473,27 +1667,310 @@
                 <span class="who">Evaluator · <code>final_test</code></span>
               </div>
               <p>
-                Teste <code>candidat_a_tester</code> (donné par
-                <code>list_experiments</code> : la règle de l’étape 3 appliquée
-                aux non testés), un à la fois, 2 par run au plus :
+                <b>Le candidat est désigné par le code, pas par un agent.</b>
+                Après chaque expérience, à chaque appel de
+                <code>list_experiments</code>, le code
+                (<code>lab.candidate_to_test</code>) recalcule
+                <code>candidat_a_tester</code> parmi les expériences
+                <b>non testées</b> du plus gros split, en deux temps :
+              </p>
+              <ol class="twosteps">
+                <li class="s-fold">
+                  <b>Les candidats potentiels</b> : les expériences dont l'AP
+                  par chaîne sur val est à moins de <b>0,005</b> de la
+                  meilleure. Elles reconnaissent à peu près aussi bien les
+                  ajouts sur des chaînes jamais vues ; l'écart entre elles est
+                  du bruit.
+                  <div class="subbox">
+                    <h4>
+                      L'AP par chaîne, pas à pas · chiffres de
+                      <code>exp_151</code>
+                    </h4>
+                    <ol>
+                      <li>
+                        <b>Ce qu'elle mesure</b> : si le modèle
+                        <b>classe</b> bien les images d'une chaîne, celles avec
+                        ajout en haut, celles sans en bas. Aucun seuil
+                        n'intervient.
+                      </li>
+                      <li>
+                        <b>L'AP d'une liste d'images</b> : on trie les images
+                        par score, du plus haut au plus bas, et on descend la
+                        liste. À chaque image avec ajout, on note la précision à
+                        ce rang (la part d'ajouts parmi les images vues
+                        jusque-là). L'AP est la moyenne de ces précisions.
+                        <div class="math">
+                          <span
+                            >AP =
+                            <span class="frac"
+                              ><span
+                                >somme des précisions aux rangs des ajouts</span
+                              ><span>nombre d'ajouts</span></span
+                            ></span
+                          >
+                        </div>
+                        <div class="seqs">
+                          <div>
+                            <span class="seq"
+                              ><i class="a">A</i><i class="a">A</i
+                              ><i class="a">A</i><i class="s">S</i
+                              ><i class="s">S</i></span
+                            ><span
+                              >(1 + 1 + 1) / 3 = <b>1</b> : classement
+                              parfait</span
+                            >
+                          </div>
+                          <div>
+                            <span class="seq"
+                              ><i class="a">A</i><i class="a">A</i
+                              ><i class="s">S</i><i class="a">A</i
+                              ><i class="s">S</i></span
+                            ><span>(1/1 + 2/2 + 3/4) / 3 = <b>0,92</b></span>
+                          </div>
+                          <div>
+                            <span class="seq"
+                              ><i class="s">S</i><i class="s">S</i
+                              ><i class="a">A</i><i class="a">A</i
+                              ><i class="a">A</i></span
+                            ><span
+                              >(1/3 + 2/4 + 3/5) / 3 = <b>0,48</b> : ajouts en
+                              bas</span
+                            >
+                          </div>
+                        </div>
+                      </li>
+                      <li>
+                        <b>Une vraie chaîne</b> : on prend une chaîne et ses
+                        images, et on les note avec
+                        <b
+                          >le modèle de plis dont l'entraînement n'a pas inclus
+                          le pli de cette chaîne</b
+                        >
+                        : un seul des 5 modèles, pas leur moyenne (les 4 autres
+                        ont vu la chaîne). Ici la vidéo
+                        <code>yt_FZVMB8mrNO0</code>, dans le pli 2 : ses 9
+                        images sont notées par le modèle entraîné sur les plis
+                        1, 3, 4 et 5.
+                      </li>
+                    </ol>
+                    <table class="mini folds aprank">
+                      <thead>
+                        <tr>
+                          <th>rang</th>
+                          <th>score</th>
+                          <th>image</th>
+                          <th>précision au rang</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>1</td>
+                          <td>1,000</td>
+                          <td><i class="a">A</i></td>
+                          <td>1/1 = 1</td>
+                        </tr>
+                        <tr>
+                          <td>2</td>
+                          <td>0,999</td>
+                          <td><i class="a">A</i></td>
+                          <td>2/2 = 1</td>
+                        </tr>
+                        <tr>
+                          <td>3</td>
+                          <td>0,998</td>
+                          <td><i class="a">A</i></td>
+                          <td>3/3 = 1</td>
+                        </tr>
+                        <tr>
+                          <td>4</td>
+                          <td>0,642</td>
+                          <td><i class="s">S</i></td>
+                          <td></td>
+                        </tr>
+                        <tr>
+                          <td>5</td>
+                          <td>0,605</td>
+                          <td><i class="a">A</i></td>
+                          <td>4/5 = 0,80</td>
+                        </tr>
+                        <tr>
+                          <td>6</td>
+                          <td>0,466</td>
+                          <td><i class="a">A</i></td>
+                          <td>5/6 = 0,83</td>
+                        </tr>
+                        <tr>
+                          <td>7</td>
+                          <td>0,421</td>
+                          <td><i class="a">A</i></td>
+                          <td>6/7 = 0,86</td>
+                        </tr>
+                        <tr>
+                          <td>8</td>
+                          <td>0,158</td>
+                          <td><i class="s">S</i></td>
+                          <td></td>
+                        </tr>
+                        <tr>
+                          <td>9</td>
+                          <td>0,136</td>
+                          <td><i class="a">A</i></td>
+                          <td>7/9 = 0,78</td>
+                        </tr>
+                        <tr class="total">
+                          <td colspan="3">AP de la chaîne</td>
+                          <td>
+                            (1 + 1 + 1 + 0,80 + 0,83 + 0,86 + 0,78) / 7 = 0,895
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <ol start="4">
+                      <li>
+                        <b>Par chaîne, puis la moyenne</b> : on fait ce calcul
+                        pour chaque chaîne qui a les deux classes. Sur les 58
+                        chaînes de dev, 24 en ont (9 n'ont aucun ajout, 25 n'ont
+                        que des ajouts : rien à classer). Moyenne des 24 AP :
+                        <b>0,9742</b> ; 8 sont parfaites, la plus faible vaut
+                        0,865.
+                      </li>
+                      <li>
+                        <b>Pourquoi ce critère</b> : on veut un modèle qui
+                        distingue un ajout d'une image brute, pas un modèle qui
+                        reconnaît une chaîne. L'AP par chaîne mesure la première
+                        chose ; les mesures globales mélangent les deux.
+                        <ul>
+                          <li>
+                            <b
+                              >Une mesure globale récompense la reconnaissance
+                              de l'habillage d'une chaîne.</b
+                            >
+                            Sur les 58 chaînes de dev, 25 n'ont que des images
+                            avec ajout et 9 n'en ont aucune. Un modèle qui
+                            apprend « ce style de chaîne est monté, celui-là non
+                            » met les 25 en haut et les 9 en bas : les mesures
+                            globales le récompensent, sans qu'il sache voir un
+                            ajout. L'AP par chaîne ignore ces 34 chaînes et ne
+                            pose qu'une question : <b>dans une même chaîne</b>,
+                            même habillage, l'image avec ajout passe-t-elle
+                            au-dessus de celle sans ? C'est ce qui servira sur
+                            une chaîne jamais vue.
+                          </li>
+                          <li>
+                            <b>Chaque chaîne décale ses scores.</b> Un seuil
+                            unique coupe mal une chaîne notée un peu trop haut
+                            ou trop bas : au seuil 0,509, la chaîne ci-dessus a
+                            1 fausse alerte (rang 4) et 3 ajouts ratés (rangs 6,
+                            7 et 9), alors que son classement est presque bon.
+                            Le rappel et la précision punissent ce décalage,
+                            l'AP par chaîne non : le décalage est traité à part,
+                            par le seuil prudent.
+                          </li>
+                          <li>
+                            <b>Une grosse chaîne ne décide pas seule.</b> Dans
+                            une mesure globale, une chaîne de 113 images pèse 12
+                            fois plus qu'une de 9. Ici chaque chaîne compte pour
+                            une voix, comme les chaînes inconnues que le modèle
+                            rencontrera.
+                          </li>
+                          <li>
+                            <b>En pratique, ça choisit mieux.</b> Sur le banc b2
+                            (384 expériences), choisir directement par rappel
+                            val retenait souvent des modèles qui tenaient mal
+                            sur des chaînes cachées ; choisir par AP par chaîne
+                            a pris le meilleur modèle sur ces chaînes dans 19
+                            runs sur 30, contre 5 par le rappel val.
+                          </li>
+                        </ul>
+                      </li>
+                    </ol>
+                  </div>
+                </li>
+                <li class="s-fold spaced">
+                  <b>Le candidat</b> : parmi elles, le meilleur
+                  <b>rappel val</b> au <b>seuil prudent</b> qui tient 90 % de
+                  précision (0,608 pour <code>exp_215</code>). À rappel égal, la
+                  meilleure AP globale, puis la meilleure AUC, puis la plus
+                  rapide. Rappel, AP globale et AUC se mesurent sur les scores
+                  val, un modèle par image ; seule la vitesse est mesurée sur
+                  l'ensemble des 5 modèles, comme en production.
+                </li>
+              </ol>
+              <p>
+                C'est la même règle qui choisira la production en fin de run :
+                le candidat est celui que le code y mettrait s'il réussit son
+                test.
+              </p>
+              <div class="subbox">
+                <h4>
+                  Run 012 sur <code>split_005</code> · 78 expériences,
+                  meilleure AP par chaîne 0,9266 (exp_227)
+                </h4>
+                <table class="mini folds">
+                  <thead>
+                    <tr>
+                      <th style="width: 80px">expérience</th>
+                      <th>AP par chaîne</th>
+                      <th>rappel val à 90 %</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="total">
+                      <td>exp_215</td>
+                      <td>0,9234</td>
+                      <td>93,7 %</td>
+                      <td><span class="chip ok">candidat</span></td>
+                    </tr>
+                    <tr>
+                      <td>exp_214</td>
+                      <td>0,9242</td>
+                      <td>93,5 %</td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td>exp_216</td>
+                      <td>0,9239</td>
+                      <td>93,5 %</td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td>exp_204</td>
+                      <td>0,9241</td>
+                      <td>93,4 %</td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td>exp_225</td>
+                      <td>0,9239</td>
+                      <td>93,4 %</td>
+                      <td></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="emb-note">
+                  37 candidats potentiels (AP par chaîne ≥ 0,9216) ; ici les 5
+                  meilleurs rappels. exp_215 n'a pas la meilleure AP par chaîne,
+                  mais il est dans la marge et a le meilleur rappel.
+                </p>
+              </div>
+              <p>
+                L'orchestrateur et l'Evaluator lisent ce candidat dans
+                <code>list_experiments</code> ; l'Evaluator le teste avec
+                <code>final_test</code>, un à la fois, 2 par run au plus :
                 <b>ce même seuil</b> sur le <b>test</b> du split, des chaînes
-                jamais vues.
+                jamais vues. L'outil est verrouillé : il refuse toute autre
+                expérience que <code>candidat_a_tester</code>, et toute autre
+                précision que 90 %. L'agent lance le test, il ne choisit pas quoi
+                tester ; un même split n'a donc qu'un modèle réussi.
               </p>
               <p>
                 Précision ≥ 90 % → <span class="chip ok">réussi</span>, on
-                s'arrête ; sinon <span class="chip ko">échoué</span>, et le
-                candidat suivant prend sa place. Sans test →
+                s'arrête ; sinon <span class="chip ko">échoué</span>, et le code
+                désigne le suivant (ici <code>exp_214</code>, si
+                <code>exp_215</code> avait échoué). Sans test →
                 <span class="chip warn">non testé</span>.
               </p>
-              <div class="example-note">
-                <span class="ex-tag">Exemple</span>
-                la cible est passée de 95 % à 90 % le 03/11. Un test ne vaut que
-                pour sa cible : <code>exp_151</code>, réussi à 95 % (précision
-                test 95,3 %, rappel 70,7 %), compte comme non testé à 90 %. Il
-                reste en production à son seuil de 95 % (0,762) jusqu'à ce qu'un
-                modèle réussisse un test à 90 % ; le prochain candidat est
-                <code>exp_151</code> lui-même, au seuil 0,509.
-              </div>
             </div>
           </li>
         </ol>
@@ -1503,7 +1980,7 @@
       <section class="phase code">
         <div class="phase-head">
           <span class="tag">Fin du run</span>
-          <h2>Le code choisit</h2>
+          <h2>Le code choisit le modèle en production</h2>
         </div>
         <ol class="track">
           <li class="stage">
@@ -1557,6 +2034,15 @@
             <div class="card">
               <h3>Le meilleur du groupe</h3>
               <p>
+                <b>Le groupe</b>, c'est celui retenu au point 2, parmi les
+                modèles du plus gros split : ceux qui ont
+                <span class="chip ok">réussi</span> leur test ; s'il n'y en a
+                aucun, ceux qui sont <span class="chip warn">non testés</span> ;
+                en dernier recours, ceux qui ont
+                <span class="chip ko">échoué</span>. On ne mélange jamais deux
+                groupes.
+              </p>
+              <p>
                 On garde ceux dont l'<b>AP par chaîne</b> sur val est à moins de
                 <b>0,005</b> de la meilleure (ils reconnaissent aussi bien les
                 ajouts sur des chaînes nouvelles), puis on prend celui qui a le
@@ -1564,10 +2050,6 @@
                 seuil qui tient 90 % de précision).
               </p>
             </div>
-          </li>
-
-          <li class="stage">
-            <span class="marker">4</span>
             <div class="question">Ce candidat a-t-il réussi son test ?</div>
             <div class="branches">
               <div>
@@ -1613,25 +2095,30 @@
       <!-- ======================= EXEMPLE ======================= -->
       <aside class="example">
         <div class="eyebrow">Exemple</div>
-        <h3>L'état après le run 007</h3>
+        <h3>Le run 012 (03/11, cible 90 %)</h3>
         <ol>
-          <li>Plus gros split : <code>split_003</code> (44 expériences).</li>
           <li>
-            Aucun test réussi : exp_072 (précision test 0,940) et exp_066
-            (0,923) ont échoué → groupe des
-            <span class="chip warn">non testés</span>.
+            Plus gros split : <code>split_005</code> (75 vidéos, 78 expériences),
+            créé pendant ce run parce qu'une vidéo n'était pas dans
+            <code>split_004</code>.
           </li>
           <li>
-            Meilleure AP par chaîne : exp_081 (0,9355). Dans les 0,005 :
-            exp_081, 082, 080, 079, 083 → meilleur rappel :
-            <b>exp_079</b> (0,862).
+            Candidat à tester : meilleure AP par chaîne exp_227 (0,9266) ; 37
+            expériences dans les 0,005 (≥ 0,9216) → meilleur rappel val :
+            <b>exp_215</b> (93,7 %), <code>clip_b32:full</code>, logreg
+            <code>C</code> = 0,02, <code>weights</code> clip_vide × 10.
           </li>
           <li>
-            exp_079 est aussi le <code>candidat_a_tester</code> que verra
-            l'Evaluator au prochain run. Pour l'instant il n'est pas testé ; la
-            production actuelle, <b>exp_045</b> (<code>split_002</code>), a
-            réussi son test (précision 0,980) →
-            <span class="ok">exp_045 est gardée</span>.
+            L'Evaluator teste exp_215 au seuil choisi sur val (0,608) :
+            précision test 95,5 % ≥ 90 % →
+            <span class="chip ok">réussi</span> (rappel test 89,7 %). Plus de
+            candidat ensuite ; le second test n'est pas utilisé.
+          </li>
+          <li>
+            Fin du run : le groupe des <span class="chip ok">réussis</span> ne
+            contient qu'exp_215 → il a réussi son test →
+            <span class="ok">exp_215 passe en production</span>, à la place
+            d'exp_151 (<code>split_004</code>).
           </li>
         </ol>
       </aside>

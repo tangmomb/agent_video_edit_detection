@@ -6,69 +6,144 @@
 <title>Test du saut d'images</title>
 <style>
 :root {
-  --bg: #f6f5f2; --panel: #ffffff; --fg: #1c1c1e; --muted: #6e6e73; --line: #dedcd6; --soft: #efede8;
-  --sent: #2f5bd3; --sent-soft: #e2e9fb; --yes: #2f7d4f; --no: #8e8e93; --bad: #c0392b; --bad-soft: #f8dedb;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141416; --panel: #1d1d20; --fg: #ececee; --muted: #9a9aa1; --line: #33333a; --soft: #26262b;
-    --sent: #7d9cff; --sent-soft: #1f2a47; --yes: #5cc48a; --no: #9a9aa1; --bad: #ff7a6b; --bad-soft: #42211d;
-  }
+  color-scheme: dark;
+  --bg: #141416; --panel: #1d1d20; --sunk: #252529; --fg: #ececee; --muted: #a2a2a8;
+  --faint: #6e6e75; --line: #333338;
+  --sent: #8aa6ff; --sent-soft: color-mix(in srgb, var(--sent) 16%, transparent);
+  --bad: #ff7a5c; --ok: #8fe0b0; --bar: #4a4a52;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 64px; }
-h1 { font-size: 22px; margin: 0 0 4px; }
-.sub { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 28px 16px 64px; }
+code { font: 12.5px ui-monospace, "Cascadia Code", Consolas, monospace; background: var(--sunk);
+  padding: 1px 6px; border-radius: 5px; color: var(--fg); }
 .muted { color: var(--muted); }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
-.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-select, button { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--fg); }
-select { max-width: 100%; min-width: 0; flex: 1 1 320px; }
-button { cursor: pointer; }
-.drop { border: 2px dashed var(--line); border-radius: 9px; padding: 8px 14px; color: var(--muted); font-size: 14px; cursor: pointer; }
-.drop.over { border-color: var(--sent); color: var(--fg); }
-input[type=range] { width: 220px; max-width: 100%; }
-code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
-h2 { font-size: 16px; margin: 0 0 4px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
-.card { border: 3px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
-.card.sent { border-color: var(--sent); }
-.card.skip { opacity: .55; }
-.card.diff { border-color: var(--bad); opacity: 1; }
-.card img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
-.card .t { padding: 3px 6px; font-size: 12px; display: flex; justify-content: space-between; gap: 6px; font-variant-numeric: tabular-nums; }
 .err { color: var(--bad); }
+
+/* ---------- en-tête ---------- */
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--sent); }
+h1 { font-size: 26px; margin: 2px 0 4px; letter-spacing: -.01em; }
+.lede { color: var(--muted); margin: 0 0 18px; max-width: 820px; }
+.badge-free { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 1px 8px; border-radius: 10px;
+  background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); vertical-align: 1px; }
+
+/* ---------- panneaux ---------- */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+h2 { font-size: 12px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  font-weight: 700; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+h2 .count { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--faint); font-size: 12.5px; }
+.note { font-size: 13px; color: var(--muted); margin: -4px 0 12px; }
+
+/* ---------- choix ---------- */
+.pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+@media (max-width: 620px) { .pick { grid-template-columns: 1fr; } }
+select, button { font: inherit; font-size: 14px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--sunk); color: var(--fg); }
+select { width: 100%; min-width: 0; }
+button { cursor: pointer; background: var(--panel); }
+button:hover, select:hover { border-color: var(--muted); }
+.drop { border: 1px dashed var(--line); border-radius: 8px; padding: 7px 14px; color: var(--muted); font-size: 14px;
+  cursor: pointer; text-align: center; white-space: nowrap; }
+.drop:hover { border-color: var(--muted); color: var(--fg); }
+.drop.over { border-color: var(--sent); color: var(--fg); background: var(--sent-soft); }
+.thr { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; margin-top: 14px; }
+.thr label { font-size: 13px; color: var(--muted); }
+.slider { position: relative; width: 260px; max-width: 100%; }
+input[type=range] { width: 100%; accent-color: var(--sent); margin: 0; display: block; }
+#seuil-mark { position: absolute; top: -6px; width: 2px; height: 6px; background: var(--fg); opacity: .7;
+  pointer-events: none; transform: translateX(-1px); }
+#seuil-v { font-variant-numeric: tabular-nums; font-weight: 650; min-width: 46px; }
+#status { font-size: 13px; }
+.spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--sent);
+  border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- résumé ---------- */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 700px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { background: var(--sunk); border-radius: 9px; padding: 9px 12px; min-width: 0; }
+.tile .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .meter { height: 4px; border-radius: 2px; background: var(--line); margin-top: 6px; overflow: hidden; }
+.tile .meter i { display: block; height: 100%; background: var(--sent); border-radius: 2px; }
+.tile.sent .v { color: var(--sent); }
+.tile.bad .v { color: var(--bad); }
+#strip { display: flex; gap: 1px; height: 22px; margin-top: 14px; border-radius: 6px; overflow: hidden; background: var(--sunk); }
+#strip i { flex: 1 1 0; min-width: 0; background: var(--bar); opacity: .45; }
+#strip i.k { background: var(--sent); opacity: 1; }
+#strip i.d { background: var(--bad); opacity: 1; }
+@media (max-width: 620px) { #strip { gap: 0; } }
+.legend { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+/* ---------- images ---------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+@media (max-width: 520px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+.card { border-radius: 9px; overflow: hidden; background: var(--sunk); box-shadow: 0 0 0 1px var(--line); }
+.card.sent { box-shadow: 0 0 0 2px var(--sent); }
+.card.skip { opacity: .5; }
+.card.skip:hover { opacity: .85; }
+.card.diff { box-shadow: 0 0 0 2px var(--bad); opacity: 1; }
+.card img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
+.card .t { padding: 5px 8px 6px; font-size: 12px; display: flex; justify-content: space-between; gap: 6px;
+  font-variant-numeric: tabular-nums; }
+.card .t .r { color: var(--muted); }
+.card.sent .t .r::before { content: "envoyée "; color: var(--sent); }
 </style>
 </head>
 <body>
 <main>
-  <h1>Test du saut d'images</h1>
-  <p class="sub">Avant l'annotation, une image dont le cosinus CLIP avec la dernière image gardée dépasse le seuil n'est pas envoyée aux annotateurs (<code>frames.skip_refs</code>, seuil du pipeline <code id="pipe"></code>). Aucun appel payant.</p>
+  <header>
+    <div class="eyebrow">Avant l'annotation</div>
+    <h1>Test du saut d'images <span class="badge-free">gratuit</span></h1>
+    <p class="lede">Une image dont le cosinus CLIP avec la dernière image gardée dépasse le seuil n'est pas
+      envoyée aux annotateurs (<code>frames.skip_refs</code>, seuil du pipeline <code id="pipe"></code>) : elle
+      reprend l'étiquette de cette image. Choisis une vidéo pour voir ce qui serait envoyé. Aucun appel payant.</p>
+  </header>
 
   <section class="panel">
-    <div class="row">
+    <h2>Vidéo et seuil</h2>
+    <div class="pick">
       <select id="video"><option value="">Choisis une vidéo…</option></select>
       <label class="drop" id="drop">ou envoie une vidéo<input type="file" id="file" accept="video/*" hidden></label>
     </div>
-    <div class="row" style="margin-top: 10px">
+    <div class="thr">
       <label for="seuil">Seuil</label>
-      <input type="range" id="seuil" min="0.85" max="0.995" step="0.005">
-      <b id="seuil-v" style="font-variant-numeric: tabular-nums"></b>
+      <div class="slider"><input type="range" id="seuil" min="0.85" max="0.995" step="0.005"><div id="seuil-mark" title="seuil du pipeline"></div></div>
+      <span id="seuil-v"></span>
       <button id="reset">Seuil du pipeline</button>
       <span id="status" class="muted"></span>
     </div>
   </section>
 
+  <section class="panel" id="summary" hidden>
+    <h2>Résumé <span class="count">au seuil courant</span></h2>
+    <div class="tiles">
+      <div class="tile"><div class="v" id="t-all">–</div><div class="k">images (1 par seconde)</div></div>
+      <div class="tile sent"><div class="v" id="t-sent">–</div><div class="k">envoyées aux annotateurs</div></div>
+      <div class="tile"><div class="v" id="t-skip">–</div><div class="k">sautées</div>
+        <div class="meter"><i id="t-skip-bar"></i></div></div>
+      <div class="tile"><div class="v" id="t-diff">–</div><div class="k" id="t-diff-k">étiquette perdue</div></div>
+    </div>
+    <div id="strip"></div>
+    <div class="legend">
+      <span><i style="background: var(--sent)"></i>envoyée</span>
+      <span><i style="background: var(--bar)"></i>sautée</span>
+      <span id="lg-diff"><i style="background: var(--bad)"></i>sautée, étiquette différente de l'envoyée</span>
+    </div>
+  </section>
+
   <section class="panel" id="all" hidden>
-    <h2 id="all-h"></h2>
-    <p class="sub" id="all-sub" style="margin: 0"></p>
+    <h2>Toutes les images <span class="count" id="all-h"></span></h2>
+    <p class="note" id="all-sub"></p>
     <div class="grid" id="all-grid"></div>
   </section>
 
   <section class="panel" id="sent" hidden>
-    <h2 id="sent-h"></h2>
-    <p class="sub" style="margin: 0">Le chiffre sous chaque image est son cosinus avec l'image envoyée précédente : il est resté sous le seuil.</p>
+    <h2>Envoyées aux annotateurs <span class="count" id="sent-h"></span></h2>
+    <p class="note">Le chiffre sous chaque image est son cosinus avec l'image envoyée précédente : il est resté sous le seuil.</p>
     <div class="grid" id="sent-grid"></div>
   </section>
 </main>
@@ -76,19 +151,22 @@ h2 { font-size: 16px; margin: 0 0 4px; }
 const $ = (id) => document.getElementById(id);
 let pipe = 0.87, data = null, titles = {};
 
-const pct = (a, b) => b ? `${(100 * a / b).toFixed(1)} %` : "–";
+const pct = (a, b) => b ? `${(100 * a / b).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %` : "–";
+const dec = (x, n = 3) => Number(x).toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n });
 const isDiff = (f) => !f.kept && f.label !== null && data.frames[f.ref].label !== null && f.label !== data.frames[f.ref].label;
 const seuil = () => Number($("seuil").value);
+const SMIN = 0.85, SMAX = 0.995;
 
 function setSeuil(v) {
   $("seuil").value = v;
-  $("seuil-v").textContent = Number(v).toFixed(3);
+  $("seuil-v").textContent = dec(v);
 }
 
 async function init() {
   const r = await (await fetch("/api/videos")).json();
   pipe = r.seuil_pipeline;
   $("pipe").textContent = pipe;
+  $("seuil-mark").style.left = `${(pipe - SMIN) / (SMAX - SMIN) * 100}%`;
   setSeuil(pipe);
   fillVideos(r.videos);
 }
@@ -114,7 +192,7 @@ function fillVideos(list, select) {
 async function load() {
   const id = $("video").value;
   if (!id) return;
-  $("status").textContent = "Calcul…";
+  $("status").innerHTML = '<span class="spinner"></span>Calcul…';
   const r = await fetch(`/api/simulate?id=${encodeURIComponent(id)}&seuil=${seuil()}`);
   const j = await r.json();
   if (!r.ok) { $("status").innerHTML = `<span class="err">${j.error || r.status}</span>`; return; }
@@ -125,30 +203,40 @@ async function load() {
 
 function card(f, inAll) {
   const cls = f.kept ? "sent" : isDiff(f) ? "skip diff" : "skip";
-  const right = !f.kept ? `≈ #${f.ref} · ${f.cos.toFixed(3)}` : f.cos === null ? "" : f.cos.toFixed(3);
+  const right = !f.kept ? `≈ #${f.ref} · ${dec(f.cos)}` : f.cos === null ? "" : dec(f.cos);
   const tip = !f.kept ? `sautée : cosinus ${f.cos} avec l'envoyée #${f.ref}` : "envoyée";
   return `<div class="card ${inAll ? cls : ""}" title="${tip}"><img loading="lazy" src="${f.url}" alt="image ${f.i}">
-    <div class="t"><span>#${f.i}</span><span class="muted">${right}</span></div></div>`;
+    <div class="t"><span>#${f.i}</span><span class="r">${right}</span></div></div>`;
 }
 
 function render() {
   const d = data, sk = d.images - d.envoyees;
-  $("all").hidden = $("sent").hidden = false;
-  $("all-h").textContent = `Toutes les images · ${d.images}`;
+  $("summary").hidden = $("all").hidden = $("sent").hidden = false;
+  $("t-all").textContent = d.images;
+  $("t-sent").textContent = d.envoyees;
+  $("t-skip").textContent = `${sk} · ${pct(sk, d.images)}`;
+  $("t-skip-bar").style.width = d.images ? `${100 * sk / d.images}%` : "0";
+  $("t-diff").textContent = d.etiquetee ? `${d.sautees_differentes} / ${d.sautees_comparables}` : "–";
+  $("t-diff").parentElement.classList.toggle("bad", d.sautees_differentes > 0);
+  $("t-diff-k").textContent = d.etiquetee ? "sautées à l'étiquette différente" : "pas d'étiquettes (vidéo envoyée)";
+  $("lg-diff").hidden = !d.etiquetee;
+  $("strip").innerHTML = d.frames.map((f) => `<i class="${f.kept ? "k" : isDiff(f) ? "d" : ""}" title="#${f.i}"></i>`).join("");
+
+  $("all-h").textContent = `${d.images}`;
   $("all-sub").textContent = "Bordure bleue : envoyée. Estompée : sautée, « ≈ #n » est l'envoyée qui la remplace et son cosinus avec elle."
     + (d.etiquetee ? ` Bordure rouge : étiquette différente de celle de l'envoyée (${d.sautees_differentes} / ${d.sautees_comparables}).` : "");
   $("all-grid").innerHTML = d.frames.map((f) => card(f, true)).join("");
-  $("sent-h").textContent = `Images envoyées aux annotateurs · ${d.envoyees} (${pct(sk, d.images)} sautées)`;
+  $("sent-h").textContent = `${d.envoyees} · ${pct(sk, d.images)} sautées`;
   $("sent-grid").innerHTML = d.frames.filter((f) => f.kept).map((f) => card(f, false)).join("");
 }
 
 async function upload(file) {
-  $("status").textContent = `Envoi de ${file.name} et extraction des images…`;
+  $("status").innerHTML = `<span class="spinner"></span>Envoi de ${file.name} et extraction des images…`;
   const r = await fetch("/api/upload", { method: "POST", body: file, headers: { "X-Filename": encodeURIComponent(file.name) } });
   const j = await r.json();
   if (!r.ok) { $("status").innerHTML = `<span class="err">${j.error || r.status}</span>`; return; }
   fillVideos((await (await fetch("/api/videos")).json()).videos, j.id);
-  $("status").textContent = "Calcul des embeddings CLIP…";
+  $("status").innerHTML = '<span class="spinner"></span>Calcul des embeddings CLIP…';
   load();
 }
 
