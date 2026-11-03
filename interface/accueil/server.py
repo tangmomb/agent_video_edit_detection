@@ -23,6 +23,10 @@ INTERFACE = HERE.parent
 # Les outils du menu, dans l'ordre (le premier s'ouvre à l'arrivée) : id de la page (/#/<id>), nom, description, adresse affichée dans
 # le cadre et, pour un outil à serveur, l'adresse dont on vérifie qu'elle répond (voyant du menu).
 TOOLS = [
+    {"id": "runs", "name": "Résumé des runs", "icon": "📋", "url": "http://localhost:8830/",
+     "check": "http://localhost:8830/",
+     "desc": "Une ligne par run : run en cours, coût, durée, temps et coût de chaque étape, expériences, "
+             "tests finaux et modèle mis en production."},
     {"id": "modele", "name": "Modèle en production", "icon": "▶", "url": "http://localhost:8780/",
      "check": "http://localhost:8780/",
      "desc": "Envoie une vidéo et vois les images où le classifieur détecte un ajout de montage, avec un "

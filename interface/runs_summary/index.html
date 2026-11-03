@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Résumé des runs</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #141416; --panel: #1d1d20; --sunk: #252529; --fg: #ececee; --muted: #a2a2a8;
+  --faint: #6e6e75; --line: #333338;
+  --accent: #f2b36b; --ok: #8fe0b0; --ko: #ff8a80; --warn: #f0d36b; --live: #8aa6ff;
+  --a-orch: #f2b36b; --a-data: #4fbfc4; --a-model: #8aa6ff; --a-eval: #c08cff;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 64px; }
+code { font: 12.5px ui-monospace, "Cascadia Code", Consolas, monospace; background: var(--sunk); padding: 1px 6px; border-radius: 5px; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+
+/* ---------- en-tête ---------- */
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: 26px; margin: 2px 0 4px; letter-spacing: -.01em; }
+.lede { color: var(--muted); margin: 0 0 18px; max-width: 820px; }
+h2 { font-size: 12px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  font-weight: 700; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+h2 .count { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--faint); font-size: 12.5px; }
+
+/* ---------- vue d'ensemble ---------- */
+.overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+@media (max-width: 760px) { .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.overview > div { background: var(--panel); padding: 11px 14px; min-width: 0; }
+.overview .k { font-size: 11.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.overview .v { font-size: 18px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.overview .s { font-size: 12.5px; color: var(--muted); }
+
+/* ---------- run en cours ---------- */
+#live { background: color-mix(in srgb, var(--live) 10%, var(--panel)); border: 1px solid color-mix(in srgb, var(--live) 45%, transparent);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+#live .title { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+.pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 0 var(--live);
+  animation: pulse 1.6s infinite; flex: none; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 70%, transparent); }
+  70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+#live .facts { display: flex; gap: 6px 22px; flex-wrap: wrap; margin-top: 8px; font-size: 14px; color: var(--muted); }
+#live .facts b { color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* ---------- liste des runs ---------- */
+.runs { display: grid; gap: 8px; }
+details.run { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+details.run[open] { border-color: color-mix(in srgb, var(--fg) 25%, var(--line)); }
+details.run > summary { list-style: none; cursor: pointer; padding: 10px 16px; }
+details.run > summary::-webkit-details-marker { display: none; }
+details.run > summary:hover { background: color-mix(in srgb, var(--fg) 3%, transparent); }
+.l1, .l2 { display: flex; align-items: center; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.l1 { gap: 4px 10px; }
+.l2 { gap: 4px 20px; margin-top: 5px; font-size: 13.5px; color: var(--muted); }
+.l2 b { color: var(--fg); font-weight: 600; }
+.runname { font-weight: 650; font-size: 15px; }
+.when { font-size: 13px; color: var(--muted); }
+.cost { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.cost .meter { width: 70px; margin: 0; }
+@media (max-width: 520px) { .cost { margin-left: 0; width: 100%; } }
+.chip { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.chip.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.chip.ko { background: color-mix(in srgb, var(--ko) 18%, transparent); color: var(--ko); }
+.chip.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.chip.live { background: color-mix(in srgb, var(--live) 20%, transparent); color: var(--live); }
+.chip.dim { background: var(--sunk); color: var(--muted); }
+.meter { height: 5px; border-radius: 3px; background: var(--sunk); margin-top: 4px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+/* ---------- détail ---------- */
+.detail { border-top: 1px solid var(--line); padding: 14px 16px 16px; display: grid; gap: 16px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+.box { background: var(--sunk); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.stack { display: flex; height: 14px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--bg); margin-bottom: 10px; }
+.stack i { display: block; min-width: 3px; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.steps li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; font-size: 13.5px; }
+.steps .dot { width: 10px; height: 10px; border-radius: 3px; align-self: center; }
+.steps .what { min-width: 0; }
+.steps .what b { font-weight: 600; }
+.steps .what span { display: block; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.steps .nums { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.steps .nums b { color: var(--fg); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 11px; color: var(--faint); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+td.r, th.r { text-align: right; padding-right: 0; padding-left: 8px; }
+td code { font-size: 11.5px; padding: 0 4px; }
+tr.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); padding-left: 8px; }
+.apbar { display: inline-block; width: 46px; height: 5px; border-radius: 3px; background: var(--bg); vertical-align: middle; margin-right: 6px; overflow: hidden; }
+.apbar i { display: block; height: 100%; background: var(--a-model); }
+.facts-line { display: flex; gap: 6px 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.facts-line b { color: var(--fg); font-weight: 600; }
+.conclusion { font-size: 13.5px; color: var(--muted); margin: 0; }
+.empty { color: var(--muted); font-size: 13.5px; }
+.legend { display: flex; gap: 4px 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+#unreadable { font-size: 12.5px; color: var(--faint); margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Runs des agents</div>
+    <h1>Résumé des runs</h1>
+    <p class="lede">Une ligne par run : état, coût, durée, expériences, tests finaux et modèle mis en production.
+      Ouvre un run pour le temps et le coût de chaque étape. Pour relire un run message par message, voir
+      <b>Conversations des runs</b>.</p>
+  </header>
+
+  <section class="overview" id="overview"></section>
+  <section id="live" hidden></section>
+
+  <h2>Runs <span class="count" id="runs-count"></span></h2>
+  <div class="runs" id="runs"></div>
+  <p id="unreadable" hidden></p>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const AGENTS = {
+  orchestrator: ["Orchestrateur", "var(--a-orch)"], dataset_builder: ["Dataset Builder", "var(--a-data)"],
+  model_researcher: ["Model Researcher", "var(--a-model)"], evaluator: ["Evaluator", "var(--a-eval)"],
+};
+const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const usd = (x, n = 2) => x == null ? "–" : `${x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n })} $`;
+const dec = (x, n = 4) => x == null ? "–" : x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n });
+const pct = (x) => x == null ? "–" : `${(Math.round(x * 1000) / 10).toLocaleString("fr-FR")} %`;
+const dur = (s) => {
+  if (s == null) return "–";
+  s = Math.round(s);
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m} min ${String(s % 60).padStart(2, "0")}` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
+};
+const date = (iso) => iso ? new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
+const STATUS = { done: ["terminé", "ok"], running: ["en cours", "live"], interrompu: ["interrompu", "warn"], error: ["erreur", "ko"] };
+const opened = new Set();
+
+function config(e) {
+  const p = Object.entries(e.params || {}).map(([k, v]) => `${k}=${v}`).join(" ");
+  const w = Object.entries(e.weights || {}).map(([k, v]) => `${k}×${v}`).join(" ");
+  const b = Object.entries(e.balance || {}).map(([k, v]) => `${k}×${v}`).join(" ");
+  return `${e.model}${p ? " " + p : ""}${w ? " · poids " + w : ""}${b ? " · balance " + b : ""}`;
+}
+
+function testChip(t) {
+  const cls = t.statut === "réussi" ? "ok" : t.statut === "échoué" ? "ko" : "dim";
+  return `<span class="chip ${cls}" title="précision test ${pct(t.precision)}, rappel ${pct(t.recall)} (cible ${pct(t.precision_visee)})">${esc(t.id)} ${esc(t.statut || "?")}</span>`;
+}
+
+function prodChip(p) {
+  if (!p) return '<span class="chip dim">aucun</span>';
+  const cls = p.statut === "vérifié" ? "ok" : p.statut === "conservé" ? "dim" : "warn";
+  return `<b>${esc(p.experiment_id)}</b> <span class="chip ${cls}">${esc(p.statut)}</span>`;
+}
+
+function overview(d) {
+  const p = d.production, total = d.runs.reduce((s, r) => s + (r.cost_usd || 0) + (r.annotation_usd || 0), 0);
+  const live = d.runs.find((r) => r.status === "running");
+  $("overview").innerHTML = `
+    <div><div class="k">Modèle en production</div><div class="v">${p ? esc(p.experiment_id) : "–"}</div>
+      <div class="s">${p ? `${esc(p.split_id)} · seuil ${dec(p.threshold, 3)} · test ${p.test && p.test.statut === "réussi" ? `${pct(p.test.precision)} préc. · ${pct(p.test.recall)} rappel` : (p.test && p.test.statut) || "?"}` : ""}</div></div>
+    <div><div class="k">Run en cours</div><div class="v">${live ? `Run ${live.n}` : "aucun"}</div>
+      <div class="s">${live ? `${(AGENTS[live.en_cours?.agent] || [live.en_cours?.agent || "—"])[0]} · ${dur(live.duration_s)}` : "dernier : " + (d.runs[0] ? `run ${d.runs[0].n}, ${date(d.runs[0].started)}` : "–")}</div></div>
+    <div><div class="k">Dépensé au total</div><div class="v">${usd(total)}</div>
+      <div class="s">agents + annotation, ${d.runs.length} runs</div></div>
+    <div><div class="k">Expériences</div><div class="v">${d.runs.reduce((s, r) => s + r.experiences.length, 0)}</div>
+      <div class="s">${d.runs.reduce((s, r) => s + r.final_tests.length, 0)} tests finaux</div></div>`;
+}
+
+function liveBanner(d) {
+  const r = d.runs.find((x) => x.status === "running");
+  $("live").hidden = !r;
+  if (!r) return;
+  const a = r.en_cours ? (AGENTS[r.en_cours.agent] || [r.en_cours.agent])[0] : "Orchestrateur";
+  const since = r.en_cours ? (Date.now() - new Date(r.en_cours.depuis)) / 1000 : null;
+  $("live").innerHTML = `<div class="title"><span class="pulse"></span>Run ${r.n} en cours · ${esc(a)}${since != null ? ` depuis ${dur(since)}` : ""}</div>
+    <div class="facts"><span>démarré <b>${date(r.started)}</b></span><span>durée <b>${dur(r.duration_s)}</b></span>
+      <span>coût <b>${usd(r.cost_usd, 3)}</b> / ${usd(r.budget_usd)}</span><span>expériences <b>${r.experiences.length}</b></span>
+      <span>dernier événement <b>${date(r.dernier_evenement)}</b></span></div>
+    <div class="meter" style="margin-top:10px"><i style="width:${Math.min(100, 100 * (r.cost_usd || 0) / (r.budget_usd || 1))}%"></i></div>`;
+}
+
+function detail(r) {
+  const total = r.etapes.reduce((s, e) => s + (e.duration_s || 0), 0) || 1;
+  const orchCost = Math.max(0, (r.cost_usd || 0) - r.etapes.reduce((s, e) => s + (e.cost_usd || 0), 0));
+  const stack = r.etapes.map((e) => `<i style="flex:${e.duration_s || 1};background:${(AGENTS[e.agent] || ["", "var(--muted)"])[1]}" title="${esc((AGENTS[e.agent] || [e.agent])[0])} · ${dur(e.duration_s)}"></i>`).join("");
+  const steps = r.etapes.map((e) => {
+    const [name, color] = AGENTS[e.agent] || [e.agent, "var(--muted)"];
+    return `<li><span class="dot" style="background:${color}"></span>
+      <span class="what"><b>${esc(name)}</b>${e.en_cours ? ' <span class="chip live" style="display:inline">en cours</span>' : ""}<span title="${esc(e.task)}">${esc(e.task)}</span></span>
+      <span class="nums"><b>${dur(e.duration_s)}</b> · ${usd(e.cost_usd, 3)} · ${e.tools} outils</span></li>`;
+  }).join("") + `<li><span class="dot" style="background:var(--a-orch)"></span><span class="what"><b>Orchestrateur</b><span>décisions et délégations</span></span>
+      <span class="nums">${usd(orchCost, 3)}</span></li>`;
+
+  const exps = [...r.experiences].sort((a, b) => (b.ap_par_chaine ?? -1) - (a.ap_par_chaine ?? -1));
+  const top = exps.slice(0, 8);
+  const old = exps.some((e) => e.ap_globale);
+  const rows = top.map((e, k) => `<tr class="${k === 0 ? "best" : ""}"><td>${esc(e.id)}</td>
+      <td>${(e.embeddings || []).map((x) => `<code>${esc(x)}</code>`).join(" ")}<br><span class="muted">${esc(config(e))}</span></td>
+      <td class="r"><span class="apbar"><i style="width:${Math.max(0, ((e.ap_par_chaine ?? 0) - 0.8) / 0.2 * 100)}%"></i></span>${dec(e.ap_par_chaine)}</td>
+      <td class="r">${pct(e.recall)}</td></tr>`).join("");
+  const expBox = exps.length ? `<table><thead><tr><th>exp</th><th>config</th><th class="r">${old ? "AP" : "AP / chaîne"}</th><th class="r">rappel</th></tr></thead><tbody>${rows}</tbody></table>
+      ${exps.length > top.length ? `<p class="empty" style="margin:8px 0 0">et ${exps.length - top.length} autres, moins bonnes en ${old ? "AP" : "AP par chaîne"}.</p>` : ""}`
+    : '<p class="empty" style="margin:0">Aucune expérience entraînée.</p>';
+
+  const facts = [
+    `<span>modèle des agents <b>${esc(r.agent_model || "mistral-large-4-0 (défaut)")}</b></span>`,
+    r.tokens ? `<span>tokens <b>${(r.tokens.input || 0).toLocaleString("fr-FR")}</b> en entrée, <b>${(r.tokens.output || 0).toLocaleString("fr-FR")}</b> en sortie</span>` : "",
+    `<span>vidéos collectées <b>${r.videos_collectees}</b>${r.annotation_usd ? ` · annotation <b>${usd(r.annotation_usd, 3)}</b>` : ""}</span>`,
+    r.splits.length ? `<span>nouveau split <b>${r.splits.join(", ")}</b></span>` : "",
+  ].join("");
+  return `<div class="detail">
+    <div class="facts-line">${facts}</div>
+    <div class="cols">
+      <div class="box"><h2>Étapes <span class="count">${dur(r.duration_s)} au total</span></h2>
+        <div class="legend">${Object.entries(AGENTS).slice(1).map(([, [n, c]]) => `<span><i style="background:${c}"></i>${n}</span>`).join("")}</div>
+        <div class="stack">${stack || '<i style="flex:1;background:var(--line)"></i>'}</div>
+        <ul class="steps">${steps}</ul></div>
+      <div class="box"><h2>Expériences <span class="count">${exps.length}, les meilleures</span></h2>${expBox}</div>
+    </div>
+    ${r.final_tests.length ? `<div class="box"><h2>Tests finaux</h2><table><thead><tr><th>exp</th><th>verdict</th><th class="r">cible</th><th class="r">précision test</th><th class="r">rappel test</th></tr></thead><tbody>
+      ${r.final_tests.map((t) => `<tr><td>${esc(t.id)}</td><td>${testChip({ ...t, id: "" })}</td><td class="r">${pct(t.precision_visee)}</td><td class="r">${pct(t.precision)}</td><td class="r">${pct(t.recall)}</td></tr>`).join("")}
+      </tbody></table></div>` : ""}
+    ${r.error ? `<p class="conclusion" style="color:var(--ko)">Erreur : ${esc(r.error)}</p>` : ""}
+    ${r.conclusion ? `<p class="conclusion"><b style="color:var(--fg)">Conclusion de l'orchestrateur :</b> ${esc(r.conclusion)}${r.conclusion.length >= 300 ? "…" : ""}</p>` : ""}
+  </div>`;
+}
+
+function runRow(r) {
+  const [label, cls] = STATUS[r.status] || [r.status, "dim"];
+  const ratio = r.budget_usd ? Math.min(100, 100 * (r.cost_usd || 0) / r.budget_usd) : 0;
+  const ap = r.best ? ` · AP max <b>${dec(r.best.ap_par_chaine, 3)}</b>` : "";
+  return `<details class="run" data-id="${r.id}" ${opened.has(r.id) ? "open" : ""}>
+    <summary>
+      <div class="l1">
+        <span class="runname">Run ${r.n}</span><span class="when">${date(r.started)}</span><span class="chip ${cls}">${label}</span>
+        <span class="cost"><span><b>${usd(r.cost_usd, 3)}</b> <span class="muted">/ ${usd(r.budget_usd)}</span></span>
+          <span class="meter"><i style="width:${ratio}%"></i></span><b>${dur(r.duration_s)}</b></span>
+      </div>
+      <div class="l2">
+        <span><b>${r.experiences.length}</b> exp.${ap}</span>
+        <span>tests : ${r.final_tests.length ? r.final_tests.map(testChip).join(" ") : "aucun"}</span>
+        <span>production : ${prodChip(r.production)}</span>
+      </div>
+    </summary>
+    ${detail(r)}
+  </details>`;
+}
+
+async function load() {
+  let d;
+  try { d = await (await fetch("/api/runs", { cache: "no-store" })).json(); } catch { return; }
+  overview(d);
+  liveBanner(d);
+  $("runs-count").textContent = `${d.runs.length}`;
+  $("runs").innerHTML = d.runs.map(runRow).join("") || '<p class="empty">Aucun run dans runs/.</p>';
+  $("runs").querySelectorAll("details.run").forEach((el) => el.ontoggle = () => {
+    if (el.open) opened.add(el.dataset.id); else opened.delete(el.dataset.id);
+  });
+  $("unreadable").hidden = !d.illisibles.length;
+  $("unreadable").textContent = d.illisibles.length ? `Journal illisible (vide ou abîmé) : ${d.illisibles.join(", ")}.` : "";
+  clearTimeout(load.t);
+  load.t = setTimeout(load, d.runs.some((r) => r.status === "running") ? 5000 : 30000);
+}
+load();
+</script>
+</body>
+</html>

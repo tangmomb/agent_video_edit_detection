@@ -50,6 +50,15 @@
         "interface/run_chat/server.py"
       ],
       "port": 8820
+    },
+    {
+      "name": "runs-summary",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "interface/dev_reload.py",
+        "interface/runs_summary/server.py"
+      ],
+      "port": 8830
     }
   ]
 }

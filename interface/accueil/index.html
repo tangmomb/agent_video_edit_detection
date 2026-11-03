@@ -63,7 +63,7 @@ function menu() {
     `<div class="ds">${esc(t.desc)}</div></div></a>`).join("");
 }
 
-// sans page demandée : le premier outil du menu (le modèle en production)
+// sans page demandée : le premier outil du menu (le résumé des runs)
 const current = () => (location.hash.match(/^#\/([\w-]+)/) || [])[1] || (TOOLS[0] || {}).id;
 
 // Un cadre par outil, gardé en mémoire : revenir à un outil le retrouve dans l'état laissé
