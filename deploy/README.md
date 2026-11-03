@@ -33,7 +33,9 @@ sudo systemctl reload caddy
 
 ## Lancer un run (payant)
 
-Un run à la main, avec un budget explicite et des plafonds pour laisser le site répondre :
+Un run à la main, avec un budget explicite et des plafonds pour laisser le site répondre.
+L'annotation part en batch (-50 %) : un run qui collecte peut durer jusqu'à 24 h, sans rien écrire
+dans son journal pendant l'attente. Le suivre avec `python -m model_training_pipeline batch status`.
 
 ```bash
 cd /srv/agent_mots_cles

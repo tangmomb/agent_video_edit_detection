@@ -18,7 +18,6 @@ import random
 import time
 
 from video_source import youtube
-from video_source.annotators import ANNOTATORS, DIRECT_ANNOTATORS
 from video_source.config import SAMPLES_DIR
 
 from . import batch
@@ -54,10 +53,11 @@ def collect(target: int = 50, per_query: int = 2, max_usd: float = 2.5, dry_run:
     factor = 1 / batch.DISCOUNT if direct else 1.0  # estimations au tarif batch ; direct : prix plein
 
     def annotate_now(d) -> None:
-        """Appels directs : tous les annotateurs (--direct), sinon ceux dont le batch est trop lent
-        (annotators.DIRECT_ANNOTATORS) ; le batch final n'envoie que les votes manquants."""
+        """Appels directs (--direct) ; sans --direct, tout part dans le batch final."""
         nonlocal cost
-        res = annotate(d, max_usd=max_usd - cost, models=ANNOTATORS if direct else DIRECT_ANNOTATORS)
+        if not direct:
+            return
+        res = annotate(d, max_usd=max_usd - cost)
         cost += res["cost_usd"]
         print(f"[collect] {d.name} annotée : {res['images_avec_accord']}/{res['images_annotees']} avec accord, "
               f"{res['cost_usd']:.3f} $ (total {cost:.2f} $)", flush=True)

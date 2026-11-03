@@ -455,8 +455,7 @@ class Lab:
         """Collecte n nouvelles vraies vidéos YouTube pour la requête, puis fait annoter leurs images
         par les trois LLM (appels payants, plafonnés par annotation_budget_usd) : en mode batch, en
         attendant les résultats sans limite (envoi et récupération dans le même appel : un batch que
-        l'appel n'a pas récupéré, s'il est interrompu, est oublié), sauf les annotateurs de
-        annotators.DIRECT_ANNOTATORS, toujours en appels directs ; tout en appels directs si
+        l'appel n'a pas récupéré, s'il est interrompu, est oublié) ; en appels directs si
         direct_annotation. Une vidéo non annotée (budget épuisé) reste sans étiquette, jamais reprise."""
         n = min(int(n), self.max_per_request, self.data_budget - self.generated)
         if n <= 0:
@@ -484,11 +483,8 @@ class Lab:
             est += e
         before = self.annotation_spent
         failed = 0
-        # Appels directs : tous les annotateurs (direct_annotation), sinon ceux dont le batch est trop
-        # lent (annotators.DIRECT_ANNOTATORS) ; le batch ci-dessous n'envoie que les votes manquants.
-        direct = annotators.ANNOTATORS if self.direct_annotation else annotators.DIRECT_ANNOTATORS
-        for d in chosen if direct else []:
-            res = annotate(d, max_usd=self.annotation_budget_usd - self.annotation_spent, models=direct)
+        for d in chosen if self.direct_annotation else []:
+            res = annotate(d, max_usd=self.annotation_budget_usd - self.annotation_spent)
             self.annotation_spent += res["cost_usd"]
             if res["arret_budget"]:
                 stopped = "budget d'annotation épuisé pendant l'annotation directe"

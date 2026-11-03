@@ -78,6 +78,7 @@ def describe(frames: list[str], max_usd: float, every_s: float = 20) -> dict:
     finally:
         path.unlink(missing_ok=True)
     while True:
+        batch.heartbeat()
         job = batch._job(provider, api, job_id)
         if str(job.status) in batch.DONE[provider]:
             break

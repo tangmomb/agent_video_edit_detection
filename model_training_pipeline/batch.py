@@ -202,10 +202,18 @@ def in_flight(job_ids: set[str] | None = None) -> list[dict]:
     return [j for j in _load()["jobs"] if job_ids is None or j["job_id"] in job_ids]
 
 
+def heartbeat() -> None:
+    """Signal de vie pendant l'attente d'un batch : le journal du run ne bouge plus, parfois des
+    heures ; les interfaces lisent cette date pour ne pas le croire interrompu."""
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.touch()
+
+
 def wait(job_ids: set[str], every_s: float = 180, apis: dict | None = None) -> None:
     """Attend, sans limite, que les batchs job_ids soient terminés côté API (sans les récupérer) ;
     les API les arrêtent d'elles-mêmes au bout de 24 h (statut expiré)."""
     while True:
+        heartbeat()
         pending = {j["job_id"] for j in status(apis, job_ids) if not j["collected"]
                    and j["status"] not in DONE["openai"] | DONE["mistral"]}
         if not pending:
