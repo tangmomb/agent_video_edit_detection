@@ -52,6 +52,10 @@ MAX_SIDE = 768  # plus grand côté envoyé ; le nombre de tokens d'une image su
 
 # Les trois annotateurs du dataset (meilleurs du banc, octobre 2026).
 ANNOTATORS = ("gpt-6-luna", "gpt-5.6-luna", "zai-glm-5-3-flash")
+# Annotés en appels directs même quand la session annote en batch : le batch de gpt-6-luna peut
+# attendre des heures (run 014, 04/11/2026 : plus de 10 h pour 500 requêtes, les deux autres déjà
+# finis), et tout le run l'attend. Surcoût : environ 20 % de l'annotation.
+DIRECT_ANNOTATORS = ("gpt-6-luna",)
 
 PROMPT = """Dis si cette image est brute de la caméra ou non.
 Réponds true dès que quelque chose a été ajouté au montage : habillage, texte, titre, sous-titres,

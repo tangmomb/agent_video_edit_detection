@@ -34,8 +34,9 @@ sudo systemctl reload caddy
 ## Lancer un run (payant)
 
 Un run à la main, avec un budget explicite et des plafonds pour laisser le site répondre.
-Tout part en batch (-50 %), annotation et agents (un batch par tour d'agent) : un run dure plus
-longtemps et peut rester des heures sur une attente, sans rien écrire dans son journal. Le suivre
+Tout part en batch (-50 %), agents (un batch par tour) et annotation, sauf `gpt-6-luna`, en direct
+car son batch est trop lent. Un run dure plus longtemps et peut rester des heures sur une attente,
+sans rien écrire dans son journal. Le suivre
 avec `python -m model_training_pipeline batch status`. `--direct-agents` et `--direct-annotation`
 repassent en appels directs (prix plein). Le coût affiché des agents compte le pire cas (sans tarif
 cache) : à comparer à la console Mistral.
