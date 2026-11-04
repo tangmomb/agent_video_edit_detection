@@ -135,7 +135,8 @@ def summarize(run_dir: Path) -> dict:
                            "precision_visee": res.get("precision_visee"),
                            "precision": t.get("precision"), "recall": t.get("recall")})
     best = max((e for e in exps if e["ap_par_chaine"] is not None), key=lambda e: e["ap_par_chaine"], default=None)
-    current = next(iter(open_calls.values()), None) if status == "running" else None
+    # L'appel ouvert le plus récent : l'orchestrateur reste ouvert pendant que son sous-agent travaille.
+    current = list(open_calls.values())[-1] if status == "running" and open_calls else None
     return {
         "id": run_dir.name, "n": run_dir.name.split("_")[0], "status": status, "started": r.get("started"),
         "ended": r.get("ended"), "duration_s": _seconds(r.get("started"), ended),
