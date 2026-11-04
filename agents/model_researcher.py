@@ -42,8 +42,7 @@ payant : pas à chaque expérience.
 
 Rapport final, court, en français : le split (et pourquoi si tu l'as créé) ; par expérience, id, \
 hypothèse, AP par chaîne, rappel à 90 % et effet sur l'erreur visée ; ton meilleur candidat \
-(règle de la partie Mesure) et pourquoi ; ce que tu essaierais ensuite et les données qui \
-manquent."""
+(règle de la partie Mesure) et pourquoi ; ce que tu essaierais ensuite."""
 
 
 def make(lab: Lab, session=None) -> Agent:

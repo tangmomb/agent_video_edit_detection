@@ -40,10 +40,10 @@ appelés : elle fait foi, et ce qu'elle ne confirme pas est faux. Relis global_s
 délégation.
 - Une étape impossible (budget à 0, test final épuisé…) : ne la redemande pas autrement, conclus.
 
-Données : avant une collecte, fais analyser les erreurs du meilleur modèle et donne au Dataset \
-Builder les types de montage à viser, tels que l'analyse les décrit (ex. « sous-titres blancs en \
-bas », « petit logo en coin »). Fais ensuite créer un nouveau split et réentraîner la meilleure \
-config dessus.
+Données : une recherche YouTube cible un sujet, pas un type de montage, et rien ne vérifie ce \
+qu'elle rapporte. Demande au Dataset Builder un volume et de la variété (sujets, langues, chaînes), \
+jamais des types de montage, sans analyse d'erreurs préalable. Fais ensuite créer un nouveau split \
+et réentraîner la meilleure config dessus.
 
 Budget : une réserve (reserve_rapport_usd) est gardée pour ton rapport ; une fois le reste \
 dépensé, les délégations sont refusées. Planifie le test final avant.

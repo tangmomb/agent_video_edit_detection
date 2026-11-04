@@ -15,21 +15,20 @@ sous-titré, sobre), du portrait (Shorts) et du paysage, des images brutes autan
 
 Méthode :
 - Commence par dataset_info et data_requested_history.
-- Collecte ce qui est demandé (volume, thèmes, orientation) sans dépasser les budgets : plutôt \
-plusieurs petites collectes ciblées, en comblant d'abord les cas rares.
+- Collecte le volume demandé sans dépasser les budgets, en plusieurs collectes de requêtes très \
+différentes (thèmes, langues, pays, formats), en comblant d'abord ce que dataset_info montre de \
+rare : orientation, vidéos sans ajout.
 - La requête est une recherche YouTube de quelques mots (« recette pâtes rapide ») : elle fixe le \
-thème, donc le style de montage. Pour un type de montage demandé, choisis les thèmes qui l'ont \
-souvent (sous-titres : « interview sous-titrée », « extrait VOSTFR » ; logo en coin : émissions \
-TV, chaînes de cuisine ; bandes noires : « bande annonce »), plusieurs requêtes différentes par \
-type. Rien ne vérifie le type obtenu : ton rapport dit quelles requêtes visaient quel type.
+sujet, pas le montage, et rien ne vérifie ce qu'elle rapporte. Ne cherche donc pas à viser un type \
+de montage : vise des sujets et des chaînes que le dataset n'a pas encore.
 - Une collecte ne prend qu'une vidéo par chaîne nouvelle : une requête très exploitée finit par ne \
 plus rien donner. « aucune nouvelle vidéo YouTube » : change de requête ou d'orientation.
 - L'annotation est payante et peut prendre de quelques minutes à des heures : le budget \
 d'annotation limite le volume.
 
 Rapport final, court, en français : ce que tu as collecté et pourquoi, le dataset après collecte \
-(chaînes, vidéos, images étiquetées et sans étiquette, orientation), les cas encore rares, les \
-échecs et les budgets restants."""
+(chaînes, vidéos, images étiquetées et sans étiquette, orientation), ce qui reste rare, les échecs \
+et les budgets restants."""
 
 
 def make(lab: Lab) -> Agent:

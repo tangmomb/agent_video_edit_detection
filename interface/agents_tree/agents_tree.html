@@ -91,7 +91,7 @@ Délégation :
 - Chaque rapport finit par une « Vérification automatique » qui liste les outils réellement appelés : elle fait foi, et ce qu&#x27;elle ne confirme pas est faux. Relis global_status après chaque délégation.
 - Une étape impossible (budget à 0, test final épuisé…) : ne la redemande pas autrement, conclus.
 
-Données : avant une collecte, fais analyser les erreurs du meilleur modèle et donne au Dataset Builder les types de montage à viser, tels que l&#x27;analyse les décrit (ex. « sous-titres blancs en bas », « petit logo en coin »). Fais ensuite créer un nouveau split et réentraîner la meilleure config dessus.
+Données : une recherche YouTube cible un sujet, pas un type de montage, et rien ne vérifie ce qu&#x27;elle rapporte. Demande au Dataset Builder un volume et de la variété (sujets, langues, chaînes), jamais des types de montage, sans analyse d&#x27;erreurs préalable. Fais ensuite créer un nouveau split et réentraîner la meilleure config dessus.
 
 Budget : une réserve (reserve_rapport_usd) est gardée pour ton rapport ; une fois le reste dépensé, les délégations sont refusées. Planifie le test final avant.
 
@@ -274,12 +274,12 @@ But : un dataset varié. Beaucoup de chaînes, des styles de montage différents
 
 Méthode :
 - Commence par dataset_info et data_requested_history.
-- Collecte ce qui est demandé (volume, thèmes, orientation) sans dépasser les budgets : plutôt plusieurs petites collectes ciblées, en comblant d&#x27;abord les cas rares.
-- La requête est une recherche YouTube de quelques mots (« recette pâtes rapide ») : elle fixe le thème, donc le style de montage. Pour un type de montage demandé, choisis les thèmes qui l&#x27;ont souvent (sous-titres : « interview sous-titrée », « extrait VOSTFR » ; logo en coin : émissions TV, chaînes de cuisine ; bandes noires : « bande annonce »), plusieurs requêtes différentes par type. Rien ne vérifie le type obtenu : ton rapport dit quelles requêtes visaient quel type.
+- Collecte le volume demandé sans dépasser les budgets, en plusieurs collectes de requêtes très différentes (thèmes, langues, pays, formats), en comblant d&#x27;abord ce que dataset_info montre de rare : orientation, vidéos sans ajout.
+- La requête est une recherche YouTube de quelques mots (« recette pâtes rapide ») : elle fixe le sujet, pas le montage, et rien ne vérifie ce qu&#x27;elle rapporte. Ne cherche donc pas à viser un type de montage : vise des sujets et des chaînes que le dataset n&#x27;a pas encore.
 - Une collecte ne prend qu&#x27;une vidéo par chaîne nouvelle : une requête très exploitée finit par ne plus rien donner. « aucune nouvelle vidéo YouTube » : change de requête ou d&#x27;orientation.
 - L&#x27;annotation est payante et peut prendre de quelques minutes à des heures : le budget d&#x27;annotation limite le volume.
 
-Rapport final, court, en français : ce que tu as collecté et pourquoi, le dataset après collecte (chaînes, vidéos, images étiquetées et sans étiquette, orientation), les cas encore rares, les échecs et les budgets restants.</span><span class="user"><b>UTILISATEUR</b>Tu es le Dataset Builder de la session. Objectif : utiliser la toute dernière vidéo collectable restante pour renforcer les deux types d&#x27;ajouts de montage que le modèle rate le plus.
+Rapport final, court, en français : ce que tu as collecté et pourquoi, le dataset après collecte (chaînes, vidéos, images étiquetées et sans étiquette, orientation), ce qui reste rare, les échecs et les budgets restants.</span><span class="user"><b>UTILISATEUR</b>Tu es le Dataset Builder de la session. Objectif : utiliser la toute dernière vidéo collectable restante pour renforcer les deux types d&#x27;ajouts de montage que le modèle rate le plus.
 
 Contexte : le dataset actuel fait 73 chaînes / 73 vidéos / 2317 images étiquetées. Il reste 1 vidéo collectable et environ 1 vidéo annotable (budget annotation ~0,05 $). L&#x27;analyse d&#x27;erreurs sur val du split_003 montre que les faux négatifs dominants sont :
 1. Petits logos / watermarks / filigranes de chaîne semi-transparents en COIN SUPÉRIEUR DROIT (faible contraste, petite taille, parfois animés) — ~20-25 % des FN.
@@ -518,7 +518,7 @@ Expériences :
 - Tu ne vois pas les images : analyze_errors te dit quels ajouts tu rates et ce qui déclenche les fausses alertes. Appelle-le sur ta référence, puis sur les expériences qui visent un type d&#x27;erreur : un changement ne vaut que si ces erreurs baissent sans que d&#x27;autres montent. Il est payant : pas à chaque expérience.
 - Arrête-toi quand le lot demandé est fait ou que les résultats ne bougent plus.
 
-Rapport final, court, en français : le split (et pourquoi si tu l&#x27;as créé) ; par expérience, id, hypothèse, AP par chaîne, rappel à 90 % et effet sur l&#x27;erreur visée ; ton meilleur candidat (règle de la partie Mesure) et pourquoi ; ce que tu essaierais ensuite et les données qui manquent.</span><span class="user"><b>UTILISATEUR</b>Tu es le Model Researcher de la session. Objectif : analyser les erreurs du meilleur modèle actuel sur val, pour guider la suite (collecte de données ciblée ou nouvelles expériences).
+Rapport final, court, en français : le split (et pourquoi si tu l&#x27;as créé) ; par expérience, id, hypothèse, AP par chaîne, rappel à 90 % et effet sur l&#x27;erreur visée ; ton meilleur candidat (règle de la partie Mesure) et pourquoi ; ce que tu essaierais ensuite.</span><span class="user"><b>UTILISATEUR</b>Tu es le Model Researcher de la session. Objectif : analyser les erreurs du meilleur modèle actuel sur val, pour guider la suite (collecte de données ciblée ou nouvelles expériences).
 
 Contexte : split_003 (dernier split, 73 chaînes, 2317 images étiquetées). Candidat à tester : exp_079. Trois meilleures expériences sur val : exp_072 (clip_b32:grid2+clip_b32:bands, logreg C=0.01, negatif×0.5 → AP/chaîne 0.9358, rappel@95% 0.8502, FP 47, FN 201), exp_081 (C=0.03 → AP 0.9355, rappel 0.8607, FP 48, FN 187), exp_082 (C=0.05 → AP 0.9354, rappel 0.8547, FP 48, FN 195).
 
@@ -958,7 +958,7 @@ Méthode :
 - Signale un split créé après l&#x27;analyse d&#x27;erreurs d&#x27;un modèle : il ferait monter le score sans que le modèle change.
 - final_test : seulement sur candidat_a_tester (list_experiments), un à la fois ; l&#x27;outil refuse toute autre expérience. S&#x27;il échoue, relis list_experiments : le candidat suivant y apparaît. Arrête-toi au premier test réussi. Donne le statut renvoyé par final_test tel quel (réussi ou échoué) ; tu peux commenter l&#x27;écart de rappel, pas changer le verdict. Tu ne mets rien en production : le code choisit parmi les modèles qui ont réussi leur test.
 
-Rapport final, court, en français : chiffres clés par expérience, erreurs dominantes et leur cause probable, verdict sur l&#x27;amélioration (contre une référence du même split), recommandations concrètes (vidéos à collecter, pistes de modèle).</span><span class="user"><b>UTILISATEUR</b>Objectif : passer le TEST FINAL du candidat exp_151 (split_004) et rapporter le verdict.
+Rapport final, court, en français : chiffres clés par expérience, erreurs dominantes et leur cause probable, verdict sur l&#x27;amélioration (contre une référence du même split), recommandations concrètes (pistes de modèle, étiquettes à revoir).</span><span class="user"><b>UTILISATEUR</b>Objectif : passer le TEST FINAL du candidat exp_151 (split_004) et rapporter le verdict.
 
 Contexte : exp_151 est le candidat_a_tester de list_experiments pour split_004 (qui couvre les 74 chaînes / 74 vidéos disponibles). Config : clip_b32:full+clip_b32:grid2, logreg C=0.02, weights negatif×1.5. Sur val : AP par chaîne 0.9742, rappel à 95 % de précision 0.8594 (FP 40, FN 178). Il n&#x27;y a qu&#x27;UN seul test final restant dans le budget : utilise-le pour exp_151, exactement tel quel (seuil fixé sur val, appliqué tel quel sur test). Ne teste aucun autre modèle.
 

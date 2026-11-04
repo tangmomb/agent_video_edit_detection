@@ -29,7 +29,7 @@ réussi leur test.
 
 Rapport final, court, en français : chiffres clés par expérience, erreurs dominantes et leur cause \
 probable, verdict sur l'amélioration (contre une référence du même split), recommandations \
-concrètes (vidéos à collecter, pistes de modèle)."""
+concrètes (pistes de modèle, étiquettes à revoir)."""
 
 
 
