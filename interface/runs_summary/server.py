@@ -29,17 +29,18 @@ PAGE = HERE / "index.html"
 # Comme run_chat : un run « running » dont le journal n'a pas bougé depuis ce délai a été arrêté
 # sans être clôturé, il est affiché « interrompu ».
 STALE_S = 15 * 60
-HEARTBEAT = ROOT / "data" / "batches.json"
+OLD_SIGNS = (ROOT / "data" / "batches.json", ROOT / "data" / "videos_samples")
 _PROD_RE = re.compile(r"`(exp_\d+)` sur `(split_\d+)`")
 
 
 def _stale(path: Path) -> bool:
-    """Journal immobile depuis STALE_S. Pendant un batch d'annotation (jusqu'à 24 h), le dernier run
-    reste vivant sans écrire : son signal de vie est la date de data/batches.json (batch.heartbeat)."""
-    seen = path.stat().st_mtime
-    if HEARTBEAT.exists() and path.parent.name == max(p.parent.name for p in RUNS.glob("*/pipeline.json")):
-        seen = max(seen, HEARTBEAT.stat().st_mtime)
-    return time.time() - seen > STALE_S
+    """Aucun signe de vie depuis STALE_S : journal immobile et fichier alive (Session._alive) pas touché.
+    Les runs d'avant ce fichier : batches.json et l'arrivée des vidéos, pour le dernier run seulement."""
+    alive = path.parent / "alive"
+    seen = [path, alive] if alive.exists() else [path]
+    if path.parent.name == max(p.parent.name for p in RUNS.glob("*/pipeline.json")):
+        seen += [f for f in OLD_SIGNS if f.exists()]
+    return time.time() - max(f.stat().st_mtime for f in seen) > STALE_S
 
 
 def _seconds(a: str | None, b: str | None) -> float | None:

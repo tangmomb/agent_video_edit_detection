@@ -29,6 +29,7 @@ import io
 import json
 import os
 import sys
+import threading
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -52,6 +53,7 @@ RUNS_DIR = LAB_DIR / "runs"
 # souvent : 7 délégations sur 13 en 503 sur b3, une perdue au run 006 malgré les relances
 # (01/11/2026). À retester quand il sortira de préversion.
 DEFAULT_MODEL = "mistral/mistral-large-4-0"
+ALIVE_S = 60  # entre deux signaux de vie du run (runs/<id>/alive)
 # Attentes avant chaque relance d'un appel en erreur passagère (Session._call).
 # $/million de tokens : tarifs relevés à la main (table des modèles du banc des annotateurs,
 # octobre 2026), prioritaires sur ceux de LiteLLM, parfois en retard. cached_input : tokens
@@ -176,6 +178,7 @@ class Session:
         self.verbose = verbose
         self.run_dir = run_dir or RUNS_DIR / f"{_next_run_number():03d}_{time.strftime('%Y%m%d-%H%M%S')}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
+        threading.Thread(target=self._alive, daemon=True).start()
         self._stack: list[int] = []  # appels d'agent en cours (le dernier est le plus profond)
         self._models: list[str] = []  # leurs modèles, dans le même ordre
         self.trace = {
@@ -204,6 +207,13 @@ class Session:
         cached = tokens["cached_input"] if "cached_input" in p else 0
         return ((tokens["input"] - cached) * p["input"] + cached * p.get("cached_input", 0)
                 + tokens["output"] * p["output"]) / 1e6
+
+    def _alive(self) -> None:
+        """Signal de vie, tant que le processus tourne : le journal ne bouge pas pendant un outil long
+        (téléchargements, attente d'un batch, run 015 : affiché interrompu alors qu'il téléchargeait)."""
+        while True:
+            (self.run_dir / "alive").touch()
+            time.sleep(ALIVE_S)
 
     def _say(self, msg: str) -> None:
         if self.verbose:
