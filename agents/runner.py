@@ -27,7 +27,6 @@ production) vit sur disque, pas dans les conversations.
 import base64
 import io
 import json
-import os
 import sys
 import threading
 import time
@@ -38,6 +37,7 @@ from typing import Any, Callable
 
 from video_source import retry
 from video_source.annotators import MODELS
+from video_source.atomic import write_atomic
 from video_source.config import LAB_DIR
 
 RUNS_DIR = LAB_DIR / "runs"
@@ -223,24 +223,7 @@ class Session:
         run = self.trace["run"]
         run["cost_usd"] = round(self.spent, 4)
         run["agent_calls"] = self.calls
-        path = self.run_dir / "pipeline.json"
-        tmp = path.with_suffix(".tmp")
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(self.trace, ensure_ascii=False, indent=2, default=str))
-            # Sur disque avant de remplacer le journal : après un arrêt brutal de la machine, on garde
-            # l'ancien ou le nouveau, pas un fichier rempli de zéros (run 009, tout le journal perdu).
-            fh.flush()
-            os.fsync(fh.fileno())
-        # Sous Windows, un fichier ouvert en lecture ailleurs ne peut pas être remplacé : un lecteur
-        # du journal (interface/run_chat, toutes les 5 s) faisait échouer l'outil en cours (run 008).
-        for wait in (0.05, 0.1, 0.2, 0.5, 1.0, None):
-            try:
-                os.replace(tmp, path)
-                return
-            except PermissionError:
-                if wait is None:
-                    raise
-                time.sleep(wait)
+        write_atomic(self.run_dir / "pipeline.json", json.dumps(self.trace, ensure_ascii=False, indent=2, default=str))
 
     def _step(self, call: int, agent: str, type_: str, **data) -> None:
         parent = self._stack[-2] if len(self._stack) > 1 else None

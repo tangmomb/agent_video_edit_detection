@@ -43,6 +43,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from video_source import annotators, youtube
+from video_source.atomic import sync_dir, write_atomic
 from video_source.config import DATA_DIR, LAB_DIR, SAMPLES_DIR
 
 from . import batch, describe, metrics
@@ -556,7 +557,7 @@ class Lab:
         if any(not str(v).strip() for v in clips.values()):
             raise ValueError("chaque exclusion doit avoir une raison")
         excluded = {**self._excluded(), **{k: str(v) for k, v in clips.items()}}
-        EXCLUDED.write_text(json.dumps(excluded, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_atomic(EXCLUDED, json.dumps(excluded, ensure_ascii=False, indent=2))
         return {"clips_exclus": excluded,
                 "effet": "appliqué aux splits créés à partir de maintenant (make_split) ; splits existants inchangés"}
 
@@ -589,10 +590,10 @@ class Lab:
         path = SPLITS_DIR / f"{split_id}.json"
         sp = {"split_id": split_id, "note": note, "date": time.strftime("%Y-%m-%d %H:%M"), "params": params,
               "excluded": exclude, "clips": assign}
-        path.write_text(json.dumps(sp, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_atomic(path, json.dumps(sp, ensure_ascii=False, indent=2))
         # plis figés avec le split (voir _folds), calculés sur le fichier qui vient d'être écrit
         sp["folds"] = self._folds(split_id)
-        path.write_text(json.dumps(sp, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_atomic(path, json.dumps(sp, ensure_ascii=False, indent=2))
         m = self._split_map(split_id)
         return _jsonable({"split_id": split_id, "params": params, "clips_exclus": len(exclude),
                           "plis_de_validation": len(set(self._folds(split_id).values())),
@@ -670,15 +671,17 @@ class Lab:
                   "params": params, "balance": balance or {}, "weights": weights or {}, "note": note}
         d = EXP_DIR / exp_id
         d.mkdir(parents=True)
-        (d / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
-        (d / "metrics.json").write_text(json.dumps(_jsonable(result), indent=2), encoding="utf-8")
+        sync_dir(EXP_DIR)
+        write_atomic(d / "config.json", json.dumps(config, indent=2))
         # Prédictions val (hors pli) indexées par frame : restent valides si le dataset grossit
         # ensuite ; groups (chaîne de chaque image) sert au seuil prudent.
-        (d / "val_preds.json").write_text(json.dumps(
+        write_atomic(d / "val_preds.json", json.dumps(
             {"frames": [self.rows[i]["frame"] for i in dev], "y": y[dev].tolist(),
-             "probs": [round(float(p), 5) for p in probs], "groups": groups.tolist()}), encoding="utf-8")
-        with open(d / "model.pkl", "wb") as fh:
-            pickle.dump(clf, fh)
+             "probs": [round(float(p), 5) for p in probs], "groups": groups.tolist()}))
+        write_atomic(d / "model.pkl", pickle.dumps(clf))
+        # En dernier : list_experiments ne retient que les dossiers qui ont metrics.json, donc une
+        # expérience interrompue n'apparaît pas sans son modèle.
+        write_atomic(d / "metrics.json", json.dumps(_jsonable(result), indent=2))
         return self.train_summary(exp_id)
 
     def train_summary(self, experiment_id: str) -> dict:
@@ -893,7 +896,7 @@ class Lab:
                   "precision_visee": precision, "seuil_choisi_sur_val": op["threshold"], "val": op,
                   "test": metrics.operating_point(y, probs, op["threshold"]),
                   "test_auc": s["auc"], "test_ap": s["ap"], "final_tests_restants": self.final_tests_left}
-        (d / "final_test.json").write_text(json.dumps(_jsonable(result), indent=2), encoding="utf-8")
+        write_atomic(d / "final_test.json", json.dumps(_jsonable(result), indent=2))
         return self.final_test_summary(experiment_id, precision)
 
     def final_test_summary(self, experiment_id: str, precision: float = metrics.DEFAULT_PRECISION) -> dict:
@@ -915,7 +918,7 @@ class Lab:
                 "precision_visee": precision, "threshold": op["threshold"],
                 "val_recall": op["recall"], "val_precision": op["precision"],
                 "test": test or self._test_status(experiment_id, precision), "note": note, "time": time.time()}
-        (EXP_DIR / "production.json").write_text(json.dumps(_jsonable(prod), indent=2), encoding="utf-8")
+        write_atomic(EXP_DIR / "production.json", json.dumps(_jsonable(prod), indent=2))
         return _jsonable(prod)
 
     def _ranked(self, split_id: str, precision: float = metrics.DEFAULT_PRECISION) -> list[dict]:
