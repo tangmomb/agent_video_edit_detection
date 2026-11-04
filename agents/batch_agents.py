@@ -24,7 +24,7 @@ DISCOUNT = batch.DISCOUNT
 
 
 class _BatchError(Exception):
-    """Batch expiré, annulé ou en échec sans résultat : passager, renvoyé par retry.forever."""
+    """Batch expiré, annulé, introuvable ou en échec sans résultat : passager, renvoyé par retry.forever."""
     status_code = 503
 
 
@@ -50,7 +50,12 @@ class BatchClient(HTTPHandler):
             path.unlink(missing_ok=True)
         while True:
             batch.heartbeat()  # le journal du run ne bouge pas pendant l'attente
-            job = batch._job("mistral", self._api, job_id)
+            try:
+                job = batch._job("mistral", self._api, job_id)
+            except Exception as e:
+                if getattr(e, "status_code", None) == 404:  # toujours introuvable : le tour est renvoyé
+                    raise _BatchError(f"batch {job_id} introuvable") from e
+                raise
             if str(job.status) in batch.DONE["mistral"]:
                 break
             time.sleep(EVERY_S)

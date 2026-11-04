@@ -567,9 +567,7 @@ Rapport attendu : chiffres val uniquement (pas de test), liste des types d&#x27;
           },
           &quot;test_ratio&quot;: {
             &quot;type&quot;: &quot;number&quot;,
-            &quot;minimum&quot;: 0.05,
-            &quot;maximum&quot;: 0.4,
-            &quot;description&quot;: &quot;Part des chaînes en test (défaut 0.2).&quot;
+            &quot;description&quot;: &quot;Part des chaînes en test, de 0.05 à 0.4 (défaut 0.2).&quot;
           },
           &quot;stratify&quot;: {
             &quot;type&quot;: &quot;array&quot;,
@@ -835,7 +833,7 @@ Outils réellement appelés par model_researcher :
       &quot;autres&quot;: &quot;69 expériences, AP par chaîne de 0.788 à 0.9247&quot;
     }
   ]
-}</pre></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><div class="exlabel">Options</div><ul class="params"><li><code>note</code><span class="req">requis</span> <span class="ptype">string</span><div class="pdesc">Pourquoi ce split.</div></li><li><code>test_ratio</code> <span class="ptype">number · 0.05…0.4</span><div class="pdesc">Part des chaînes en test (défaut 0.2).</div></li><li><code>stratify</code> <span class="ptype">array de string · orientation | clip_vide</span><div class="pdesc">Caractéristiques réparties à parts égales entre dev, test et plis (clip_vide : vidéo sans aucun ajout). Défaut : toutes ; [] : tirage au hasard.</div></li><li><code>seed</code> <span class="ptype">integer</span><div class="pdesc">Graine du tirage (défaut 0).</div></li></ul><div class="exlabel">Appel</div><pre>{
+}</pre></div></details></li><li class="node tool"><details><summary><span class="badge tool">outil</span><code class="tname">make_split</code></summary><div class="body"><div class="exlabel">Options</div><ul class="params"><li><code>note</code><span class="req">requis</span> <span class="ptype">string</span><div class="pdesc">Pourquoi ce split.</div></li><li><code>test_ratio</code> <span class="ptype">number</span><div class="pdesc">Part des chaînes en test, de 0.05 à 0.4 (défaut 0.2).</div></li><li><code>stratify</code> <span class="ptype">array de string · orientation | clip_vide</span><div class="pdesc">Caractéristiques réparties à parts égales entre dev, test et plis (clip_vide : vidéo sans aucun ajout). Défaut : toutes ; [] : tirage au hasard.</div></li><li><code>seed</code> <span class="ptype">integer</span><div class="pdesc">Graine du tirage (défaut 0).</div></li></ul><div class="exlabel">Appel</div><pre>{
   &quot;note&quot;: &quot;Nouveau split sur le dataset élargi (73 chaînes, 73 vidéos, 2317 images étiquetées) : intègre les clips collectés après split_002 (hors split) pour mesurer les meilleures configs de split_002 sur des chaînes nouvelles ; stratification par défaut (orientation, clip_vide), tirage par chaîne YouTube.&quot;,
   &quot;stratify&quot;: [
     &quot;orientation&quot;,

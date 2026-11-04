@@ -29,6 +29,7 @@ from . import frames
 
 STATE = DATA_DIR / "batches.json"
 DISCOUNT = 0.5  # remise batch d'OpenAI et de Mistral (octobre 2026)
+NOT_FOUND_S = 300  # durée pendant laquelle un batch introuvable (404) est relu avant d'abandonner
 CHUNK = 500  # requêtes par batch : fichiers de quelques dizaines de Mo (images en base64)
 DONE = {"openai": {"completed", "failed", "expired", "cancelled"},
         "mistral": {"SUCCESS", "FAILED", "TIMEOUT_EXCEEDED", "CANCELLED"}}
@@ -177,9 +178,23 @@ def submit(max_usd: float, apis: dict | None = None, samples: list[Path] | None 
     return {"envoyes": sent, "estimation": est}
 
 
+class _NotVisibleYet(Exception):
+    status_code = 503  # passager : retry.forever relit le batch
+
+
 def _job(provider: str, api, job_id: str):
-    return retry.forever(lambda: api.batches.retrieve(job_id) if provider == "openai"
-                         else api.batch.jobs.get(job_id=job_id), f"suivi du batch {job_id}")
+    """État d'un batch. Un 404 est d'abord traité comme passager : l'API peut ne pas encore connaître
+    un batch qu'elle vient de créer (run 016 : 404 deux secondes après l'envoi). Il remonte s'il dure."""
+    deadline = time.monotonic() + NOT_FOUND_S
+
+    def get():
+        try:
+            return api.batches.retrieve(job_id) if provider == "openai" else api.batch.jobs.get(job_id=job_id)
+        except Exception as e:
+            if getattr(e, "status_code", None) == 404 and time.monotonic() < deadline:
+                raise _NotVisibleYet(f"batch {job_id} introuvable") from e
+            raise
+    return retry.forever(get, f"suivi du batch {job_id}")
 
 
 def status(apis: dict | None = None, job_ids: set[str] | None = None) -> list[dict]:

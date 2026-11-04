@@ -575,8 +575,8 @@ class Lab:
         exclude = self._excluded()
         if not note.strip():
             raise ValueError("note obligatoire : pourquoi ce split")
-        if not 0 < test_ratio <= 0.4:
-            raise ValueError("test_ratio doit être > 0 et au plus 0.4")
+        if not 0.05 <= test_ratio <= 0.4:
+            raise ValueError("test_ratio doit être entre 0.05 et 0.4")
         if set(stratify) - set(STRATIFY_KEYS):
             raise ValueError(f"stratify parmi {STRATIFY_KEYS}")
         clips = self._channel_traits({r["sample_id"] for r in self.rows} - set(exclude), stratify)

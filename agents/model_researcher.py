@@ -62,8 +62,11 @@ def make(lab: Lab, session=None) -> Agent:
                     "type": "object",
                     "properties": {
                         "note": {"type": "string", "description": "Pourquoi ce split."},
-                        "test_ratio": {"type": "number", "minimum": 0.05, "maximum": 0.4,
-                                       "description": "Part des chaînes en test (défaut 0.2)."},
+                        # Bornes dans le texte, vérifiées par make_split : l'API batch de Mistral refuse
+                        # un minimum ou un maximum décimal (run 016 : « '0.4' is not of type 'number' »,
+                        # alors que le même schéma passe en appel direct).
+                        "test_ratio": {"type": "number",
+                                       "description": "Part des chaînes en test, de 0.05 à 0.4 (défaut 0.2)."},
                         "stratify": {"type": "array", "items": {"type": "string", "enum": list(STRATIFY_KEYS)},
                                      "description": "Caractéristiques réparties à parts égales entre dev, test "
                                                     "et plis (clip_vide : vidéo sans aucun ajout). Défaut : "
