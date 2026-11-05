@@ -1,0 +1,2 @@
+# Lus par bash : jamais de fin de ligne Windows, même au checkout sur le PC.
+*.sh text eol=lf
