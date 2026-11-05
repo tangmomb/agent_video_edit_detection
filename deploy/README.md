@@ -12,13 +12,18 @@ dataset, saut d'images. Le banc des annotateurs (appels payants) n'est pas publi
 
 Automatique à chaque push sur `master` (`.github/workflows/deploy.yml`) : `modal deploy` si
 `encoders.py` ou `embed_modal.py` a changé, puis `deploy/update_vps.sh update` sur le VPS (`git pull`,
-dépendances, Caddy, redémarrage des interfaces). Seuls les changements de `.md` ne déclenchent rien.
+dépendances, Caddy, redémarrage des interfaces). Un push qui ne touche que des `.md` attend le
+lancement de l'heure.
 
-**Refusé tant qu'un run tourne**, le workflow apparaît alors en échec. À relancer à la fin du run :
+**Rien n'est déployé tant qu'un run tourne.** Le workflow repasse toutes les heures et rattrape le
+retard après le run ; sans retard, il ne fait rien. Pour ne pas attendre l'heure suivante :
 
 ```bash
 gh workflow run deploy.yml
 ```
+
+GitHub désactive les lancements programmés après 60 jours sans activité sur un dépôt public : les
+réactiver dans l'onglet Actions.
 
 Mise en place, ou remplacement de la clé et des jetons : `deploy/setup_github_actions.sh`.
 
