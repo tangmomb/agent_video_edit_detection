@@ -216,6 +216,7 @@ let model = null, data = null, threshold = 0.5, filter = "all", cur = -1;
 const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 const pct = (x) => `${(Math.round(x * 1000) / 10).toLocaleString("fr-FR")} %`;
 const dec = (x, n = 3) => x.toLocaleString("fr-FR", { minimumFractionDigits: n, maximumFractionDigits: n });
+const deviceName = (d) => (d === "modal" ? "GPU Modal" : d === "cuda" ? "GPU" : "CPU");
 
 fetch("api/model").then((r) => r.json()).then((m) => {
   model = m;
@@ -225,7 +226,7 @@ fetch("api/model").then((r) => r.json()).then((m) => {
     + tile("Embeddings", m.features.map((f) => `<code>${f}</code>`).join(" "))
     + tile("Seuil", dec(m.threshold), `précision visée ${pct(m.precision_visee)}`)
     + (m.test ? tile("Test", `${pct(m.test.precision)}`, `précision · rappel ${pct(m.test.recall)}`) : "")
-    + tile("Calcul", m.device === "cuda" ? "GPU" : "CPU", m.device);
+    + tile("Calcul", deviceName(m.device), m.device);
   if (data) render();
 }).catch(() => { $("model").innerHTML = '<div><span id="model-err">Serveur du modèle injoignable.</span></div>'; });
 
@@ -313,7 +314,7 @@ function render() {
   $("s-flag").textContent = `${n} / ${frames.length}`;
   $("s-share").textContent = frames.length ? pct(share) : "–";
   $("s-share-bar").style.width = `${share * 100}%`;
-  $("s-time").textContent = `${dec(data.duration_s, 1)} s`;
+  $("s-time").textContent = `${dec(data.duration_s, 1)} s · ${deviceName(data.model.device)}`;
 
   const tl = $("timeline"), bars = tl.querySelectorAll(".b");
   bars.forEach((b, i) => { b.classList.toggle("on", on[i]); b.classList.toggle("cur", i === cur); });

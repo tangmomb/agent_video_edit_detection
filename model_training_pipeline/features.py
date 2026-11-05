@@ -21,16 +21,29 @@ from .frames import FRAMES_DIR
 MODAL_CHUNK = 256  # images par appel au GPU distant (environ 8 Mo)
 
 
-def _embed_modal(paths: list[Path], extractor: str, view: str) -> np.ndarray:
+def embed_modal(paths: list[Path], extractor: str, view: str, wait_s: float | None = None) -> np.ndarray:
+    """Embeddings calculés sur le GPU distant. Sans wait_s, une panne ou un manque de place met le
+    calcul en pause (un run peut attendre) ; avec wait_s, tout morceau plus long lève une erreur, pour
+    qui ne peut pas attendre (quelqu'un devant la page). L'appel est annulé : il ne s'exécutera pas plus tard."""
     import modal
 
     from .embed_modal import APP
     fn = modal.Function.from_name(APP, "embed")
+
+    def call(jpegs: list[bytes]) -> bytes:
+        if wait_s is None:
+            return retry.forever(lambda: fn.remote(jpegs, extractor, view), "embeddings GPU")
+        running = fn.spawn(jpegs, extractor, view)
+        try:
+            return running.get(timeout=wait_s)
+        except modal.exception.TimeoutError:
+            running.cancel()
+            raise
+
     out = []
     for i in range(0, len(paths), MODAL_CHUNK):
         jpegs = [p.read_bytes() for p in paths[i:i + MODAL_CHUNK]]
-        raw = retry.forever(lambda: fn.remote(jpegs, extractor, view), "embeddings GPU")
-        out.append(np.frombuffer(raw, dtype=np.float32).reshape(len(jpegs), -1))
+        out.append(np.frombuffer(call(jpegs), dtype=np.float32).reshape(len(jpegs), -1))
     return np.concatenate(out)
 
 
@@ -70,7 +83,7 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
         if todo:
             frames = sorted((Path(frames_dir) / "img" / s).glob("*.jpg"))
             if remote:
-                new = _embed_modal([frames[k] for k in todo], extractor, view)
+                new = embed_modal([frames[k] for k in todo], extractor, view)
             else:
                 with torch.inference_mode():
                     new = embed_images([frames[k] for k in todo], extractor, view, batch_size)
