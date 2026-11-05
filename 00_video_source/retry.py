@@ -15,7 +15,10 @@ STATUS = {408, 425, 429, 500, 502, 503, 504, 529}
 # Erreurs sans code HTTP : coupures et délais dépassés (httpx, SDK OpenAI et Anthropic, LiteLLM).
 NAMES = {"APIConnectionError", "APITimeoutError", "Timeout", "ConnectError", "ConnectTimeout", "ReadTimeout",
          "ReadError", "WriteTimeout", "PoolTimeout", "RemoteProtocolError", "ServiceUnavailableError",
-         "RateLimitError", "InternalServerError", "ConnectionError"}
+         "RateLimitError", "InternalServerError", "ConnectionError",
+         # Modal (GPU des embeddings)
+         "InternalFailure", "InternalError", "ServiceError", "ResourceExhaustedError", "TimeoutError",
+         "FunctionTimeoutError"}
 
 
 def transient(e: BaseException) -> bool:

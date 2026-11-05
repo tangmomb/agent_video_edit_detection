@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # torch : installer la variante CUDA depuis https://download.pytorch.org/whl/cu126
-model_training_pipeline = ["torch", "transformers", "scikit-learn", "numpy"]
+model_training_pipeline = ["torch", "transformers", "scikit-learn", "numpy", "modal"]
 
 [project.scripts]
 video_source = "video_source.cli:main"

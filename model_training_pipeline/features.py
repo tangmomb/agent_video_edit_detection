@@ -1,101 +1,36 @@
 """Embeddings figés des frames, cache par échantillon
 (data/videos_samples_frames/feat/<extracteur>__<vue>/<sample_id>.npz : ids, numéros des images
 calculées (frame i -> i - 1), et emb, leurs embeddings ; seules les images demandées sont calculées).
-
-Vues :
-- full  : l'image entière, redimensionnée en carré (pas de recadrage central, qui
-          couperait les sous-titres et les bandeaux en bord d'image) ;
-- grid2 : l'image entière + ses 4 quadrants, embeddings concaténés (5x la dimension),
-          pour mieux voir les petits overlays ;
-- bands : l'image entière + son tiers bas + son tiers haut (pleine largeur, étirés en carré),
-          concaténés (3x la dimension) : bandeaux de nom, sous-titres et titres y pèsent plus que
-          dans l'image entière, où la scène domine (un plan de conférence brut pris pour monté) ;
-- quads : les 4 quadrants seuls (4x), et tb : le tiers bas + le tiers haut seuls (2x). Sans
-          l'image entière, pour la combiner avec full sans l'avoir deux fois (full + grid2 la
-          doublait). Pas de cache propre : tranches de grid2 et bands, sans leur image entière.
-          Proposées à l'agent à la place de grid2 et bands (03/11/2026), gardées pour les
-          anciennes expériences.
+Extracteurs et vues : encoders.py. Calcul sur place, ou sur un GPU distant avec EMBED_GPU=modal
+(embed_modal.py).
 """
 
 import json
+import os
 import time
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image
+from video_source import retry
 
+from .encoders import AGENT_VIEWS, DERIVED, EXTRACTORS, VIEWS, _encoder, embed_images  # noqa: F401
 from .frames import FRAMES_DIR
 
-EXTRACTORS = {
-    "clip_b32": ("clip", "openai/clip-vit-base-patch32"),
-    "clip_b16": ("clip", "openai/clip-vit-base-patch16"),
-    "clip_l14": ("clip", "openai/clip-vit-large-patch14"),
-    "dinov2_s": ("dino", "facebook/dinov2-small"),
-    "dinov2_b": ("dino", "facebook/dinov2-base"),
-}
-VIEWS = {"full": 1, "grid2": 5, "bands": 3, "quads": 4, "tb": 2}  # vue -> nombre d'images par frame
-AGENT_VIEWS = ("full", "quads", "tb")
-DERIVED = {"quads": "grid2", "tb": "bands"}  # vue -> vue en cache dont elle est la fin
-INPUT = 224
-
-_encoders: dict = {}
+MODAL_CHUNK = 256  # images par appel au GPU distant (environ 8 Mo)
 
 
-def _encoder(name: str, device: str):
-    if name in _encoders:
-        return _encoders[name]
-    from transformers import AutoImageProcessor, AutoModel, CLIPModel, CLIPProcessor
+def _embed_modal(paths: list[Path], extractor: str, view: str) -> np.ndarray:
+    import modal
 
-    kind, repo = EXTRACTORS[name]
-    if kind == "clip":
-        model = CLIPModel.from_pretrained(repo).to(device).eval()
-        proc = CLIPProcessor.from_pretrained(repo)
-
-        def encode(images):
-            inputs = proc(images=images, return_tensors="pt").to(device)
-            out = model.get_image_features(**inputs)
-            if not isinstance(out, torch.Tensor):  # selon la version de transformers
-                out = out.pooler_output
-            return out
-    else:
-        model = AutoModel.from_pretrained(repo).to(device).eval()
-        proc = AutoImageProcessor.from_pretrained(repo)
-
-        def encode(images):
-            inputs = proc(images=images, return_tensors="pt", do_center_crop=False,
-                          size={"height": INPUT, "width": INPUT}).to(device)
-            h = model(**inputs).last_hidden_state
-            # CLS + moyenne des patchs : le CLS seul rate souvent les petits overlays.
-            return torch.cat([h[:, 0], h[:, 1:].mean(1)], dim=1)
-    _encoders[name] = encode
-    return encode
-
-
-def _views(img: Image.Image, view: str) -> list[Image.Image]:
-    crops = [] if view in DERIVED else [img]
-    w, h = img.size
-    if view in ("grid2", "quads"):
-        crops += [img.crop((x, y, x + w // 2, y + h // 2)) for y in (0, h // 2) for x in (0, w // 2)]
-    elif view in ("bands", "tb"):
-        crops += [img.crop((0, h - h // 3, w, h)), img.crop((0, 0, w, h // 3))]
-    return [c.resize((INPUT, INPUT), Image.BICUBIC) for c in crops]
-
-
-def embed_images(paths: list[Path], extractor: str, view: str = "full", batch_size: int = 64) -> np.ndarray:
-    """Embeddings (len(paths), VIEWS[view] x dim) d'images quelconques, sans cache : utilisé par
-    get_features et l'interface. À appeler sous
-    torch.inference_mode()."""
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    encode, n_views = _encoder(extractor, device), VIEWS[view]
-    per_batch = max(1, batch_size // n_views)
+    from .embed_modal import APP
+    fn = modal.Function.from_name(APP, "embed")
     out = []
-    with torch.autocast(device, enabled=device == "cuda"):
-        for i in range(0, len(paths), per_batch):
-            imgs = [v for f in paths[i:i + per_batch] for v in _views(Image.open(f).convert("RGB"), view)]
-            emb = encode(imgs).float().cpu().numpy()
-            out.append(emb.reshape(-1, n_views * emb.shape[1]))
+    for i in range(0, len(paths), MODAL_CHUNK):
+        jpegs = [p.read_bytes() for p in paths[i:i + MODAL_CHUNK]]
+        raw = retry.forever(lambda: fn.remote(jpegs, extractor, view), "embeddings GPU")
+        out.append(np.frombuffer(raw, dtype=np.float32).reshape(len(jpegs), -1))
     return np.concatenate(out)
 
 
@@ -122,6 +57,7 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
     for i, r in enumerate(rows):
         by_sample[r["sample_id"]].append(i)
 
+    remote = os.environ.get("EMBED_GPU") == "modal"
     t0, n_frames, out = time.time(), 0, None
     for s, idxs in by_sample.items():
         path = cdir / f"{s}.npz"
@@ -133,8 +69,11 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
         todo = sorted(set(frame_ids) - set(ids.tolist()))
         if todo:
             frames = sorted((Path(frames_dir) / "img" / s).glob("*.jpg"))
-            with torch.inference_mode():
-                new = embed_images([frames[k] for k in todo], extractor, view, batch_size)
+            if remote:
+                new = _embed_modal([frames[k] for k in todo], extractor, view)
+            else:
+                with torch.inference_mode():
+                    new = embed_images([frames[k] for k in todo], extractor, view, batch_size)
             ids = np.concatenate([ids, np.array(todo, dtype=np.int32)])
             emb = new.astype(np.float32) if emb is None else np.concatenate([emb, new.astype(np.float32)])
             order = np.argsort(ids)
@@ -148,7 +87,8 @@ def get_features(rows: list[dict], extractor: str, view: str = "full",
         if out is None:
             out = np.zeros((len(rows), emb.shape[1]), dtype=np.float32)
         out[idxs] = emb[np.searchsorted(ids, frame_ids)]
-    if n_frames:
+    # Pas de mesure au GPU distant : ms_par_frame dit ce que coûte le modèle en production, sur place.
+    if n_frames and not remote:
         meta = {"ms_per_frame": round(1000 * (time.time() - t0) / n_frames, 2),
                 "device": "cuda" if torch.cuda.is_available() else "cpu"}
         (cdir / "meta.json").write_text(json.dumps(meta))
