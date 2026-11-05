@@ -32,7 +32,8 @@ image = (modal.Image.debian_slim(python_version="3.12")
          .pip_install("torch==2.14.1", "transformers==5.20.2", "pillow==13.0.0", "numpy==2.5.2")
          .add_local_file(ENCODERS, "/root/encoders.py", copy=True)
          .env({"PYTHONPATH": "/root"})
-         .run_function(_download_models))
+         .run_function(_download_models)
+         .env({"HF_HUB_OFFLINE": "1"}))  # les modèles sont dans l'image : aucun accès à Hugging Face au démarrage
 
 app = modal.App(APP, image=image)
 
