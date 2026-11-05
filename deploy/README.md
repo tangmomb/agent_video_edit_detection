@@ -10,16 +10,17 @@ dataset, saut d'images. Le banc des annotateurs (appels payants) n'est pas publi
 
 ## Mettre à jour le code
 
+Automatique à chaque push sur `master` (`.github/workflows/deploy.yml`) : `modal deploy` si
+`encoders.py` ou `embed_modal.py` a changé, puis `deploy/update_vps.sh update` sur le VPS (`git pull`,
+dépendances, Caddy, redémarrage des interfaces). Seuls les changements de `.md` ne déclenchent rien.
+
+**Refusé tant qu'un run tourne**, le workflow apparaît alors en échec. À relancer à la fin du run :
+
 ```bash
-cd /srv/agent_mots_cles && git pull
-sudo systemctl restart 'agent-interface@*'
+gh workflow run deploy.yml
 ```
 
-Après un changement de `deploy/Caddyfile` :
-
-```bash
-sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
-```
+Mise en place, ou remplacement de la clé et des jetons : `deploy/setup_github_actions.sh`.
 
 ## Changer le mot de passe
 
