@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mise à jour du VPS, seule commande permise à la clé SSH de GitHub Actions (setup_github_actions.sh).
-#   check  : refuse si un run tourne, sinon affiche le commit en place
+#   check  : affiche "running" si un run tourne, sinon le commit en place
 #   update : git pull, dépendances et Caddy s'ils ont changé, redémarrage des interfaces
 # Jamais pendant un run : il chargerait du nouveau code à côté de l'ancien.
 set -euo pipefail
@@ -8,16 +8,17 @@ cd /srv/agent_mots_cles
 
 action="${SSH_ORIGINAL_COMMAND:-${1:-}}"
 
-if systemctl is-active --quiet agent-run; then
-    echo "Un run est en cours (agent-run) : rien n'est déployé. Relancer le workflow à la fin du run." >&2
-    exit 1
-fi
+running() { systemctl is-active --quiet agent-run; }
 
 case "$action" in
 check)
-    git rev-parse HEAD
+    if running; then echo running; else git rev-parse HEAD; fi
     ;;
 update)
+    if running; then  # lancé depuis le contrôle du workflow
+        echo "Un run vient de démarrer (agent-run) : VPS non mis à jour, nouvel essai à la prochaine heure." >&2
+        exit 1
+    fi
     old=$(git rev-parse HEAD)
     git pull --ff-only --quiet
     changed=$(git diff --name-only "$old" HEAD)

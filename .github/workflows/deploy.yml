@@ -1,5 +1,5 @@
-# Met à jour Modal (s'il le faut) puis le VPS à chaque push sur master. Refusé pendant un run :
-# à relancer ensuite depuis l'onglet Actions, ou avec gh workflow run deploy.yml.
+# Met à jour Modal (s'il le faut) puis le VPS à chaque push sur master, et toutes les heures pour
+# reprendre ce qu'un run a retardé : rien n'est déployé tant qu'un run tourne.
 # Mise en place : deploy/setup_github_actions.sh
 name: Déploiement
 
@@ -7,6 +7,8 @@ on:
   push:
     branches: [master]
     paths-ignore: ["**.md"]
+  schedule:
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -27,15 +29,6 @@ jobs:
           ref: master
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Vérifier la syntaxe
-        run: |
-          git ls-files -z '*.py' | xargs -0 python -m py_compile
-          bash -n deploy/update_vps.sh
-
       - name: Préparer SSH
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -46,21 +39,38 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
-      - name: Contrôler le VPS (aucun run en cours)
+      - name: Contrôler le VPS
         id: vps
         run: |
-          commit=$(ssh "${{ secrets.VPS_TARGET }}" check)
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          state=$(ssh "${{ secrets.VPS_TARGET }}" check)
+          if [ "$state" = running ]; then
+            echo "::notice::Run en cours : rien n'est déployé, nouvel essai à la prochaine heure."
+          elif [ "$state" = "$(git rev-parse HEAD)" ]; then
+            echo "::notice::VPS déjà à jour."
+          else
+            echo "commit=$state" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.vps.outputs.commit
+        with:
+          python-version: "3.12"
+
+      - name: Vérifier la syntaxe
+        if: steps.vps.outputs.commit
+        run: |
+          git ls-files -z '*.py' | xargs -0 python -m py_compile
+          bash -n deploy/update_vps.sh
 
       # Comparé au commit du VPS, pas au dernier push : le VPS n'avance qu'après Modal, donc un
-      # changement dont le déploiement a été refusé (run en cours) est repris à la relance.
+      # changement retardé par un run est repris au déploiement suivant.
       - name: Déployer sur Modal si besoin
+        if: steps.vps.outputs.commit
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
-          if git diff --quiet "${{ steps.vps.outputs.commit }}" HEAD -- \
-              model_training_pipeline/encoders.py model_training_pipeline/embed_modal.py; then
+          if git diff --quiet "${{ steps.vps.outputs.commit }}" HEAD --               model_training_pipeline/encoders.py model_training_pipeline/embed_modal.py; then
             echo "encoders.py et embed_modal.py inchangés : pas de déploiement Modal."
           else
             pip install --quiet modal==1.6.3
@@ -68,4 +78,5 @@ jobs:
           fi
 
       - name: Mettre à jour le VPS
+        if: steps.vps.outputs.commit
         run: ssh "${{ secrets.VPS_TARGET }}" update
