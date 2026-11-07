@@ -72,6 +72,10 @@ details.run > summary:hover { background: color-mix(in srgb, var(--fg) 3%, trans
 .chip.dim { background: var(--sunk); color: var(--muted); }
 .meter { height: 5px; border-radius: 3px; background: var(--sunk); margin-top: 4px; overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+.meters > div { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.meters .meter { flex: 1; margin: 0; }
+@media (max-width: 600px) { .meters { grid-template-columns: 1fr; gap: 6px; } }
 
 /* ---------- détail ---------- */
 .detail { border-top: 1px solid var(--line); padding: 14px 16px 16px; display: grid; gap: 16px; }
@@ -184,9 +188,12 @@ function liveBanner(d) {
   const since = r.en_cours ? (Date.now() - new Date(r.en_cours.depuis)) / 1000 : null;
   $("live").innerHTML = `<div class="title"><span class="pulse"></span>Run ${r.n} en cours · ${esc(a)}${since != null ? ` depuis ${dur(since)}` : ""}</div>
     <div class="facts"><span>démarré <b>${date(r.started)}</b></span><span>durée <b>${dur(r.duration_s)}</b></span>
-      <span>coût <b>${usd(r.cost_usd, 3)}</b> / ${usd(r.budget_usd)}</span><span>expériences <b>${r.experiences.length}</b></span>
+      <span>coût agents <b>${usd(r.cost_usd, 3)}</b> / ${usd(r.budget_usd)}</span>
+      <span>coût annotation <b>${usd(r.annotation_usd, 3)}</b> / ${usd(r.annotation_budget_usd || 0)}</span>
+      <span>expériences <b>${r.experiences.length}</b></span>
       <span>dernier événement <b>${date(r.dernier_evenement)}</b></span></div>
-    <div class="meter" style="margin-top:10px"><i style="width:${Math.min(100, 100 * (r.cost_usd || 0) / (r.budget_usd || 1))}%"></i></div>`;
+    <div class="meters">${[["agents", r.cost_usd, r.budget_usd], ["annotation", r.annotation_usd, r.annotation_budget_usd]].map(([k, spent, budget]) =>
+      `<div><span>${k}</span><div class="meter"><i style="width:${budget ? Math.min(100, 100 * (spent || 0) / budget) : 0}%"></i></div></div>`).join("")}</div>`;
 }
 
 function detail(r) {

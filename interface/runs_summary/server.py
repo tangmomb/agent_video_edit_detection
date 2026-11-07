@@ -141,6 +141,7 @@ def summarize(run_dir: Path) -> dict:
         "id": run_dir.name, "n": run_dir.name.split("_")[0], "status": status, "started": r.get("started"),
         "ended": r.get("ended"), "duration_s": _seconds(r.get("started"), ended),
         "cost_usd": r.get("cost_usd"), "budget_usd": r.get("budget_usd"), "annotation_usd": round(annotation, 4),
+        "annotation_budget_usd": r.get("annotation_usd"),
         "agent_model": r.get("agent_model"), "tokens": r.get("tokens"), "videos_collectees": videos,
         "splits": splits, "experiences": exps, "best": best, "final_tests": finals,
         "production": _production(run_dir), "etapes": etapes,
