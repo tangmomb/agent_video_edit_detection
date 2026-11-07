@@ -406,6 +406,9 @@ document.getElementById("showTools").onchange = applyToggles;
   if (!list.length) { chat.innerHTML = '<p class="empty">Aucun run dans runs/.</p>'; return; }
   let id = list[0].id;
   try { const s = localStorage.getItem("run_chat_run"); if (s && list.some(r => r.id === s)) id = s; } catch (e) {}
+  // ?run=<id> (lien du résumé des runs) passe avant le dernier run consulté
+  const asked = new URLSearchParams(location.search).get("run");
+  if (asked && list.some(r => r.id === asked)) id = asked;
   pick(id);
 })();
 </script></body></html>

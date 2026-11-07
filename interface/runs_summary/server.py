@@ -98,14 +98,16 @@ def summarize(run_dir: Path) -> dict:
     for c in calls.values():
         if c["agent"] == "orchestrator":
             continue
-        etapes.append({"agent": c["agent"], "task": c["task"], "start": c["start"],
+        etapes.append({"call": c["call"], "agent": c["agent"], "task": c["task"], "start": c["start"],
                        "duration_s": _seconds(c["start"], c["end"] or ended), "en_cours": c["end"] is None,
                        "cost_usd": round(turn_cost.get(c["call"], 0.0), 4), "tools": c["tools"]})
     orch = next((c for c in calls.values() if c["agent"] == "orchestrator"), None)
 
-    # Expériences, splits, collecte et tests finaux, lus dans les résultats d'outils.
+    # Expériences, splits, collecte et tests finaux, lus dans les résultats d'outils ; la collecte
+    # et les splits aussi par appel d'agent, affichés sous son étape.
     exps, splits, finals = [], [], []
     videos, annotation = 0, 0.0
+    per_call: dict = {}
     for s in steps:
         if s["type"] != "tool":
             continue
@@ -123,9 +125,23 @@ def summarize(run_dir: Path) -> dict:
                          "recall": v.get("recall"), "fp": v.get("fp"), "fn": v.get("fn")})
         elif s["tool"] == "make_split" and isinstance(res, dict) and "split_id" in res:
             splits.append(res["split_id"])
+            # chaînes du dev et du test (anciens runs : absentes)
+            per_call.setdefault(s.get("call"), {}).setdefault("splits", []).append(
+                {"id": res["split_id"], **{part: (res.get(part) or {}).get("chaines_distinctes") for part in ("dev", "test")}})
         elif s["tool"] == "generate_data" and isinstance(res, dict):
             videos += res.get("videos_collectees") or 0
             annotation += res.get("cout_annotation_usd") or 0.0
+            c = per_call.setdefault(s.get("call"), {})
+            c["videos"] = c.get("videos", 0) + (res.get("videos_collectees") or 0)
+            c["annotation_usd"] = round(c.get("annotation_usd", 0.0) + (res.get("cout_annotation_usd") or 0.0), 4)
+            # images : extraites des vidéos, envoyées aux annotateurs (sans les quasi identiques),
+            # étiquetées (les trois annotateurs d'accord)
+            for k, src in (("images_extraites", "total_images_extraites_videos"),
+                           ("images_envoyees", "total_images_pour_annotation"),
+                           ("images_etiquetees", "total_images_annotees")):
+                c[k] = c.get(k, 0) + (res.get(src) or 0)
+            c.setdefault("requetes", []).append({"query": inp.get("query"), "orientation": inp.get("orientation"),
+                                                 "videos": res.get("videos_collectees") or 0})
         elif s["tool"] == "final_test" and isinstance(res, dict) and "test" in res:
             t, target = res["test"], res.get("precision_visee")
             # Les anciens runs n'avaient pas de verdict : même règle que lab._test_status.
@@ -134,6 +150,9 @@ def summarize(run_dir: Path) -> dict:
             finals.append({"id": res.get("experiment_id"), "statut": statut,
                            "precision_visee": res.get("precision_visee"),
                            "precision": t.get("precision"), "recall": t.get("recall")})
+            per_call.setdefault(s.get("call"), {}).setdefault("tests", []).append(finals[-1])
+    for e in etapes:
+        e.update(per_call.get(e.pop("call"), {}))
     best = max((e for e in exps if e["ap_par_chaine"] is not None), key=lambda e: e["ap_par_chaine"], default=None)
     # L'appel ouvert le plus récent : l'orchestrateur reste ouvert pendant que son sous-agent travaille.
     current = list(open_calls.values())[-1] if status == "running" and open_calls else None
@@ -142,7 +161,8 @@ def summarize(run_dir: Path) -> dict:
         "ended": r.get("ended"), "duration_s": _seconds(r.get("started"), ended),
         "cost_usd": r.get("cost_usd"), "budget_usd": r.get("budget_usd"), "annotation_usd": round(annotation, 4),
         "annotation_budget_usd": r.get("annotation_usd"),
-        "agent_model": r.get("agent_model"), "tokens": r.get("tokens"), "videos_collectees": videos,
+        "final_tests_budget": r.get("final_tests"),
+        "agent_model": r.get("agent_model"), "videos_collectees": videos,
         "splits": splits, "experiences": exps, "best": best, "final_tests": finals,
         "production": _production(run_dir), "etapes": etapes,
         "orchestrateur_s": _seconds(orch["start"], orch["end"] or ended) if orch else None,

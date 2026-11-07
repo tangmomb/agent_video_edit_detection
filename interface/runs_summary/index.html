@@ -63,6 +63,8 @@ details.run > summary:hover { background: color-mix(in srgb, var(--fg) 3%, trans
 .when { font-size: 13px; color: var(--muted); }
 .cost { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .cost .meter { width: 70px; margin: 0; }
+.spend { display: grid; grid-template-columns: auto auto 70px; align-items: center; gap: 2px 10px; justify-items: end; }
+.spend .k { font-size: 12px; }
 @media (max-width: 520px) { .cost { margin-left: 0; width: 100%; } }
 .chip { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
 .chip.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
@@ -72,7 +74,7 @@ details.run > summary:hover { background: color-mix(in srgb, var(--fg) 3%, trans
 .chip.dim { background: var(--sunk); color: var(--muted); }
 .meter { height: 5px; border-radius: 3px; background: var(--sunk); margin-top: 4px; overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+.meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 10px; }
 .meters > div { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .meters .meter { flex: 1; margin: 0; }
 @media (max-width: 600px) { .meters { grid-template-columns: 1fr; gap: 6px; } }
@@ -86,10 +88,32 @@ details.run > summary:hover { background: color-mix(in srgb, var(--fg) 3%, trans
 .stack i { display: block; min-width: 3px; }
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .steps li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; font-size: 13.5px; }
-.steps .dot { width: 10px; height: 10px; border-radius: 3px; align-self: center; }
+.steps .dot { width: 10px; height: 10px; border-radius: 3px; align-self: start; margin-top: 4px; }
 .steps .what { min-width: 0; }
 .steps .what b { font-weight: 600; }
 .steps .what span { display: block; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.steps .made { grid-column: 2 / -1; font-size: 12.5px; display: flex; align-items: center; gap: 4px 14px; flex-wrap: wrap; width: fit-content; max-width: 100%;
+  margin-top: 5px; padding: 4px 10px 4px 8px; border-radius: 6px; white-space: normal;
+  background: color-mix(in srgb, var(--accent) 10%, transparent); border-left: 2px solid var(--accent); color: var(--muted); }
+.steps .made > span { display: inline; color: inherit; font-size: inherit; white-space: nowrap; }
+.steps .made .i { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+.steps .made b { color: var(--fg); font-weight: 600; }
+.steps .made > .imgs { flex-basis: 100%; white-space: normal; }
+.steps .made span.dev, .steps .made span.test { display: inline; font-size: inherit; }
+.steps .made > .tst { white-space: normal; flex: 1 1 0; min-width: 160px; }
+.steps .made > .tst > span { display: inline; white-space: nowrap; color: inherit; font-size: inherit; }
+.steps .made b.ok { color: var(--ok); }
+.steps .made b.ko { color: var(--ko); }
+.steps .made .dev { color: var(--a-model); }
+.steps .made .test { color: var(--a-eval); }
+.steps .made > .imgs > span { display: inline; white-space: nowrap; color: inherit; font-size: inherit; }
+.steps .made > .qs { display: flex; flex-wrap: wrap; gap: 4px; flex-basis: 100%; white-space: normal; }
+.steps .made .q { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--sunk); font-size: 12px; white-space: nowrap; }
+.steps .made .q.none { opacity: .55; }
+.steps .made .or { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; font-size: 11px; color: var(--muted); }
+.steps .made .or i { display: inline-block; border: 1.5px solid currentColor; border-radius: 2px; }
+.steps .made .or i.pt { width: 6px; height: 10px; }
+.steps .made .or i.ls { width: 10px; height: 6px; }
 .steps .nums { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .steps .nums b { color: var(--fg); font-weight: 600; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -102,6 +126,8 @@ tr.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); padding-left: 
 .apbar i { display: block; height: 100%; background: var(--a-model); }
 .facts-line { display: flex; gap: 6px 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .facts-line b { color: var(--fg); font-weight: 600; }
+.facts-line .conv { margin-left: auto; color: var(--accent); font-weight: 600; text-decoration: none; }
+.facts-line .conv:hover { text-decoration: underline; }
 .conclusion { font-size: 13.5px; color: var(--muted); margin: 0; }
 .empty { color: var(--muted); font-size: 13.5px; }
 .legend { display: flex; gap: 4px 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
@@ -190,10 +216,52 @@ function liveBanner(d) {
     <div class="facts"><span>démarré <b>${date(r.started)}</b></span><span>durée <b>${dur(r.duration_s)}</b></span>
       <span>coût agents <b>${usd(r.cost_usd, 3)}</b> / ${usd(r.budget_usd)}</span>
       <span>coût annotation <b>${usd(r.annotation_usd, 3)}</b> / ${usd(r.annotation_budget_usd || 0)}</span>
+      <span>tests finaux <b>${r.final_tests.length}</b> / ${r.final_tests_budget ?? "?"}</span>
       <span>expériences <b>${r.experiences.length}</b></span>
       <span>dernier événement <b>${date(r.dernier_evenement)}</b></span></div>
-    <div class="meters">${[["agents", r.cost_usd, r.budget_usd], ["annotation", r.annotation_usd, r.annotation_budget_usd]].map(([k, spent, budget]) =>
+    <div class="meters">${[["agents", r.cost_usd, r.budget_usd], ["annotation", r.annotation_usd, r.annotation_budget_usd], ["tests finaux", r.final_tests.length, r.final_tests_budget]].map(([k, spent, budget]) =>
       `<div><span>${k}</span><div class="meter"><i style="width:${budget ? Math.min(100, 100 * (spent || 0) / budget) : 0}%"></i></div></div>`).join("")}</div>`;
+}
+
+// Page Conversations ouverte sur ce run : en ligne, à côté sous /conversations/ ; en local, son port.
+function chatUrl(id) {
+  const base = location.port === "8830" ? `${location.protocol}//${location.hostname}:8820/` : "../conversations/";
+  return `${base}?run=${encodeURIComponent(id)}`;
+}
+
+// Orientation demandée à generate_data : un petit cadre debout ou couché, et le mot.
+function orientTag(o) {
+  if (o !== "portrait" && o !== "landscape") return "";
+  const p = o === "portrait";
+  return `<span class="or"><i class="${p ? "pt" : "ls"}"></i>${p ? "portrait" : "paysage"}</span>`;
+}
+
+function stepFacts(e) {
+  // Ce que l'étape a produit : la collecte sous le Dataset Builder, le split sous le Model Researcher.
+  const f = [];
+  if (e.videos != null) {
+    const n = (x) => (x || 0).toLocaleString("fr-FR");
+    f.push(`<span>vidéos collectées <b>${e.videos}</b></span>`, `<span>annotation <b>${usd(e.annotation_usd || 0, 3)}</b></span>`,
+      `<span class="imgs"><span>images extraites <b>${n(e.images_extraites)}</b></span> → <span>envoyées en annotation <b>${n(e.images_envoyees)}</b></span>` +
+      ` → <span>étiquetées (unanimes) <b>${n(e.images_etiquetees)}</b></span></span>`);
+  }
+  for (const t of e.tests || []) {
+    // une seule ligne : l'expérience en couleur du verdict, puis ses chiffres sur test
+    const cls = t.statut === "réussi" ? "ok" : t.statut === "échoué" ? "ko" : "";
+    let line = `<span>exp testée : <b class="${cls}">${esc(t.id)} ${esc(t.statut || "?")}</b></span>`;
+    if (t.precision != null) line += ` · <span>précision <b>${pct(t.precision)}</b>${t.precision_visee != null ? ` (cible ${pct(t.precision_visee)})` : ""}</span>` +
+      ` · <span>rappel <b>${pct(t.recall)}</b></span>`;
+    f.push(`<span class="tst">${line}</span>`);
+  }
+  for (const sp of e.splits || []) {
+    f.push(`<span>nouveau split <b>${esc(sp.id)}</b></span>`);
+    // dev aux couleurs du Model Researcher, qui y travaille ; test à celles de l'Evaluator, seul à y accéder
+    if (sp.dev != null) f.push(`<span>chaînes <span class="dev">dev</span>/<span class="test">test</span> ` +
+      `<b class="dev">${sp.dev}</b>/<b class="test">${sp.test ?? "?"}</b></span>`);
+  }
+  const q = (e.requetes || []).map((x) =>
+    `<span class="q${x.videos ? "" : " none"}">${orientTag(x.orientation)}${esc(x.query || "?")} <b>${x.videos}</b></span>`).join("");
+  return f.length ? `<span class="made"><span class="i">info</span>${f.join("")}${q ? `<span class="qs">${q}</span>` : ""}</span>` : "";
 }
 
 function detail(r) {
@@ -204,7 +272,7 @@ function detail(r) {
     const [name, color] = AGENTS[e.agent] || [e.agent, "var(--muted)"];
     return `<li><span class="dot" style="background:${color}"></span>
       <span class="what"><b>${esc(name)}</b>${e.en_cours ? ' <span class="chip live" style="display:inline">en cours</span>' : ""}<span title="${esc(e.task)}">${esc(e.task)}</span></span>
-      <span class="nums"><b>${dur(e.duration_s)}</b> · ${usd(e.cost_usd, 3)} · ${e.tools} outils</span></li>`;
+      <span class="nums"><b>${dur(e.duration_s)}</b> · ${usd(e.cost_usd, 3)} · ${e.tools} outils</span>${stepFacts(e)}</li>`;
   }).join("") + `<li><span class="dot" style="background:var(--a-orch)"></span><span class="what"><b>Orchestrateur</b><span>décisions et délégations</span></span>
       <span class="nums">${usd(orchCost, 3)}</span></li>`;
 
@@ -221,9 +289,7 @@ function detail(r) {
 
   const facts = [
     `<span>modèle des agents <b>${esc(r.agent_model || "mistral-large-4-0 (défaut)")}</b></span>`,
-    r.tokens ? `<span>tokens <b>${(r.tokens.input || 0).toLocaleString("fr-FR")}</b> en entrée, <b>${(r.tokens.output || 0).toLocaleString("fr-FR")}</b> en sortie</span>` : "",
-    `<span>vidéos collectées <b>${r.videos_collectees}</b>${r.annotation_usd ? ` · annotation <b>${usd(r.annotation_usd, 3)}</b>` : ""}</span>`,
-    r.splits.length ? `<span>nouveau split <b>${r.splits.join(", ")}</b></span>` : "",
+    `<a class="conv" href="${chatUrl(r.id)}" target="_blank" rel="noopener">Voir la conversation du run →</a>`,
   ].join("");
   return `<div class="detail">
     <div class="facts-line">${facts}</div>
@@ -242,16 +308,24 @@ function detail(r) {
   </div>`;
 }
 
+function spendLine(what, spent, budget, count) {
+  const ratio = budget ? Math.min(100, 100 * (spent || 0) / budget) : 0;
+  const [a, b] = count ? [spent || 0, budget ?? "?"] : [usd(spent || 0, 3), usd(budget || 0)];
+  return `<span class="muted k">${what}</span><span><b>${a}</b> <span class="muted">/ ${b}</span></span>
+    <span class="meter"><i style="width:${ratio}%"></i></span>`;
+}
+
 function runRow(r) {
   const [label, cls] = STATUS[r.status] || [r.status, "dim"];
-  const ratio = r.budget_usd ? Math.min(100, 100 * (r.cost_usd || 0) / r.budget_usd) : 0;
   const ap = r.best ? ` · AP max <b>${dec(r.best.ap_par_chaine, 3)}</b>` : "";
   return `<details class="run" data-id="${r.id}" ${opened.has(r.id) ? "open" : ""}>
     <summary>
       <div class="l1">
         <span class="runname">Run ${r.n}</span><span class="when">${date(r.started)}</span><span class="chip ${cls}">${label}</span>
-        <span class="cost"><span><b>${usd(r.cost_usd, 3)}</b> <span class="muted">/ ${usd(r.budget_usd)}</span></span>
-          <span class="meter"><i style="width:${ratio}%"></i></span><b>${dur(r.duration_s)}</b></span>
+        <span class="cost"><span class="spend">${spendLine("agents", r.cost_usd, r.budget_usd)}${
+          r.annotation_budget_usd != null || r.annotation_usd ? spendLine("annotation", r.annotation_usd, r.annotation_budget_usd) : ""}${
+          r.final_tests_budget != null ? spendLine("tests finaux", r.final_tests.length, r.final_tests_budget, true) : ""}</span>
+          <b>${dur(r.duration_s)}</b></span>
       </div>
       <div class="l2">
         <span><b>${r.experiences.length}</b> exp.${ap}</span>
