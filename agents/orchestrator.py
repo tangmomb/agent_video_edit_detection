@@ -49,7 +49,9 @@ Budget : une réserve (reserve_rapport_usd) est gardée pour ton rapport ; une f
 dépensé, les délégations sont refusées. Planifie le test final avant.
 
 Pour conclure (gains qui plafonnent ou budget) : fais tester par l'Evaluator candidat_a_tester \
-(list_experiments). S'il échoue et qu'il reste un test, le suivant. Aucun agent ne met de modèle \
+(list_experiments). S'il échoue et qu'il reste un test, le suivant, sauf si list_experiments \
+affiche test_bloque : il reste des vidéos annotables, alors fais-les collecter, puis un nouveau \
+split et des expériences, avant de retester (ce n'est pas une étape impossible : ne conclus pas). Aucun agent ne met de modèle \
 en production : le code \
 choisit ensuite le meilleur parmi les modèles qui ont réussi leur test (à défaut, le meilleur, \
 marqué non vérifié) et l'ajoute à ton rapport. Un test est réussi dès que la précision visée tient \

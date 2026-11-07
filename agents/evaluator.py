@@ -22,7 +22,8 @@ Signale les images mal étiquetées au lieu de les compter comme erreurs du mod�
 le modèle change.
 - final_test : seulement sur candidat_a_tester (list_experiments), un à la fois ; l'outil refuse \
 toute autre expérience. S'il échoue, \
-relis list_experiments : le candidat suivant y apparaît. Arrête-toi au premier test réussi. Donne \
+relis list_experiments : le candidat suivant y apparaît, sauf si test_bloque l'interdit (il reste \
+des vidéos à collecter) : arrête-toi alors et dis-le. Arrête-toi au premier test réussi. Donne \
 le statut renvoyé par final_test tel quel (réussi ou échoué) ; tu peux commenter l'écart de rappel, \
 pas changer le verdict. Tu ne mets rien en production : le code choisit parmi les modèles qui ont \
 réussi leur test.
@@ -40,6 +41,9 @@ def _final_test_tool(lab: Lab) -> Tool:
     def fn(experiment_id: str) -> dict:
         split_id = lab.latest_split()
         candidate = lab.candidate_to_test(split_id) if split_id else None
+        blocked = lab.retest_blocked(split_id) if split_id else None
+        if blocked:
+            return {"error": blocked}
         if candidate is None:
             return {"error": "aucun candidat à tester sur le dernier split (un test y a déjà réussi, ou "
                              "aucune expérience non testée) : pas de final_test"}

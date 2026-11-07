@@ -266,6 +266,7 @@ class Lab:
         self._rows: list[dict] | None = None
         self._ann_cache: dict[str, dict] = {}
         self._folds_cache: dict[str, dict[str, int]] = {}
+        self._test_chains_cache: dict[str, int] = {}
         EXP_DIR.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ données
@@ -657,7 +658,7 @@ class Lab:
 
         exp_id = self._next_exp_id()
         result = {
-            "val": metrics.summary(y[dev], probs, groups), "train_s": train_s,
+            "val": metrics.summary(y[dev], probs, groups, self._test_chains(split_id)), "train_s": train_s,
             "ms_par_frame": feat_ms + pred_ms, "n_features": X.shape[1],
             "n_dev": len(dev), "plis": len(np.unique(fold)), "data": self._data_snapshot(split_id),
             "date": time.strftime("%Y-%m-%d %H:%M"),
@@ -784,6 +785,8 @@ class Lab:
         """Tout ce qu'on sait de chaque expérience : config, métriques val, volume de données,
         test final et statut de production."""
         prod = self.production() or {}
+        latest = self.latest_split()
+        key = f"rappel_a_precision_{metrics.DEFAULT_PRECISION}"
         out = []
         for d in sorted(p for p in EXP_DIR.glob("exp_*") if p.is_dir()):
             if not (d / "metrics.json").exists():
@@ -799,6 +802,15 @@ class Lab:
                 # l'expérience est ignorée plutôt que de casser list_experiments et la fin de run.
                 print(f"[lab] {d.name} ignorée : fichiers illisibles", file=sys.stderr)
                 continue
+            # Split récent : seuil d'un ancien réglage recalculé une fois (réécrit par _val_at), pour
+            # que les agents comparent les expériences au même point que celui que final_test teste.
+            if (e.get("split_id") == latest and
+                    self._prudent_stale(e["val"].get(key), latest, e["val"].get("ap_par_chaine") is not None)):
+                try:
+                    self._val_at(d.name, metrics.DEFAULT_PRECISION)
+                except ValueError:
+                    pass
+                e["val"] = json.loads((d / "metrics.json").read_text(encoding="utf-8"))["val"]
             e["en_production"] = prod.get("experiment_id") == d.name
             out.append(e)
         return out
@@ -833,6 +845,9 @@ class Lab:
                 entry = {"split_id": sid, "clips_hors_split": sp["clips_hors_split"], "note": note,
                          "candidat_a_tester": self.candidate_to_test(sid), "experiences": len(mine),
                          "meilleures": {e["id"]: _one_line(e) for e in ranked[:BRIEF_BEST]}}
+                blocked = self.retest_blocked(sid)
+                if blocked:
+                    entry["test_bloque"] = blocked
                 out.append(entry)
                 continue
             dev = self._idx("dev", sid)
@@ -855,6 +870,9 @@ class Lab:
                 entry["anomalie_chaines_dans_dev_et_test"] = shared
             entry["note"] = note
             entry["candidat_a_tester"] = self.candidate_to_test(sid)
+            blocked = self.retest_blocked(sid)
+            if blocked:
+                entry["test_bloque"] = blocked
             entry["experiences"] = len(mine)
             listed = {}
             for name, group in (("meilleures", ranked[:LISTED_BEST]),
@@ -884,6 +902,9 @@ class Lab:
         d = EXP_DIR / experiment_id
         config = json.loads((d / "config.json").read_text(encoding="utf-8"))
         split_id = config.get("split_id", LEGACY_SPLIT)
+        blocked = self.retest_blocked(split_id, precision)
+        if blocked:
+            return {"error": blocked}
         te = self._idx("test", split_id)  # avant de décompter : un split refusé ne coûte pas de test
         self.final_tests_left -= 1
         with open(d / "model.pkl", "rb") as fh:
@@ -940,13 +961,44 @@ class Lab:
                                    r["ms_par_frame"]))
         return ranked
 
+    def _annotatable_left(self) -> int:
+        """Vidéos qu'on peut encore collecter et faire annoter (videos_annotables_estimees de
+        dataset_info ; sans coût mesuré, les vidéos collectables restantes)."""
+        left = self.data_budget - self.generated
+        per_video = self._video_cost_usd(self.rows) if left > 0 else None
+        if per_video:
+            left = min(left, int((self.annotation_budget_usd - self.annotation_spent) / per_video))
+        return max(left, 0)
+
+    def retest_blocked(self, split_id: str, precision: float = metrics.DEFAULT_PRECISION) -> str | None:
+        """Raison de refuser un nouveau test final sur ce split, ou None. Un test y a déjà échoué et
+        il reste des vidéos à collecter : un nouveau split, plus gros, vaut mieux qu'un autre test
+        d'une variante du même (run 019 : 3 tests sur split_008, tous échoués, 200 vidéos et 1,94 $
+        d'annotation laissés)."""
+        failed = []
+        for p in sorted(EXP_DIR.glob("exp_*/final_test.json")):  # peu de fichiers : pas list_experiments
+            try:
+                tested = json.loads(p.read_text(encoding="utf-8")).get("split_id")
+            except (ValueError, UnicodeDecodeError):
+                continue
+            if tested == split_id and self._test_status(p.parent.name, precision)["statut"] == "échoué":
+                failed.append(p.parent.name)
+        left = self._annotatable_left() if failed else 0
+        if not left:
+            return None
+        return (f"test déjà échoué sur {split_id} ({', '.join(failed)}) et {left} vidéos encore "
+                "annotables : fais d'abord collecter, puis un nouveau split, avant un autre test final")
+
     def candidate_to_test(self, split_id: str, precision: float = metrics.DEFAULT_PRECISION) -> str | None:
         """Prochaine expérience à passer au test final : la règle de choix (_best_by_rule) appliquée
         aux non testées du split. Un test échoué la retire, et la suivante prend sa place : les
         tests se font dans l'ordre où select_production choisirait. None une fois un test réussi
-        (aucune non testée ne passerait devant) ou sans non testée."""
+        (aucune non testée ne passerait devant), sans non testée, ou tant qu'un nouveau test est
+        bloqué (retest_blocked)."""
         ranked = self._ranked(split_id, precision)
         if any(r["test"]["statut"] == "réussi" for r in ranked):
+            return None
+        if self.retest_blocked(split_id, precision):
             return None
         best = _best_by_rule([r for r in ranked if r["test"]["statut"] == "non testé"])
         return best["experiment_id"] if best else None
@@ -1144,18 +1196,41 @@ class Lab:
                 default=0)
         return f"exp_{n + 1:03d}"
 
+    def _test_chains(self, split_id: str) -> int:
+        """Chaînes du test d'un split : la taille des jeux tirés pour le seuil prudent."""
+        if split_id not in self._test_chains_cache:
+            self._test_chains_cache[split_id] = len({self.rows[i]["source"] for i in self._idx("test", split_id)})
+        return self._test_chains_cache[split_id]
+
+    def _prudent_stale(self, op, split_id: str, has_groups: bool) -> bool:
+        """Point de fonctionnement val calculé avec un autre réglage du seuil prudent que l'actuel
+        (avant le 07/11/2026 : jeux de la taille du val, centile 80). Sans chaînes connues, le
+        seuil n'est pas prudent et rien n'est périmé."""
+        if not has_groups:
+            return False
+        expected = metrics.prudent_method(self._test_chains(split_id))
+        return not isinstance(op, dict) or op.get("seuil_prudent") != expected
+
     def _val_at(self, experiment_id: str, precision: float):
         """Prédictions val d'une expérience et son point de fonctionnement à la précision visée."""
-        preds = json.loads((EXP_DIR / experiment_id / "val_preds.json").read_text(encoding="utf-8"))
-        y, probs = np.array(preds["y"]), np.array(preds["probs"])
+        d = EXP_DIR / experiment_id
+        preds = json.loads((d / "val_preds.json").read_text(encoding="utf-8"))
+        y, probs, groups = np.array(preds["y"]), np.array(preds["probs"]), preds.get("groups")
+        split_id = json.loads((d / "config.json").read_text(encoding="utf-8")).get("split_id", LEGACY_SPLIT)
         # Seuil déjà calculé à l'entraînement pour les précisions usuelles (le bootstrap du seuil
-        # prudent coûte) ; sinon recalculé, prudent si les chaînes sont connues.
-        val = json.loads((EXP_DIR / experiment_id / "metrics.json").read_text(encoding="utf-8"))["val"]
-        known = val.get(f"rappel_a_precision_{precision}")
-        if isinstance(known, dict):
+        # prudent coûte) ; sinon, ou calculé avec un ancien réglage, recalculé et réécrit dans
+        # metrics.json, pour que list_experiments montre le même point que celui testé.
+        m = json.loads((d / "metrics.json").read_text(encoding="utf-8"))
+        key = f"rappel_a_precision_{precision}"
+        known = m["val"].get(key)
+        if isinstance(known, dict) and not self._prudent_stale(known, split_id, bool(groups)):
             op = metrics.operating_point(y, probs, known["threshold"])
         else:
-            op = metrics.recall_at_precision(y, probs, precision, preds.get("groups"))
+            n = self._test_chains(split_id) if groups else None
+            op = metrics.recall_at_precision(y, probs, precision, groups, n)
+            if key in m["val"] and groups:
+                m["val"][key] = op or "précision non atteinte"
+                write_atomic(d / "metrics.json", json.dumps(_jsonable(m), indent=2))
         if op is None:
             raise ValueError(f"précision {precision} jamais atteinte sur val par {experiment_id}")
         return preds["frames"], y, probs, op
