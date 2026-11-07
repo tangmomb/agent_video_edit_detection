@@ -267,6 +267,7 @@ class Lab:
         self._ann_cache: dict[str, dict] = {}
         self._folds_cache: dict[str, dict[str, int]] = {}
         self._test_chains_cache: dict[str, int] = {}
+        self._empty_cache: tuple[list, set[str]] | None = None
         EXP_DIR.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ données
@@ -342,9 +343,14 @@ class Lab:
 
     def _empty_samples(self) -> set[str]:
         """Vidéos sans aucun ajout : des images étiquetées, toutes brutes (une vidéo pas encore
-        annotée n'en fait pas partie)."""
-        labeled = {r["sample_id"] for r in self.rows if r["label_any"] is not None}
-        return labeled - self._positive_samples()
+        annotée n'en fait pas partie). Gardé tant que l'index ne change pas : _balance_groups
+        l'appelle pour chaque image, et le recalcul parcourait tout l'index à chaque fois (run
+        020 : environ 50 min par train_model, dont l'essentiel ici)."""
+        rows = self.rows
+        if self._empty_cache is None or self._empty_cache[0] is not rows:
+            labeled = {r["sample_id"] for r in rows if r["label_any"] is not None}
+            self._empty_cache = (rows, labeled - self._positive_samples())
+        return self._empty_cache[1]
 
     def _ann(self, sample_id: str) -> dict:
         """meta.json de la vidéo (titre, chaîne, dimensions, requête)."""
