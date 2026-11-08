@@ -34,6 +34,9 @@ services:
     restart: unless-stopped
     # Réseau de l'hôte : l'agent mesure les interfaces du VPS, pas celles d'un conteneur.
     network_mode: host
+    # Le profil AppArmor docker-default refuse les appels D-Bus vers systemd (guide Beszel).
+    security_opt:
+      - apparmor:unconfined
     env_file:
       - path: /srv/beszel/agent.env
         required: false
