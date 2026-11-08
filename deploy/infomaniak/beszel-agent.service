@@ -21,7 +21,7 @@ EnvironmentFile=/etc/beszel-agent.env
 Environment=HUB_URL=https://monitor.tanguym.fr
 # Repli SSH du hub : seulement en local, la connexion passe par le WebSocket sortant.
 Environment=LISTEN=127.0.0.1:45876
-Environment=SERVICE_PATTERNS=caddy*,docker*,containerd*
+Environment=SERVICE_PATTERNS=caddy*
 ExecStart=/usr/local/bin/beszel-agent
 Restart=on-failure
 RestartSec=10s
