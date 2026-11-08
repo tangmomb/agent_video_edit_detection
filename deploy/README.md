@@ -53,3 +53,25 @@ sudo systemd-run --uid=ubuntu --working-directory=$PWD --unit=agent-run -p Memor
   .venv/bin/python -m agents --budget-usd 0.30 --data-budget 0 --annotation-usd 0 --final-tests 2
 journalctl -u agent-run -f
 ```
+
+## Les autres projets du VPS
+
+Le VPS Contabo (95.111.224.166) héberge aussi deux autres projets. `deploy/Caddyfile` sert les trois
+sites, et `update_vps.sh` le recopie à chaque déploiement de ce dépôt. Les unités systemd ci-dessous,
+elles, s'installent à la main (`sudo cp deploy/<unité> /etc/systemd/system/`, puis
+`sudo systemctl daemon-reload` et `sudo systemctl enable --now <timer>`) :
+
+- **rag_ionis** (https://ionis.tanguym.fr) : conteneurs Docker dans `~/rag_ionis`, déployés par la CI
+  de son propre dépôt (`tangmomb/rag_ionis`) ; API sur 127.0.0.1:8006, préproduction sur 8007.
+  Sauvegarde nocturne de sa base et de Phoenix vers S3 Scaleway : `rag-ionis-backup.sh` (dans
+  `/usr/local/bin`), `rag-ionis-backup.service` et `.timer`. La restauration est décrite en tête du script.
+- **fine-tuning** (https://fine-tuning.tanguym.fr) : le rapport `00_compte_rendu` du dépôt public
+  `tangmomb/fine-tuning`, copie partielle dans `/srv/fine-tuning` mise à jour toutes les 10 minutes
+  par `fine-tuning-pull.timer`.
+
+## Le VPS Infomaniak
+
+Le VPS Infomaniak (179.237.98.117) sert de relais YouTube à l'agent (service `yt-tunnel` ici, voir
+`YT_PROXY` dans le README principal) et héberge les portfolios https://tanguym.fr et
+https://portfolio-ia.tanguym.fr. Sa configuration est dans `deploy/infomaniak/` et se recopie à la main :
+pas de déploiement automatique sur ce serveur.
