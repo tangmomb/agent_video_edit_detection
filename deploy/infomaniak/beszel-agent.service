@@ -27,8 +27,8 @@ Restart=on-failure
 RestartSec=10s
 StateDirectory=beszel-agent
 
-# 1,9 Go de RAM sur ce serveur : l'agent reste petit.
-MemoryMax=64M
+# ~17 Mo en régime, ~62 Mo au démarrage : plafond large, négligeable sur 1,9 Go.
+MemoryMax=128M
 OOMScoreAdjust=800
 
 NoNewPrivileges=yes
