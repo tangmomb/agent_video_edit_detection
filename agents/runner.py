@@ -343,6 +343,7 @@ class Session:
             _, final = complete(turn, "none")
             return final or f"Agent arrêté ({reason}) sans rapport."
 
+        stop = "rapport"  # pourquoi l'agent s'arrête : de lui-même, budget ou tours (résumé des runs)
         try:
             for turn in range(1, agent.max_turns + 1):
                 calls, final = complete(turn, "auto")
@@ -402,10 +403,12 @@ class Session:
                     add_user(images, logged)
                 # Un tour de plus dépasserait la limite (estimé au coût du dernier) : on conclut.
                 if self.spent + last_cost >= limit:
+                    stop = "budget"
                     final = last_report(turn + 1, f"Budget atteint ({self.spent:.2f}/{limit:.2f} $).")
                     break
                 remaining = agent.max_turns - turn
                 if remaining == 0:
+                    stop = "tours"
                     final = last_report(turn + 1, "Nombre maximal de tours atteint.")
                     break
                 if remaining <= 2 or self.spent >= 0.8 * limit:
@@ -418,7 +421,7 @@ class Session:
             step("error", error=f"{type(e).__name__}: {e}", traceback=traceback.format_exc())
             raise
         else:
-            step("end", final=final, tools_called=len(used), cost_usd=round(self.spent, 4),
+            step("end", final=final, arret=stop, tools_called=len(used), cost_usd=round(self.spent, 4),
                  duration_s=round(time.perf_counter() - t_agent, 2))
         finally:
             self._stack.pop()

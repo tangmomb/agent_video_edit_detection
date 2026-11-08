@@ -64,6 +64,58 @@ def _production(run_dir: Path) -> dict | None:
     return {"experiment_id": m[1], "split_id": m[2], "statut": kind}
 
 
+def _fin(r: dict, steps: list, status: str, finals: list, annotation: float) -> dict | None:
+    """Pourquoi le run s'est arrêté, déduit du journal plutôt que du rapport de l'orchestrateur :
+    {raison, cls (couleur du verdict), limites (autres budgets à bout)}. None tant qu'il tourne."""
+    if status == "running":
+        return None
+    errors = [str(s["result"]["error"]) for s in steps if s["type"] == "tool"
+              and isinstance(s.get("result"), dict) and "error" in s["result"]]
+    orch_end = next((s for s in reversed(steps) if s["type"] == "end" and s.get("parent") is None), None)
+    # Arrêt forcé de l'orchestrateur : noté dans l'étape end depuis le 08/11, avant dans le
+    # message ajouté par le code (runner.last_report).
+    forced = (orch_end or {}).get("arret")
+    if forced is None:
+        notes = " ".join(" ".join(s.get("content") or []) for s in steps
+                         if s["type"] == "user" and s.get("parent") is None and s.get("agent") == "orchestrator")
+        forced = "budget" if "[Budget atteint" in notes else "tours" if "[Nombre maximal de tours" in notes else None
+    tests_budget = r.get("final_tests")
+    tests_out = (tests_budget is not None and len(finals) >= tests_budget) or \
+        any(e.startswith("plus de final_test") for e in errors)
+    ann_budget = r.get("annotation_usd")
+    collecte = r.get("data_budget") != 0 and bool(ann_budget)
+    limites = []
+    if tests_out:
+        limites.append("tests finaux épuisés")
+    if collecte and (any("budget d'annotation épuisé" in e for e in errors) or annotation >= ann_budget * 0.95):
+        limites.append("budget d'annotation épuisé")
+    if forced == "budget" or any(e.startswith("budget de délégation épuisé") for e in errors):
+        limites.append("budget des agents épuisé")
+    if not collecte:
+        limites.append("sans collecte")
+    reussi = any(t["statut"] == "réussi" for t in finals)
+
+    if status == "interrompu":
+        fin = ("processus arrêté : plus de signe de vie, run jamais clôturé", "warn")
+    elif r.get("error") or status == "error":
+        fin = (f"plantage : {r.get('error') or 'erreur'}", "ko")
+    elif forced == "tours":
+        fin = ("nombre maximal de tours de l'orchestrateur atteint", "warn")
+    elif "budget des agents épuisé" in limites:
+        fin = ("budget des agents épuisé", "warn")
+    elif reussi:
+        fin = ("test final réussi", "ok")
+    elif tests_out:
+        fin = ("tests finaux épuisés, aucun réussi" if finals else "aucun test final autorisé", "ko")
+    elif any(e.startswith("test déjà échoué") for e in errors):
+        fin = ("nouveau test bloqué : collecte nécessaire avant de retester", "warn")
+    elif any(e.startswith("aucun candidat à tester") for e in errors):
+        fin = ("plus aucun candidat à tester", "warn")
+    else:
+        fin = ("arrêt décidé par l'orchestrateur", "dim")
+    return {"raison": fin[0], "cls": fin[1], "limites": [x for x in limites if x not in fin[0]]}
+
+
 def summarize(run_dir: Path) -> dict:
     path = run_dir / "pipeline.json"
     log = json.loads(path.read_text(encoding="utf-8"))
@@ -167,7 +219,7 @@ def summarize(run_dir: Path) -> dict:
         "production": _production(run_dir), "etapes": etapes,
         "orchestrateur_s": _seconds(orch["start"], orch["end"] or ended) if orch else None,
         "en_cours": {"agent": current["agent"], "depuis": current["start"]} if current else None,
-        "dernier_evenement": last, "error": r.get("error"),
+        "dernier_evenement": last, "error": r.get("error"), "fin": _fin(r, steps, status, finals, annotation),
         "conclusion": " ".join((r.get("report") or "").split())[:300],
     }
 

@@ -60,6 +60,13 @@ details.run > summary:hover { background: color-mix(in srgb, var(--fg) 3%, trans
 .l2 { gap: 4px 20px; margin-top: 5px; font-size: 13.5px; color: var(--muted); }
 .l2 b { color: var(--fg); font-weight: 600; }
 .runname { font-weight: 650; font-size: 15px; }
+.fin { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; padding: 4px 10px 4px 8px;
+  border-radius: 6px; font-size: 13.5px; width: fit-content; max-width: 100%;
+  --c: var(--muted); background: color-mix(in srgb, var(--c) 12%, transparent); border-left: 2px solid var(--c); }
+.fin.ok { --c: var(--ok); } .fin.ko { --c: var(--ko); } .fin.warn { --c: var(--warn); }
+.fin .k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--c); }
+.fin b { color: var(--fg); font-weight: 600; }
+.fin .lim { font-size: 12px; color: var(--muted); padding: 0 7px; border-radius: 999px; background: var(--sunk); white-space: nowrap; }
 .when { font-size: 13px; color: var(--muted); }
 .cost { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .cost .meter { width: 70px; margin: 0; }
@@ -316,6 +323,14 @@ function spendLine(what, spent, budget, count) {
     <span class="meter"><i style="width:${ratio}%"></i></span>`;
 }
 
+// Pourquoi le run s'est arrêté (déduit du journal par le serveur), en couleur du verdict, puis les
+// autres budgets arrivés à bout.
+function finLine(f) {
+  if (!f) return "";
+  return `<div class="fin ${f.cls}"><span class="k">fin</span><b>${esc(f.raison)}</b>${
+    (f.limites || []).map((x) => `<span class="lim">${esc(x)}</span>`).join("")}</div>`;
+}
+
 function runRow(r) {
   const [label, cls] = STATUS[r.status] || [r.status, "dim"];
   const ap = r.best ? ` · AP max <b>${dec(r.best.ap_par_chaine, 3)}</b>` : "";
@@ -328,6 +343,7 @@ function runRow(r) {
           r.final_tests_budget != null ? spendLine("tests finaux", r.final_tests.length, r.final_tests_budget, true) : ""}</span>
           <b>${dur(r.duration_s)}</b></span>
       </div>
+      ${finLine(r.fin)}
       <div class="l2">
         <span><b>${r.experiences.length}</b> exp.${ap}</span>
         <span>tests : ${r.final_tests.length ? r.final_tests.map(testChip).join(" ") : "aucun"}</span>
