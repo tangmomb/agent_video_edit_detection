@@ -61,3 +61,17 @@ ionis.tanguym.fr {
 		-Server
 	}
 }
+
+# Rapport du projet fine-tuning (dépôt public tangmomb/fine-tuning) : pages statiques servies depuis
+# une copie partielle limitée à 00_compte_rendu, tenue à jour par fine-tuning-pull.timer.
+fine-tuning.tanguym.fr {
+	encode zstd gzip
+	root * /srv/fine-tuning/00_compte_rendu
+	file_server
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Met a jour le rapport fine-tuning publie (fine-tuning.tanguym.fr)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/srv/fine-tuning
+ExecStart=/usr/bin/git fetch -q --depth 1 origin master
+ExecStart=/usr/bin/git reset -q --hard origin/master
