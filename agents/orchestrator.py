@@ -55,7 +55,8 @@ split et des expériences, avant de retester (ce n'est pas une étape impossible
 en production : le code \
 choisit ensuite le meilleur parmi les modèles qui ont réussi leur test (à défaut, le meilleur, \
 marqué non vérifié) et l'ajoute à ton rapport. Un test est réussi dès que la précision visée tient \
-sur test, même si le rappel baisse. N'annonce pas quel modèle sera en production : c'est le code \
+sur test, même si le rappel baisse, ou si le candidat fait mieux que le modèle en production sur les \
+chaînes de test que celui-ci n'a jamais vues. N'annonce pas quel modèle sera en production : c'est le code \
 qui le décide, après ton rapport (run 010 : rapport « exp_045 reste en production », code : exp_151).
 
 Rapport final, en français : modèle recommandé (id, seuil, split) et pourquoi, verdict du test, \
@@ -154,7 +155,9 @@ def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annota
         f"`{choice['production']['experiment_id']}` sur `{choice['split_id']}` (le plus gros split), seuil "
         f"{choice['production']['threshold']} : "
         + (f"meilleur rappel val parmi les AP par chaîne à {AP_TIE} près de la meilleure, chez les "
-           "modèles qui ont réussi leur test final."
+           "modèles qui ont réussi leur test final"
+           + (f" (test : {choice['production']['test']['motif']})."
+              if choice["production"]["test"].get("motif") else ".")
            if choice["verifie_sur_test"] else
            "**NON VÉRIFIÉ sur test** : aucun modèle de ce split n'a réussi son test final, c'est le "
            f"meilleur rappel val parmi les AP par chaîne à {AP_TIE} près de la meilleure, chez les modèles "

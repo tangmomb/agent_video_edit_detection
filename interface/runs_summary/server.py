@@ -147,7 +147,7 @@ def summarize(run_dir: Path) -> dict:
             # Les anciens runs n'avaient pas de verdict : même règle que lab._test_status.
             statut = res.get("statut") or (None if target is None or t.get("precision") is None else
                                            "réussi" if t["precision"] >= target else "échoué")
-            finals.append({"id": res.get("experiment_id"), "statut": statut,
+            finals.append({"id": res.get("experiment_id"), "split_id": res.get("split_id"), "statut": statut,
                            "precision_visee": res.get("precision_visee"),
                            "precision": t.get("precision"), "recall": t.get("recall")})
             per_call.setdefault(s.get("call"), {}).setdefault("tests", []).append(finals[-1])

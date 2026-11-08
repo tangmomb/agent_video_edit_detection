@@ -74,6 +74,8 @@ BRIEF_BEST = 3  # version de l'orchestrateur : les meilleures seulement
 # (AP 0.9358, rappel 0.850) passait devant exp_079 (0.9351, 0.863) pour un écart d'AP sans portée.
 # Fixé à l'œil (01/11/2026), pas mesuré sur le banc.
 AP_TIE = 0.005
+# Chaînes de test communes en dessous desquelles on ne compare pas un candidat à la production.
+MIN_CHAINS_VS_PROD = 20
 # Caractéristiques des vidéos sur lesquelles make_split peut équilibrer les splits.
 STRATIFY_KEYS = ("orientation", "clip_vide")
 # hgb (HistGradientBoosting) retiré le 26/10/2026 : sur les 20 essais du banc b2, jamais le meilleur
@@ -922,18 +924,74 @@ class Lab:
         result = {"experiment_id": experiment_id, "split_id": split_id,
                   "precision_visee": precision, "seuil_choisi_sur_val": op["threshold"], "val": op,
                   "test": metrics.operating_point(y, probs, op["threshold"]),
-                  "test_auc": s["auc"], "test_ap": s["ap"], "final_tests_restants": self.final_tests_left}
+                  "test_auc": s["auc"], "test_ap": s["ap"], "final_tests_restants": self.final_tests_left,
+                  "contre_production": self._against_production(experiment_id, te, probs, op["threshold"])}
         write_atomic(d / "final_test.json", json.dumps(_jsonable(result), indent=2))
         return self.final_test_summary(experiment_id, precision)
+
+    def _against_production(self, experiment_id: str, te: np.ndarray, probs: np.ndarray,
+                            threshold: float) -> dict | None:
+        """Le candidat et le modèle en production, chacun à son seuil, sur les chaînes de test que
+        la production n'a jamais vues (hors du dev de son split) : de quoi voir si le candidat fait
+        mieux qu'elle, sur les mêmes images, même quand ce test est trop dur pour la précision
+        visée (run 021 : exp_361, en production, tenait 0,72 de précision sur ces chaînes, les
+        trois candidats 0,81 à 0,82, tous échoués à 0,90 ; il est resté en production). None
+        sans production, ou avec moins de MIN_CHAINS_VS_PROD chaînes communes."""
+        path = EXP_DIR / "production.json"
+        if not path.exists():
+            return None
+        prod = json.loads(path.read_text(encoding="utf-8"))
+        pid = prod["experiment_id"]
+        if pid == experiment_id:
+            return None
+        seen = {self.rows[i]["source"] for i in self._idx("dev", prod["split_id"])}
+        keep = np.array([k for k, i in enumerate(te) if self.rows[i]["source"] not in seen], dtype=int)
+        chains = {self.rows[te[k]]["source"] for k in keep}
+        if len(chains) < MIN_CHAINS_VS_PROD:
+            return None
+        pd = EXP_DIR / pid
+        pconfig = json.loads((pd / "config.json").read_text(encoding="utf-8"))
+        with open(pd / "model.pkl", "rb") as fh:
+            pclf = pickle.load(fh)
+        PX, _ = self._X(pconfig["features"])
+        y = self._y()[te[keep]]
+        pprobs = pclf.predict_proba(PX[te[keep]])[:, 1]
+        side = lambda p, t: {**metrics.operating_point(y, p, t), "ap": metrics.summary(y, p)["ap"]}
+        return {"production": pid, "production_verifiee": prod["test"].get("statut") == "réussi",
+                "chaines": len(chains), "images": len(keep),
+                "candidat": side(probs[keep], threshold), "modele_production": side(pprobs, prod["threshold"])}
+
+    def compare_tested_to_production(self, split_id: str) -> dict:
+        """Ajoute contre_production aux tests finaux déjà passés sur ce split qui ne l'ont pas
+        (faits avant la règle) : relit le test, sans décompter de final_test ni rien choisir."""
+        out = {}
+        for p in sorted(EXP_DIR.glob("exp_*/final_test.json")):
+            ft = json.loads(p.read_text(encoding="utf-8"))
+            if ft.get("split_id") != split_id or "contre_production" in ft:
+                continue
+            eid = p.parent.name
+            config = json.loads((p.parent / "config.json").read_text(encoding="utf-8"))
+            with open(p.parent / "model.pkl", "rb") as fh:
+                clf = pickle.load(fh)
+            te = self._idx("test", split_id)
+            X, _ = self._X(config["features"])
+            ft["contre_production"] = self._against_production(
+                eid, te, clf.predict_proba(X[te])[:, 1], ft["seuil_choisi_sur_val"])
+            write_atomic(p, json.dumps(_jsonable(ft), indent=2))
+            out[eid] = {**self._test_status(eid, ft["precision_visee"]), "contre_production": ft["contre_production"]}
+        return _jsonable(out)
 
     def final_test_summary(self, experiment_id: str, precision: float = metrics.DEFAULT_PRECISION) -> dict:
         """Réponse de final_test, relue dans final_test.json : le verdict en tête, calculé comme pour
         le choix de la production (_test_status). Sans lui, l'Evaluator jugeait lui-même (run 010 :
         « échec relatif » d'un test réussi, parce que le rappel baissait)."""
         result = json.loads((EXP_DIR / experiment_id / "final_test.json").read_text(encoding="utf-8"))
-        status = self._test_status(experiment_id, precision)["statut"]
-        return _jsonable({"statut": status, "regle": "réussi si la précision visée tient sur test, au seuil "
-                          "choisi sur val ; le rappel n'entre pas dans le verdict", **result})
+        status = self._test_status(experiment_id, precision)
+        status = {k: status[k] for k in ("statut", "motif") if k in status}
+        return _jsonable({**status, "regle": "réussi si la précision visée tient sur test, au seuil "
+                          "choisi sur val, ou si le candidat fait mieux que le modèle en production (précision "
+                          "et AP) sur les chaînes de test que celui-ci n'a jamais vues ; le rappel n'entre pas "
+                          "dans le verdict", **result})
 
     def save_model(self, experiment_id: str, precision: float, note: str,
                    test: dict | None = None) -> dict:
@@ -1061,7 +1119,10 @@ class Lab:
 
     def _test_status(self, experiment_id: str, precision: float) -> dict:
         """Résultat du test final d'une expérience pour une précision visée : réussi si la
-        précision visée est tenue sur test au seuil choisi sur val."""
+        précision visée est tenue sur test au seuil choisi sur val, ou si le candidat fait mieux que
+        le modèle en production au moment du test, en précision et en AP, sur les chaînes de test
+        que celui-ci n'a jamais vues (contre_production) : un test trop dur pour la précision visée
+        ne garde plus en production un modèle moins bon."""
         path = EXP_DIR / experiment_id / "final_test.json"
         if not path.exists():
             return {"statut": "non testé"}
@@ -1069,8 +1130,19 @@ class Lab:
         if ft["precision_visee"] != precision:
             return {"statut": "non testé", "detail": f"testé à une autre précision visée ({ft['precision_visee']})"}
         t = ft["test"]
-        return {"statut": "réussi" if t["precision"] >= precision else "échoué",
-                "recall": t["recall"], "precision": t["precision"]}
+        out = {"recall": t["recall"], "precision": t["precision"]}
+        if t["precision"] >= precision:
+            return {"statut": "réussi", "motif": "précision visée tenue", **out}
+        vs = ft.get("contre_production")
+        # Battre une production elle-même non vérifiée ne prouve rien.
+        if vs and vs["production_verifiee"] and (vs["candidat"]["precision"] >= vs["modele_production"]["precision"]
+                   and vs["candidat"]["ap"] >= vs["modele_production"]["ap"]):
+            return {"statut": "réussi", "motif": (
+                f"meilleur que {vs['production']} (en production au test) sur {vs['chaines']} chaînes "
+                f"qu'il n'a jamais vues : précision {vs['candidat']['precision']} contre "
+                f"{vs['modele_production']['precision']}, AP {vs['candidat']['ap']} contre "
+                f"{vs['modele_production']['ap']}"), **out}
+        return {"statut": "échoué", **out}
 
     # ------------------------------------------------------------------ interne
     @staticmethod

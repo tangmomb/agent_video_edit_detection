@@ -20,6 +20,10 @@ def main() -> None:
     ex = sub.add_parser("exclude", help="retire une vidéo défectueuse (cassée, doublon) des splits créés ensuite")
     ex.add_argument("sample_id", help="dossier de la vidéo, ex. yt_eT0O3wigEEA")
     ex.add_argument("raison", help="défaut constaté sur la vidéo elle-même, jamais une erreur de modèle")
+    cp = sub.add_parser("compare-prod", help="compare à la production les tests finaux déjà passés sur un split "
+                                             "(relit le test, sans en décompter)")
+    cp.add_argument("split_id")
+    sub.add_parser("select-production", help="refait le choix automatique de fin de run (écrit production.json)")
     c = sub.add_parser("collect", help="collecte directe de vidéos variées puis annotation en batch (payant)")
     c.add_argument("--target", type=int, default=50, help="vidéos à collecter")
     c.add_argument("--per-query", type=int, default=2, help="vidéos au plus par requête")
@@ -88,6 +92,18 @@ def main() -> None:
 
         from .lab import Lab
         print(json.dumps(Lab().exclude_clips({args.sample_id: args.raison}), indent=2, ensure_ascii=False))
+    elif args.cmd == "compare-prod":
+        import json
+
+        from .lab import Lab
+        print(json.dumps(Lab().compare_tested_to_production(args.split_id), indent=2, ensure_ascii=False))
+    elif args.cmd == "select-production":
+        import json
+
+        from .lab import Lab
+        res = Lab().select_production()
+        res.pop("classement", None)
+        print(json.dumps(res, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

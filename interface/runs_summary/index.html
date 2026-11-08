@@ -248,7 +248,8 @@ function stepFacts(e) {
   for (const t of e.tests || []) {
     // une seule ligne : l'expérience en couleur du verdict, puis ses chiffres sur test
     const cls = t.statut === "réussi" ? "ok" : t.statut === "échoué" ? "ko" : "";
-    let line = `<span>exp testée : <b class="${cls}">${esc(t.id)} ${esc(t.statut || "?")}</b></span>`;
+    let line = `<span>exp testée : <b class="${cls}">${esc(t.id)} ${esc(t.statut || "?")}</b></span>` +
+      (t.split_id ? ` · <span><b>${esc(t.split_id)}</b></span>` : "");
     if (t.precision != null) line += ` · <span>précision <b>${pct(t.precision)}</b>${t.precision_visee != null ? ` (cible ${pct(t.precision_visee)})` : ""}</span>` +
       ` · <span>rappel <b>${pct(t.recall)}</b></span>`;
     f.push(`<span class="tst">${line}</span>`);

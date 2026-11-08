@@ -24,7 +24,7 @@ le modèle change.
 toute autre expérience. S'il échoue, \
 relis list_experiments : le candidat suivant y apparaît, sauf si test_bloque l'interdit (il reste \
 des vidéos à collecter) : arrête-toi alors et dis-le. Arrête-toi au premier test réussi. Donne \
-le statut renvoyé par final_test tel quel (réussi ou échoué) ; tu peux commenter l'écart de rappel, \
+le statut renvoyé par final_test tel quel (réussi ou échoué) et son motif ; tu peux commenter l'écart de rappel, \
 pas changer le verdict. Tu ne mets rien en production : le code choisit parmi les modèles qui ont \
 réussi leur test.
 
@@ -54,8 +54,10 @@ def _final_test_tool(lab: Lab) -> Tool:
     return Tool(
         name="final_test",
         description="Mesure candidat_a_tester (list_experiments) sur le test de son split, au seuil "
-                    "choisi sur val : statut (réussi si la précision visée tient), rappel, précision, "
-                    "TP/FP/FN. Refuse toute autre expérience. Nombre limité par session.",
+                    "choisi sur val : statut (réussi si la précision visée tient, ou si le candidat "
+                    "fait mieux que la production sur les chaînes de test qu'elle n'a jamais vues), "
+                    "motif, rappel, précision, TP/FP/FN, comparaison à la production. Refuse toute "
+                    "autre expérience. Nombre limité par session.",
         input_schema={
             "type": "object",
             "properties": {"experiment_id": {"type": "string", "description": "candidat_a_tester."}},
