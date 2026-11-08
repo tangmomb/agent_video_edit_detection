@@ -1,0 +1,43 @@
+# VPS Infomaniak (179.237.98.117) : portfolios statiques et relais. Copié dans /etc/caddy/Caddyfile
+# à la main (pas de déploiement automatique sur ce serveur), puis `sudo systemctl reload caddy`.
+# Les sites sont des copies partielles des dépôts GitHub publics dans /srv/<dépôt>, tenues à jour
+# par site-pull@<dépôt>.timer (voir site-pull@.service et site-pull@.timer à côté).
+
+(site_statique) {
+	encode zstd gzip
+	file_server
+	# Les copies sont des dépôts git : rien de ce qui commence par un point n'est servi.
+	@cache path_regexp (^|/)\.
+	respond @cache 404
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+# Portfolio principal (dépôt tangmomb/portfolio, branche main).
+tanguym.fr {
+	root * /srv/portfolio
+	import site_statique
+}
+
+www.tanguym.fr {
+	redir https://tanguym.fr{uri} permanent
+}
+
+# Portfolio des projets IA (dépôt tangmomb/portfolio_ia, branche master).
+portfolio-ia.tanguym.fr {
+	root * /srv/portfolio_ia
+	import site_statique
+}
+
+# rag_ionis a migré sur Contabo le 08/11/2026 : relais temporaire pour les anciens caches DNS.
+ionis.tanguym.fr {
+	reverse_proxy https://95.111.224.166 {
+		header_up Host ionis.tanguym.fr
+		transport http {
+			tls_server_name ionis.tanguym.fr
+		}
+	}
+}

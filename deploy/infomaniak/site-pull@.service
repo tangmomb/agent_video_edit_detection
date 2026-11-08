@@ -1,0 +1,10 @@
+[Unit]
+Description=Met a jour le site statique /srv/%i depuis GitHub
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/srv/%i
+ExecStart=/usr/bin/git fetch -q --depth 1
+ExecStart=/usr/bin/git reset -q --hard @{u}
