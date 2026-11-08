@@ -1,0 +1,48 @@
+# Agent Beszel du VPS Infomaniak : envoie ses mesures (RAM, CPU, disque, réseau, services systemd)
+# au hub du Contabo, https://monitor.tanguym.fr, par une connexion sortante. Aucun port à ouvrir.
+#
+# Installation (root), voir deploy/README.md :
+#   binaire officiel 0.21.1 vérifié par somme de contrôle dans /usr/local/bin/beszel-agent,
+#   utilisateur système beszel, /etc/beszel-agent.env avec KEY=... et TOKEN=... (affichés par le hub),
+#   install -m 0644 deploy/infomaniak/beszel-agent.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now beszel-agent
+
+[Unit]
+Description=Beszel agent (vers monitor.tanguym.fr)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=beszel
+Group=beszel
+# Lecture des journaux des services, affichés par Beszel.
+SupplementaryGroups=systemd-journal
+EnvironmentFile=/etc/beszel-agent.env
+Environment=HUB_URL=https://monitor.tanguym.fr
+# Repli SSH du hub : seulement en local, la connexion passe par le WebSocket sortant.
+Environment=LISTEN=127.0.0.1:45876
+Environment=SERVICE_PATTERNS=caddy*,docker*,containerd*
+ExecStart=/usr/local/bin/beszel-agent
+Restart=on-failure
+RestartSec=10s
+StateDirectory=beszel-agent
+
+# 1,9 Go de RAM sur ce serveur : l'agent reste petit.
+MemoryMax=64M
+OOMScoreAdjust=800
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectHostname=yes
+ProtectClock=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+KeyringMode=private
+
+[Install]
+WantedBy=multi-user.target

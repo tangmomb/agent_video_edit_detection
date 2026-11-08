@@ -90,3 +90,9 @@ Le VPS Infomaniak (179.237.98.117) sert de relais YouTube à l'agent (service `y
 `YT_PROXY` dans le README principal) et héberge les portfolios https://tanguym.fr et
 https://portfolio-ia.tanguym.fr. Sa configuration est dans `deploy/infomaniak/` et se recopie à la main :
 pas de déploiement automatique sur ce serveur.
+
+Il est surveillé par le même Beszel, système `infomaniak` : agent 0.21.1 en binaire
+(`/usr/local/bin/beszel-agent`, téléchargé depuis les releases GitHub et vérifié par somme de
+contrôle), lancé par `deploy/infomaniak/beszel-agent.service` sous l'utilisateur système `beszel`.
+Il se connecte lui-même au hub (`HUB_URL=https://monitor.tanguym.fr`) : aucun port ouvert. Sa clé
+et son jeton sont dans `/etc/beszel-agent.env` (root, 0600), hors git.
