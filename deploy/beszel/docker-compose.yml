@@ -41,11 +41,16 @@ services:
       # Le hub parle à l'agent par ce socket, sans port réseau.
       LISTEN: /beszel_socket/beszel.sock
       HUB_URL: http://127.0.0.1:8090
+      # Services systemd suivis (état, CPU, RAM et pic de RAM) : l'agent_mots_cles et ses runs ne
+      # tournent pas dans Docker, Caddy, le tunnel YouTube, les sauvegardes et synchros.
+      SERVICE_PATTERNS: "agent-*,caddy*,yt-tunnel*,rag-ionis-*,fine-tuning-*,docker*"
     volumes:
       - /srv/beszel/agent:/var/lib/beszel-agent
       - /srv/beszel/socket:/beszel_socket
       # Lecture seule : statistiques des conteneurs.
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Lecture seule : services systemd, interrogés par D-Bus.
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
     mem_limit: 64m
     memswap_limit: 64m
     oom_score_adj: 800
