@@ -1,0 +1,9 @@
+[Unit]
+Description=Sauvegarde de la base rag_ionis et de Phoenix vers S3 Scaleway
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/usr/local/bin/rag-ionis-backup.sh
