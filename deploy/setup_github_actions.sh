@@ -7,7 +7,7 @@ set -euo pipefail
 
 host="${1:?Adresse IP du VPS manquante}"
 vps="ubuntu@$host"
-admin_key="$HOME/.ssh/agent_mots_cles_vps"
+admin_key="$HOME/.ssh/admin_contabo_infomaniak"
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 
