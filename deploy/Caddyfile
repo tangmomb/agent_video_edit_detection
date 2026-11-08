@@ -41,3 +41,23 @@ agent-video-edit-detection.tanguym.fr {
 		reverse_proxy 127.0.0.1:8770
 	}
 }
+
+# rag_ionis (dépôt tangmomb/rag_ionis) : ses conteneurs Docker n'écoutent que sur 127.0.0.1,
+# l'API de production sur 8006 et celle de préproduction (contrôle Golden Dataset) sur 8007.
+ionis.tanguym.fr {
+	encode zstd gzip
+
+	handle_path /staging/* {
+		reverse_proxy 127.0.0.1:8007
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8006
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
