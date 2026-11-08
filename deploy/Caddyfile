@@ -62,6 +62,20 @@ ionis.tanguym.fr {
 	}
 }
 
+# Beszel (deploy/beszel) : surveillance du VPS. Le hub n'écoute que sur 127.0.0.1:8090 ; l'accès est
+# protégé par le compte administrateur créé dans son interface.
+monitor.tanguym.fr {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8090
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
 # Rapport du projet fine-tuning (dépôt public tangmomb/fine-tuning) : pages statiques servies depuis
 # une copie partielle limitée à 00_compte_rendu, tenue à jour par fine-tuning-pull.timer.
 fine-tuning.tanguym.fr {

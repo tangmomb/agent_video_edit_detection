@@ -69,6 +69,21 @@ elles, s'installent à la main (`sudo cp deploy/<unité> /etc/systemd/system/`, 
   `tangmomb/fine-tuning`, copie partielle dans `/srv/fine-tuning` mise à jour toutes les 10 minutes
   par `fine-tuning-pull.timer`.
 
+## Surveillance du VPS
+
+https://monitor.tanguym.fr : Beszel (`deploy/beszel/docker-compose.yml`) montre la RAM disponible et
+ses pics, le CPU, le disque, le réseau et la consommation de chaque conteneur Docker, avec un historique.
+Le hub n'écoute que sur 127.0.0.1:8090, derrière Caddy ; ses données sont dans `/srv/beszel`.
+Démarrage ou mise à jour après un changement du compose :
+
+```bash
+docker compose -f /srv/agent_mots_cles/deploy/beszel/docker-compose.yml up -d
+```
+
+La première visite crée le compte administrateur. L'agent se branche ensuite par « Add System » :
+hôte `/beszel_socket/beszel.sock`, puis `KEY=…` et `TOKEN=…` affichés par le hub, à écrire dans
+`/srv/beszel/agent.env` (hors git) avant de relancer la commande ci-dessus.
+
 ## Le VPS Infomaniak
 
 Le VPS Infomaniak (179.237.98.117) sert de relais YouTube à l'agent (service `yt-tunnel` ici, voir

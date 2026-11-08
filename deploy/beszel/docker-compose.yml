@@ -1,0 +1,56 @@
+# Beszel : surveillance du VPS Contabo (RAM, pics de RAM, CPU, disque, réseau, conteneurs Docker),
+# servie par Caddy sur https://monitor.tanguym.fr. Voir deploy/README.md.
+#
+#   docker compose -f /srv/agent_mots_cles/deploy/beszel/docker-compose.yml up -d
+#
+# Les données vivent hors du dépôt, dans /srv/beszel. /srv/beszel/agent.env contient KEY et TOKEN,
+# affichés par le hub à l'ajout du système : jamais dans git.
+name: beszel
+
+services:
+  hub:
+    image: henrygd/beszel:0.21.1@sha256:8514a69d9bbbcb74f371a3205561ee231fc0289739cea64e8131f341d695b770
+    restart: unless-stopped
+    # Joignable seulement par Caddy, sur l'hôte.
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      APP_URL: https://monitor.tanguym.fr
+    volumes:
+      - /srv/beszel/data:/beszel_data
+      - /srv/beszel/socket:/beszel_socket
+    # Le VPS partage 8 Go : la surveillance cède avant tout le reste.
+    mem_limit: 128m
+    memswap_limit: 128m
+    oom_score_adj: 800
+    cpus: 0.25
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  agent:
+    image: henrygd/beszel-agent:0.21.1@sha256:cb6868012964d7a68debaa2c84bb72285e5f08531e81f506bd4c493bf052e41c
+    restart: unless-stopped
+    # Réseau de l'hôte : l'agent mesure les interfaces du VPS, pas celles d'un conteneur.
+    network_mode: host
+    env_file:
+      - path: /srv/beszel/agent.env
+        required: false
+    environment:
+      # Le hub parle à l'agent par ce socket, sans port réseau.
+      LISTEN: /beszel_socket/beszel.sock
+      HUB_URL: http://127.0.0.1:8090
+    volumes:
+      - /srv/beszel/agent:/var/lib/beszel-agent
+      - /srv/beszel/socket:/beszel_socket
+      # Lecture seule : statistiques des conteneurs.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: 64m
+    memswap_limit: 64m
+    oom_score_adj: 800
+    cpus: 0.25
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "2"
