@@ -44,7 +44,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 GPU_WAIT_S = 120  # attente maximale du GPU distant par morceau de vidéo, avant le calcul sur place
 _gpu = Lock()  # une analyse à la fois sur le GPU
 # Page publique : au plus 30 vidéos par jour sur le GPU distant, quelques centimes chacune.
-QUOTA = Quota(JOBS, per_ip=3, per_day=30, max_mb=500, max_s=300)
+QUOTA = Quota(JOBS, per_ip=None, per_day=30, max_mb=500, max_s=300)
 
 
 def _remote() -> bool:

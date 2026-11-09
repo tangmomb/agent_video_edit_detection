@@ -169,7 +169,7 @@ async function init() {
   $("seuil-mark").style.left = `${(pipe - SMIN) / (SMAX - SMIN) * 100}%`;
   setSeuil(pipe);
   limites = r.limites;
-  if (limites) $("limits").textContent = ` (${limites.max_min.toLocaleString("fr-FR")} min, ${limites.max_mb} Mo au plus · ${limites.par_ip_jour} par jour)`;
+  if (limites) $("limits").textContent = ` (${limites.max_min.toLocaleString("fr-FR")} min, ${limites.max_mb} Mo au plus · ${limites.par_ip_jour ? `${limites.par_ip_jour} par jour` : `${limites.par_jour} par jour pour tout le monde`})`;
   fillVideos(r.videos);
 }
 

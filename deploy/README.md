@@ -5,14 +5,15 @@ son chemin (`/runs/`, `/modele/`…). Le code est dans `/srv/agent_mots_cles`, c
 `data/`, `model_results/`, `runs/` et `.env` ne sont pas dans git : **le VPS est leur seule source
 de vérité**, les runs se lancent là-bas et plus sur le PC.
 
-Toutes les pages publiées sont publiques, sans mot de passe. Les pages qui reçoivent des vidéos
-(modèle, saut d'images) sont bornées par `interface/quota.py` : 500 Mo et 5 min par vidéo, un envoi
-traité à la fois, 3 vidéos par IP et 30 par jour en tout pour le modèle (GPU Modal), 5 et 50 pour le
-saut d'images (CPU), envois effacés après 24 h. Le banc des annotateurs (`/banc/`, appels payants)
-n'offre en ligne que les 3 annotateurs du dataset, sur ses propres vidéos, une fois par modèle, avec
-3 vidéos de 3 min au plus par jour pour tout le monde (pas de limite par IP), 0,25 $ par lancement et 3 $ par jour pour tout le monde. Les réglages
-sont en tête de chaque `server.py`.
-Les adresses de `QUOTA_ILLIMITE` (`.env` du VPS, séparées par des virgules) n'ont aucune limite.
+Toutes les pages publiées sont publiques, sans mot de passe. Les pages qui reçoivent des vidéos sont
+bornées par `interface/quota.py`, avec des limites globales (pas par IP), un envoi traité à la fois et
+les envois effacés après 24 h :
+- modèle (GPU Modal) : 30 vidéos par jour, 500 Mo et 5 min au plus ;
+- saut d'images (CPU) : 50 vidéos par jour, 500 Mo et 5 min au plus ;
+- banc des annotateurs (`/banc/`, appels payants) : 3 vidéos par jour, 3 min au plus, les 3
+  annotateurs du dataset seulement, sur ses propres vidéos, une fois par modèle, 0,25 $ par
+  lancement et 3 $ par jour.
+Les réglages sont en tête de chaque `server.py`. Les adresses de `QUOTA_ILLIMITE` (`.env` du VPS, séparées par des virgules) n'ont aucune limite.
 
 ## Mettre à jour le code
 

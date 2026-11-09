@@ -239,7 +239,7 @@ input.onchange = () => input.files[0] && analyze(input.files[0]);
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && analyze(e.dataTransfer.files[0]));
 
-const limitsText = (l) => `${l.max_min.toLocaleString("fr-FR")} min et ${l.max_mb} Mo au plus · ${l.par_ip_jour} vidéos par jour`;
+const limitsText = (l) => `${l.max_min.toLocaleString("fr-FR")} min et ${l.max_mb} Mo au plus · ${l.par_ip_jour ? `${l.par_ip_jour} vidéos par jour` : `${l.par_jour} vidéos par jour pour tout le monde`}`;
 
 async function analyze(file) {
   const st = $("status");

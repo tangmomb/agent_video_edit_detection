@@ -42,7 +42,7 @@ JOBS = HERE / "_jobs"
 EXTRACTOR = "clip_b32"  # celui de frames.to_annotate
 _gpu = Lock()  # un calcul d'embeddings à la fois
 # Page publique, calcul sur le CPU du VPS : vidéos courtes et nombre borné.
-QUOTA = Quota(JOBS, per_ip=5, per_day=50, max_mb=500, max_s=300)
+QUOTA = Quota(JOBS, per_ip=None, per_day=50, max_mb=500, max_s=300)
 _cache: dict[str, dict] = {}  # id -> {"frames": [url], "X": embeddings, "labels": [1|0|None]}
 
 
