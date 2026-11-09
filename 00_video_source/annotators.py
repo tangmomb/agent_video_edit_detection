@@ -47,7 +47,14 @@ KEYS = {"mistral": "MISTRAL_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "
 REASONING = "medium"  # effort de raisonnement de tous les modèles…
 # …sauf ceux-ci (None : aucun effort précisé, le modèle garde son réglage par défaut). L'API de
 # zai-glm-5-3-flash n'accepte ni « medium » ni « none » (low, high, max seulement, octobre 2026).
-REASONING_BY_MODEL = {"zai-glm-5-3-flash": None}
+# Les quatre autres refusent « medium » ou tout réglage d'effort (erreur 400, novembre 2026).
+REASONING_BY_MODEL = {
+    "zai-glm-5-3-flash": None,
+    "mistral-large-2512": None,
+    "deepseek-v4-1-flash-1017": None,
+    "mistral-small-2603": None,
+    "ministral-14b-2512": None,
+}
 MAX_SIDE = 768  # plus grand côté envoyé ; le nombre de tokens d'une image suit son nombre de pixels
 
 # Les trois annotateurs du dataset (meilleurs du banc, octobre 2026).
