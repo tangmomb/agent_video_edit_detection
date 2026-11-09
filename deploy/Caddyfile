@@ -10,6 +10,11 @@ agent-video-edit-detection.tanguym.fr {
 		max_size 550MB
 	}
 
+	# Pages et API toujours revérifiées (réponse 304 si rien n'a changé) : sans consigne, le navigateur
+	# garde une ancienne page qui ne comprend plus les réponses du serveur après un déploiement.
+	@revalider not path *.jpg *.jpeg *.png *.webp *.mp4 *.webm *.mov
+	header @revalider Cache-Control "no-cache"
+
 	# Sans la barre finale, les adresses relatives des pages sortiraient du chemin de l'outil.
 	redir /runs /runs/
 	redir /conversations /conversations/
