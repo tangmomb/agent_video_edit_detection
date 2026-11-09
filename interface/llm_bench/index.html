@@ -163,10 +163,6 @@ table.matrix .diff { box-shadow: inset 0 0 0 2px var(--warn); border-radius: 4px
       <div class="panel">
         <h2>Modèles à interroger</h2>
         <div id="models"></div>
-        <div class="opts">
-          <label>Taille envoyée (px)<select id="max_side"><option>512</option><option selected>768</option><option>1024</option></select></label>
-          <label>Plafond par modèle ($)<input id="max_usd" type="number" min="0.05" step="0.05" value="0.50"></label>
-        </div>
         <p class="status" id="reasoning-note" style="margin: 0 0 10px"></p>
         <div class="row"><button class="primary" id="go">Interroger les modèles cochés (payant)</button>
           <span class="status" id="total"></span></div>
@@ -223,9 +219,6 @@ async function init() {
   pub = info.public;
   if (pub) {
     $("limits").textContent = `${pub.max_min.toLocaleString("fr-FR")} min et ${pub.max_mb} Mo au plus · ${pub.par_ip_jour ? `${pub.par_ip_jour} vidéos par jour · ` : `${pub.par_jour} vidéos par jour pour tout le monde · `}budget du jour restant pour tout le monde : ${pub.usd_restant.toFixed(2)} $ sur ${pub.usd_jour} $`;
-    $("max_usd").max = pub.usd_par_lancement;
-    if (+$("max_usd").value > pub.usd_par_lancement) $("max_usd").value = pub.usd_par_lancement.toFixed(2);
-    [...$("max_side").options].forEach((o) => { o.disabled = +o.value > pub.max_side; });
   }
   $("prompt").textContent = info.prompt;
   const except = Object.entries(info.reasoning_by_model).map(([m, r]) => `${m} : ${r || "aucun effort précisé"}`);
@@ -289,7 +282,7 @@ function open(v) {
 
 async function loadEstimates() {
   if (!cur) return;
-  estimates = await (await fetch(`api/estimate?video=${cur.id}&max_side=${$("max_side").value}`)).json();
+  estimates = await (await fetch(`api/estimate?video=${cur.id}`)).json();
   showEstimates();
 }
 
@@ -303,7 +296,6 @@ function showEstimates() {
   const n = cur ? cur.frames.length : 0;
   $("total").textContent = cur ? `Estimation pour les modèles cochés : ≈ ${total.toFixed(3)} $ pour ${n} images (${fmt(n)} de vidéo).` : "";
 }
-$("max_side").onchange = loadEstimates;
 
 // Vote majoritaire des autres modèles sur l'image i (null si aucun autre modèle n'a répondu).
 function majority(i, except) {
@@ -409,15 +401,14 @@ function render() {
 $("go").onclick = async () => {
   const chosen = [...$("models").querySelectorAll("input:checked")].map((x) => x.value);
   if (!chosen.length || !cur) return;
-  const opts = { max_side: +$("max_side").value, max_usd: +$("max_usd").value };
   const est = chosen.reduce((s, m) => s + ((estimates[m] || {}).usd || 0), 0);
-  if (!confirm(`Interroger ${chosen.length} modèle(s) sur ${cur.frames.length} images ? Appels payants aux API (${[...new Set(chosen.map((id) => models.find((m) => m.id === id).fournisseur))].join(", ")}) : ≈ ${est.toFixed(3)} $ estimés, plafond ${opts.max_usd} $ par modèle.`)) return;
+  if (!confirm(`Interroger ${chosen.length} modèle(s) sur ${cur.frames.length} images ? Appels payants aux API (${[...new Set(chosen.map((id) => models.find((m) => m.id === id).fournisseur))].join(", ")}) : ≈ ${est.toFixed(3)} $ estimés.`)) return;
   $("go").disabled = true;
   chosen.forEach((m) => { pending[m] = true; cur.runs = cur.runs.filter((r) => r.model !== m); });
   render();
   await Promise.all(chosen.map(async (m) => {
     try {
-      const r = await fetch("api/run", { method: "POST", body: JSON.stringify({ video: cur.id, model: m, ...opts }) });
+      const r = await fetch("api/run", { method: "POST", body: JSON.stringify({ video: cur.id, model: m }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || `${r.status} ${r.statusText}`);
       cur.runs.push(j);

@@ -34,17 +34,16 @@ ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
 from interface import dev_reload  # noqa: E402
 from interface.quota import Quota, Rejected  # noqa: E402
-from video_source.annotators import (ANNOTATORS, KEYS, MODELS, PROMPT, PROVIDER, REASONING, REASONING_BY_MODEL,  # noqa: E402
+from video_source.annotators import (ANNOTATORS, KEYS, MAX_SIDE, MODELS, PROMPT, PROVIDER, REASONING, REASONING_BY_MODEL,  # noqa: E402
                                      ask, client, parse, reasoning)
 from video_source.annotators import cost as _cost  # noqa: E402
 
 VIDEOS = HERE / "_videos"
-# En ligne : une vidéo de 3 min coûte environ 0,06 à 0,09 $ par annotateur (180 images, 768 px).
+# En ligne : une vidéo de 3 min coûte environ 0,06 à 0,09 $ par annotateur (180 images de 640 px).
 QUOTA = Quota(VIDEOS, per_ip=None, per_day=3, max_mb=500, max_s=180)
 PUBLIC_MODELS = ANNOTATORS
 USD_PER_RUN = 0.25  # plafond d'un lancement (un modèle sur une vidéo)
 USD_PER_DAY = 3.0  # pour tout le monde
-PUBLIC_MAX_SIDE = 768
 
 
 def owner(vid: str) -> str | None:
@@ -53,11 +52,11 @@ def owner(vid: str) -> str | None:
 
 
 def extract(video: Path, out: Path) -> list[Path]:
-    """Une image par seconde, 640 px au plus grand côté."""
+    """Une image par seconde, MAX_SIDE px au plus grand côté : celles que l'agent envoie aux annotateurs."""
     import imageio_ffmpeg
     out.mkdir(parents=True, exist_ok=True)
     subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-loglevel", "error", "-i", str(video), "-vf",
-                    "fps=1,scale='if(gt(iw,ih),640,-2)':'if(gt(iw,ih),-2,640)'", "-q:v", "3",
+                    f"fps=1,scale='if(gt(iw,ih),{MAX_SIDE},-2)':'if(gt(iw,ih),-2,{MAX_SIDE})'", "-q:v", "3",
                     str(out / "%05d.jpg")], check=True)
     return sorted(out.glob("*.jpg"))
 
@@ -75,8 +74,8 @@ def run(cfg: dict, api=None) -> dict:
         raise ValueError(f"{model} ne lit pas les images (ou n'est pas dans la liste) : il ne peut pas annoter")
     d = VIDEOS / Path(cfg["video"]).name
     paths = sorted((d / "frames").glob("*.jpg"))
-    max_side = int(cfg.get("max_side", 768))
-    max_usd, effort = float(cfg.get("max_usd", 0.5)), reasoning(model)
+    max_side = MAX_SIDE  # comme l'agent
+    max_usd, effort = float(cfg.get("max_usd", 0.5)), reasoning(model)  # plafond de sécurité, non réglable
     provider = PROVIDER[model]
     api = api or client(provider)
     labels, raw, spent, last = [], [], 0.0, 0.0
@@ -116,7 +115,7 @@ def _image_tokens(w: int, h: int, max_side: int) -> int:
     return cols * rows + rows
 
 
-def estimate(vid: str, max_side: int) -> dict:
+def estimate(vid: str, max_side: int = MAX_SIDE) -> dict:
     """Coût estimé par modèle pour annoter toute la vidéo. Quand le modèle a déjà été lancé à la même
     taille d'image (sur n'importe quelle vidéo), on prend ses tokens réels par image."""
     paths = sorted((VIDEOS / Path(vid).name / "frames").glob("*.jpg"))
@@ -128,7 +127,8 @@ def estimate(vid: str, max_side: int) -> dict:
     seen: dict[str, list[tuple[int, int, int]]] = {}
     for p in VIDEOS.glob("*/runs/*.json"):
         rec = json.loads(p.read_text(encoding="utf-8"))
-        if rec["config"].get("max_side") == max_side and rec["frames"]:
+        # Les anciens lancements à 768 ou 1024 px ont reçu les mêmes images de 640 px.
+        if rec["config"].get("max_side", 0) >= max_side and rec["frames"]:
             seen.setdefault(rec["model"], []).append((len(rec["frames"]), rec["tokens"]["input"], rec["tokens"]["output"]))
     out = {}
     for model, *_ in MODELS:
@@ -187,7 +187,7 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path == "/api/models":
             public = None if ip is None else {
                 **QUOTA.limits(), "usd_par_lancement": USD_PER_RUN, "usd_jour": USD_PER_DAY,
-                "usd_restant": round(QUOTA.usd_left(USD_PER_DAY), 2), "max_side": PUBLIC_MAX_SIDE}
+                "usd_restant": round(QUOTA.usd_left(USD_PER_DAY), 2)}
             return self._json(HTTPStatus.OK, {"models": [{"id": i, "nom": n, "vision": v, "prix": p, "fournisseur": f,
                                                           "cle": KEYS[f] if not os.environ.get(KEYS[f]) else None}
                                                          for i, n, v, p, f in MODELS
@@ -198,7 +198,7 @@ class Handler(SimpleHTTPRequestHandler):
                                               "public": public})
         if u.path == "/api/estimate":
             q = parse_qs(u.query)
-            return self._json(HTTPStatus.OK, estimate(q.get("video", [""])[0], int(q.get("max_side", ["768"])[0])))
+            return self._json(HTTPStatus.OK, estimate(q.get("video", [""])[0]))
         if u.path == "/api/videos":
             return self._json(HTTPStatus.OK, videos(ip))
         if u.path == "/api/video":
@@ -235,9 +235,7 @@ class Handler(SimpleHTTPRequestHandler):
             raise Rejected("Vidéo introuvable.", HTTPStatus.NOT_FOUND)
         if (VIDEOS / vid / "runs" / f"{model}.json").exists():
             raise Rejected("Ce modèle a déjà répondu sur cette vidéo.", HTTPStatus.CONFLICT)
-        cfg = {"model": model, "video": vid,
-               "max_side": min(int(cfg.get("max_side", PUBLIC_MAX_SIDE)), PUBLIC_MAX_SIDE),
-               "max_usd": min(float(cfg.get("max_usd", USD_PER_RUN)), USD_PER_RUN)}
+        cfg = {"model": model, "video": vid, "max_usd": USD_PER_RUN}
         QUOTA.reserve_usd(cfg["max_usd"], USD_PER_DAY)
         spent = cfg["max_usd"]  # compté en entier si le lancement plante en route
         try:

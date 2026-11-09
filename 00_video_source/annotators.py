@@ -55,7 +55,9 @@ REASONING_BY_MODEL = {
     "mistral-small-2603": None,
     "ministral-14b-2512": None,
 }
-MAX_SIDE = 768  # plus grand côté envoyé ; le nombre de tokens d'une image suit son nombre de pixels
+# Plus grand côté envoyé ; le nombre de tokens d'une image suit son nombre de pixels. Égal à LONG_SIDE
+# (model_training_pipeline/frames.py) : les images sont extraites à cette taille et envoyées telles quelles.
+MAX_SIDE = 640
 
 # Les trois annotateurs du dataset (meilleurs du banc, octobre 2026).
 ANNOTATORS = ("gpt-6-luna", "gpt-5.6-luna", "zai-glm-5-3-flash")

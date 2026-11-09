@@ -26,7 +26,7 @@ caméra : texte, titre, sous-titres, logo, bandeau, image incrustée, cadre, eff
 chacun, sa nature, sa position, sa taille et son contraste, en une phrase courte. S'il n'y en a \
 aucun, dis ce qui dans l'image pourrait y faire penser, ou « aucun ».
 Réponds uniquement en JSON : {"description": "…"}"""
-# Tokens d'une requête (image de 768 px au plus, consigne, réponse) : estimation avant envoi, un peu
+# Tokens d'une requête (image de 640 px au plus, consigne, réponse) : estimation avant envoi, un peu
 # au-dessus de la moyenne mesurée avec DeepSeek V4 Flash (311 / 54 sur 20 images, 01/11/2026).
 TOKENS_IN, TOKENS_OUT = 400, 80
 
