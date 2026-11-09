@@ -107,7 +107,7 @@ input[type=range] { width: 100%; accent-color: var(--sent); margin: 0; display: 
     <h2>Vidéo et seuil</h2>
     <div class="pick">
       <select id="video"><option value="">Choisis une vidéo…</option></select>
-      <label class="drop" id="drop">ou envoie une vidéo<input type="file" id="file" accept="video/*" hidden></label>
+      <label class="drop" id="drop">ou envoie une vidéo<small id="limits" class="muted"></small><input type="file" id="file" accept="video/*" hidden></label>
     </div>
     <div class="thr">
       <label for="seuil">Seuil</label>
@@ -168,6 +168,8 @@ async function init() {
   $("pipe").textContent = pipe;
   $("seuil-mark").style.left = `${(pipe - SMIN) / (SMAX - SMIN) * 100}%`;
   setSeuil(pipe);
+  limites = r.limites;
+  if (limites) $("limits").textContent = ` (${limites.max_min.toLocaleString("fr-FR")} min, ${limites.max_mb} Mo au plus · ${limites.par_ip_jour} par jour)`;
   fillVideos(r.videos);
 }
 
@@ -230,10 +232,15 @@ function render() {
   $("sent-grid").innerHTML = d.frames.filter((f) => f.kept).map((f) => card(f, false)).join("");
 }
 
+let limites = null;
 async function upload(file) {
+  if (limites && file.size > limites.max_mb * 1024 * 1024) {
+    $("status").innerHTML = `<span class="err">Vidéo trop lourde : ${limites.max_mb} Mo au plus.</span>`;
+    return;
+  }
   $("status").innerHTML = `<span class="spinner"></span>Envoi de ${file.name} et extraction des images…`;
   const r = await fetch("api/upload", { method: "POST", body: file, headers: { "X-Filename": encodeURIComponent(file.name) } });
-  const j = await r.json();
+  const j = await r.json().catch(() => ({}));
   if (!r.ok) { $("status").innerHTML = `<span class="err">${j.error || r.status}</span>`; return; }
   fillVideos((await (await fetch("api/videos")).json()).videos, j.id);
   $("status").innerHTML = '<span class="spinner"></span>Calcul des embeddings CLIP…';

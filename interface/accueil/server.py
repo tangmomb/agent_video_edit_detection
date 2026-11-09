@@ -29,7 +29,7 @@ TOOLS = [
      "port": 8830,
      "desc": "Une ligne par run : run en cours, coût, durée, temps et coût de chaque étape, expériences, "
              "tests finaux et modèle mis en production."},
-    {"id": "modele", "name": "Modèle en production", "icon": "▶", "prive": True, "url": "http://localhost:8780/",
+    {"id": "modele", "name": "Modèle en production", "icon": "▶", "url": "http://localhost:8780/",
      "port": 8780,
      "desc": "Envoie une vidéo et vois les images où le classifieur détecte un ajout de montage, avec un "
              "seuil réglable. Le modèle met quelques secondes à se charger."},
@@ -43,19 +43,19 @@ TOOLS = [
     {"id": "production", "name": "Le parcours jusqu'au modèle de production", "icon": "🏁",
      "url": "/choix_production.html",
      "desc": "Du split créé par les agents au modèle que le code met en production à la fin d'un run."},
-    {"id": "dataset", "name": "Visionneuse du dataset", "icon": "🎞", "prive": True, "url": "http://localhost:8800/",
+    {"id": "dataset", "name": "Visionneuse du dataset", "icon": "🎞", "url": "http://localhost:8800/",
      "port": 8800,
      "desc": "Parcours les vidéos du dataset : étiquette et votes des trois annotateurs pour chaque image."},
     {"id": "banc", "name": "Banc des annotateurs", "icon": "⚖", "local_seulement": True, "url": "http://localhost:8790/",
      "port": 8790,
      "desc": "Compare les réponses, le coût et la durée des LLM annotateurs sur une même vidéo (appels payants)."},
-    {"id": "saut", "name": "Test du saut d'images", "icon": "⏭", "prive": True, "url": "http://localhost:8810/",
+    {"id": "saut", "name": "Test du saut d'images", "icon": "⏭", "url": "http://localhost:8810/",
      "port": 8810,
      "desc": "Les images que l'annotation enverrait aux annotateurs et celles sautées comme quasi identiques, "
              "avec le seuil réglable."},
 ]
 # Sur le VPS (INTERFACE_PROXIED=1), Caddy est le seul point d'entrée : chaque outil est servi sous
-# /<id>/, certains derrière un mot de passe (prive), et le banc, aux appels payants, n'est pas publié.
+# /<id>/ (prive : derrière un mot de passe, aucun aujourd'hui), et le banc, aux appels payants, n'est pas publié.
 PROXIED = bool(os.environ.get("INTERFACE_PROXIED"))
 PUBLISHED = [{**t, "url": f"/{t['id']}/" if PROXIED and t.get("port") else t["url"],
               "prive": PROXIED and t.get("prive", False)}

@@ -14,6 +14,7 @@ Vidéos envoyées et leurs images dans interface/skip_tester/_jobs/, effaçables
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -33,12 +34,15 @@ from model_training_pipeline.features import embed_images, get_features  # noqa:
 from model_training_pipeline.frames import (FPS, LONG_SIDE, SKIP_SIMILAR, extract, frames_of,  # noqa: E402
                                             load_votes, skip_refs)
 from interface import dev_reload  # noqa: E402
+from interface.quota import Quota, Rejected  # noqa: E402
 from video_source.config import FRAMES_DIR, SAMPLES_DIR, ffmpeg_bin  # noqa: E402
 from video_source.youtube import load_meta  # noqa: E402
 
 JOBS = HERE / "_jobs"
 EXTRACTOR = "clip_b32"  # celui de frames.to_annotate
 _gpu = Lock()  # un calcul d'embeddings à la fois
+# Page publique, calcul sur le CPU du VPS : vidéos courtes et nombre borné.
+QUOTA = Quota(JOBS, per_ip=5, per_day=50, max_mb=500, max_s=300)
 _cache: dict[str, dict] = {}  # id -> {"frames": [url], "X": embeddings, "labels": [1|0|None]}
 
 
@@ -118,7 +122,8 @@ def simulate(vid: str, threshold: float) -> dict:
             "sautees_comparables": known, "sautees_differentes": diff, "frames": frames}
 
 
-def videos() -> list[dict]:
+def videos(ip: str | None) -> list[dict]:
+    """Le dataset et les vidéos envoyées depuis cette adresse (toutes en local)."""
     out = []
     for d in sorted(SAMPLES_DIR.glob("yt_*")):
         if (d / "meta.json").exists():
@@ -126,7 +131,8 @@ def videos() -> list[dict]:
             out.append({"id": f"ds:{d.name}", "title": m.get("title"), "channel": m.get("channel"),
                         "duration": m["video"]["duration"], "kind": "dataset"})
     for d in sorted(JOBS.glob("*"), reverse=True) if JOBS.exists() else []:
-        if (d / "img").exists():
+        owner = (d / "owner.txt").read_text(encoding="utf-8") if (d / "owner.txt").exists() else None
+        if (d / "img").exists() and (ip is None or owner == ip):
             name = (d / "name.txt").read_text(encoding="utf-8") if (d / "name.txt").exists() else d.name
             out.append({"id": f"up:{d.name}", "title": name, "channel": None,
                         "duration": len(list((d / "img").glob("*.jpg"))), "kind": "envoyee"})
@@ -160,7 +166,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._send(HTTPStatus.OK, dev_reload.page(HERE / "index.html"), "text/html; charset=utf-8")
         try:
             if u.path == "/api/videos":
-                return self._json({"videos": videos(), "seuil_pipeline": SKIP_SIMILAR})
+                return self._json({"videos": videos(QUOTA.client(self)), "limites": QUOTA.limits(), "seuil_pipeline": SKIP_SIMILAR})
             if u.path == "/api/simulate":
                 return self._json(simulate(q.get("id", [""])[0], float(q.get("seuil", [SKIP_SIMILAR])[0])))
         except FileNotFoundError:
@@ -186,20 +192,30 @@ class Handler(SimpleHTTPRequestHandler):
         size = int(self.headers.get("Content-Length") or 0)
         if not size:
             return self._json({"error": "vidéo vide"}, HTTPStatus.BAD_REQUEST)
-        name = Path(unquote(self.headers.get("X-Filename") or "video.mp4")).name
-        job = JOBS / f"{time.strftime('%Y%m%d-%H%M%S')}_{uuid.uuid4().hex[:6]}"
-        job.mkdir(parents=True)
-        video = job / ("video" + (Path(name).suffix.lower() or ".mp4"))
-        with open(video, "wb") as fh:
-            left = size
-            while left:
-                chunk = self.rfile.read(min(left, 1 << 20))
-                if not chunk:
-                    break
-                fh.write(chunk)
-                left -= len(chunk)
-        (job / "name.txt").write_text(name, encoding="utf-8")
+        for gone in QUOTA.cleanup():
+            _cache.pop(f"up:{gone}", None)
         try:
+            ip = QUOTA.admit(self)
+        except Rejected as e:
+            self.close_connection = True  # le corps n'est pas lu
+            return self._json({"error": str(e)}, e.status)
+        try:
+            name = Path(unquote(self.headers.get("X-Filename") or "video.mp4")).name
+            job = JOBS / f"{time.strftime('%Y%m%d-%H%M%S')}_{uuid.uuid4().hex[:6]}"
+            job.mkdir(parents=True)
+            video = job / ("video" + (Path(name).suffix.lower() or ".mp4"))
+            with open(video, "wb") as fh:
+                left = size
+                while left:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    left -= len(chunk)
+            QUOTA.check_video(ip, video)
+            (job / "name.txt").write_text(name, encoding="utf-8")
+            if ip:
+                (job / "owner.txt").write_text(ip, encoding="utf-8")
             frames = extract(video, job / "img", FPS, LONG_SIDE)
             # comme frames_of : sans les images qu'ffmpeg ajoute après la fin de la vidéo
             duration = _duration(video)
@@ -207,9 +223,14 @@ class Handler(SimpleHTTPRequestHandler):
                 if duration and i / FPS >= duration:
                     f.unlink()
             return self._json({"id": f"up:{job.name}"})
+        except Rejected as e:
+            shutil.rmtree(job, ignore_errors=True)
+            return self._json({"error": str(e)}, e.status)
         except Exception as e:
+            QUOTA.refund(ip)
             return self._json({"error": f"{type(e).__name__}: {e}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
-
+        finally:
+            QUOTA.release()
 
 def main() -> None:
     p = argparse.ArgumentParser(prog="interface/skip_tester/server.py")

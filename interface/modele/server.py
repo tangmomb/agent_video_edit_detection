@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import pickle
+import shutil
 import sys
 import time
 import uuid
@@ -35,12 +36,15 @@ from model_training_pipeline.features import _encoder, embed_images, embed_modal
 from model_training_pipeline.frames import FPS, extract  # noqa: E402
 from model_training_pipeline.lab import EXP_DIR  # noqa: E402
 from interface import dev_reload  # noqa: E402
+from interface.quota import Quota, Rejected  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 JOBS = HERE / "_jobs"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 GPU_WAIT_S = 120  # attente maximale du GPU distant par morceau de vidéo, avant le calcul sur place
 _gpu = Lock()  # une analyse à la fois sur le GPU
+# Page publique : au plus 30 vidéos par jour sur le GPU distant, quelques centimes chacune.
+QUOTA = Quota(JOBS, per_ip=3, per_day=30, max_mb=500, max_s=300)
 
 
 def _remote() -> bool:
@@ -171,7 +175,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path in ("/", "/index.html"):
                 return self._page(dev_reload.page(HERE / "index.html"))
         if self.path == "/api/model":
-            return self._json(HTTPStatus.OK, self.current_model().info())
+            return self._json(HTTPStatus.OK, {**self.current_model().info(), "limites": QUOTA.limits()})
         if self.path.startswith("/jobs/"):
             self.path = "/_jobs/" + self.path[len("/jobs/"):]
         elif self.path.startswith("/_jobs"):
@@ -184,23 +188,35 @@ class Handler(SimpleHTTPRequestHandler):
         size = int(self.headers.get("Content-Length") or 0)
         if not size:
             return self._json(HTTPStatus.BAD_REQUEST, {"error": "vidéo vide"})
-        name = Path(self.headers.get("X-Filename") or "video.mp4").name
-        job = JOBS / f"{time.strftime('%Y%m%d-%H%M%S')}_{uuid.uuid4().hex[:6]}"
-        job.mkdir(parents=True)
-        video = job / ("video" + (Path(name).suffix.lower() or ".mp4"))
-        with open(video, "wb") as fh:
-            left = size
-            while left:
-                chunk = self.rfile.read(min(left, 1 << 20))
-                if not chunk:
-                    break
-                fh.write(chunk)
-                left -= len(chunk)
+        QUOTA.cleanup()
         try:
+            ip = QUOTA.admit(self)
+        except Rejected as e:
+            self.close_connection = True  # le corps n'est pas lu
+            return self._json(e.status, {"error": str(e)})
+        try:
+            name = Path(self.headers.get("X-Filename") or "video.mp4").name
+            job = JOBS / f"{time.strftime('%Y%m%d-%H%M%S')}_{uuid.uuid4().hex[:6]}"
+            job.mkdir(parents=True)
+            video = job / ("video" + (Path(name).suffix.lower() or ".mp4"))
+            with open(video, "wb") as fh:
+                left = size
+                while left:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    left -= len(chunk)
+            QUOTA.check_video(ip, video)
             self._json(HTTPStatus.OK, analyze(self.current_model(), video, job))
+        except Rejected as e:
+            shutil.rmtree(job, ignore_errors=True)
+            self._json(e.status, {"error": str(e)})
         except Exception as e:
+            QUOTA.refund(ip)
             self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(e).__name__}: {e}"})
-
+        finally:
+            QUOTA.release()
 
 def main() -> None:
     p = argparse.ArgumentParser(prog="interface/modele/server.py")

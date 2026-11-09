@@ -5,8 +5,11 @@ son chemin (`/runs/`, `/modele/`…). Le code est dans `/srv/agent_mots_cles`, c
 `data/`, `model_results/`, `runs/` et `.env` ne sont pas dans git : **le VPS est leur seule source
 de vérité**, les runs se lancent là-bas et plus sur le PC.
 
-Publics en lecture : résumé des runs, conversations, parcours, agents. Sous mot de passe : modèle,
-dataset, saut d'images. Le banc des annotateurs (appels payants) n'est pas publié.
+Toutes les pages publiées sont publiques, sans mot de passe. Les pages qui reçoivent des vidéos
+(modèle, saut d'images) sont bornées par `interface/quota.py` : 500 Mo et 5 min par vidéo, un envoi
+traité à la fois, 3 vidéos par IP et 30 par jour en tout pour le modèle (GPU Modal), 5 et 50 pour le
+saut d'images (CPU), envois effacés après 24 h. Les réglages sont en tête de chaque `server.py`. Le
+banc des annotateurs (appels payants) n'est pas publié.
 
 ## Mettre à jour le code
 
@@ -26,16 +29,6 @@ GitHub désactive les lancements programmés après 60 jours sans activité sur 
 réactiver dans l'onglet Actions.
 
 Mise en place, ou remplacement de la clé et des jetons : `deploy/setup_github_actions.sh`.
-
-## Changer le mot de passe
-
-Le nom d'utilisateur et l'empreinte vivent seulement dans `/etc/caddy/agent_passwd` :
-
-```bash
-HASH=$(caddy hash-password)
-echo "NOM_UTILISATEUR $HASH" | sudo tee /etc/caddy/agent_passwd >/dev/null
-sudo systemctl reload caddy
-```
 
 ## Lancer un run (payant)
 

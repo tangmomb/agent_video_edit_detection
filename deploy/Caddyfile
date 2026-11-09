@@ -1,17 +1,13 @@
 # Point d'entrée public du panneau : HTTPS automatique, un chemin par outil.
-# Copié dans /etc/caddy/Caddyfile. L'empreinte du mot de passe vit seulement sur le serveur, dans
-# /etc/caddy/agent_passwd (ligne « utilisateur empreinte », voir deploy/README.md).
+# Copié dans /etc/caddy/Caddyfile. Toutes les pages sont publiques : les envois de vidéos (modèle,
+# saut d'images) sont bornés par interface/quota.py (taille, durée, nombre par IP et par jour).
 agent-video-edit-detection.tanguym.fr {
 	encode gzip
 
-	# Envoi de vidéos (modèle, saut d'images) : borne pour ne pas remplir le disque.
+	# Envoi de vidéos : un peu au-dessus des 500 Mo d'interface/quota.py, qui répond le premier
+	# avec un message lisible.
 	request_body {
-		max_size 1GB
-	}
-
-	@prive path /modele /modele/* /dataset /dataset/* /saut /saut/*
-	basic_auth @prive {
-		import /etc/caddy/agent_passwd
+		max_size 550MB
 	}
 
 	# Sans la barre finale, les adresses relatives des pages sortiraient du chemin de l'outil.

@@ -158,7 +158,7 @@ button:hover { border-color: var(--muted); }
     <div class="icon">🎞</div>
     <div>
       <strong id="drop-title">Dépose une vidéo ici</strong>
-      <span class="first">ou clique pour en choisir une (mp4, mov, webm…)</span>
+      <span class="first">ou clique pour en choisir une (mp4, mov, webm…)<br><small id="limits"></small></span>
       <span class="again" id="drop-sub"></span>
     </div>
     <button class="again" type="button" tabindex="-1">Analyser une autre vidéo</button>
@@ -227,6 +227,7 @@ fetch("api/model").then((r) => r.json()).then((m) => {
     + tile("Seuil", dec(m.threshold), `précision visée ${pct(m.precision_visee)}`)
     + (m.test ? tile("Test", `${pct(m.test.precision)}`, `précision · rappel ${pct(m.test.recall)}`) : "")
     + tile("Calcul", deviceName(m.device), m.device);
+  if (m.limites) $("limits").textContent = limitsText(m.limites);
   if (data) render();
 }).catch(() => { $("model").innerHTML = '<div><span id="model-err">Serveur du modèle injoignable.</span></div>'; });
 
@@ -238,16 +239,24 @@ input.onchange = () => input.files[0] && analyze(input.files[0]);
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && analyze(e.dataTransfer.files[0]));
 
+const limitsText = (l) => `${l.max_min.toLocaleString("fr-FR")} min et ${l.max_mb} Mo au plus · ${l.par_ip_jour} vidéos par jour`;
+
 async function analyze(file) {
   const st = $("status");
+  const lim = model && model.limites;
+  if (lim && file.size > lim.max_mb * 1024 * 1024) {
+    st.className = "err";
+    st.textContent = `Vidéo trop lourde : ${lim.max_mb} Mo au plus.`;
+    return;
+  }
   st.className = "";
   st.innerHTML = `<span class="spinner"></span>Analyse de « ${file.name} » : extraction des images et passage dans le modèle…`;
   $("results").style.display = "none";
   try {
     const r = await fetch("api/analyze", { method: "POST", body: file,
       headers: { "X-Filename": encodeURIComponent(file.name) } });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || r.statusText);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `${r.status} ${r.statusText}`);
     show(j, URL.createObjectURL(file), file.name);
     history.replaceState(null, "", `#job=${j.job}`);
   } catch (e) {
