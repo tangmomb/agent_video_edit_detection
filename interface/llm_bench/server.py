@@ -8,11 +8,16 @@ branché ni au dataset, ni au classifieur, ni aux agents.
 Chaque vidéo chargée est rangée dans interface/llm_bench/_videos/<id>/ (vidéo, images, et une réponse
 JSON par modèle dans runs/). Chaque lancement de modèle est un appel payant à l'API de son
 fournisseur (clés MISTRAL_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY du .env).
+
+En ligne (requête passée par Caddy), la page est publique et bornée : seuls les annotateurs du
+dataset, sur ses propres vidéos, une fois par modèle et par vidéo, avec un plafond par lancement et un
+budget en dollars par jour pour tout le monde (interface/quota.py). En local, rien ne change.
 """
 
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -28,11 +33,23 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
 from interface import dev_reload  # noqa: E402
-from video_source.annotators import (KEYS, MODELS, PROMPT, PROVIDER, REASONING, REASONING_BY_MODEL,  # noqa: E402
+from interface.quota import Quota, Rejected  # noqa: E402
+from video_source.annotators import (ANNOTATORS, KEYS, MODELS, PROMPT, PROVIDER, REASONING, REASONING_BY_MODEL,  # noqa: E402
                                      ask, client, parse, reasoning)
 from video_source.annotators import cost as _cost  # noqa: E402
 
 VIDEOS = HERE / "_videos"
+# En ligne : une vidéo de 5 min coûte environ 0,10 à 0,15 $ par annotateur (300 images, 768 px).
+QUOTA = Quota(VIDEOS, per_ip=2, per_day=10, max_mb=500, max_s=300)
+PUBLIC_MODELS = ANNOTATORS
+USD_PER_RUN = 0.25  # plafond d'un lancement (un modèle sur une vidéo)
+USD_PER_DAY = 3.0  # pour tout le monde
+PUBLIC_MAX_SIDE = 768
+
+
+def owner(vid: str) -> str | None:
+    f = VIDEOS / Path(vid).name / "owner.txt"
+    return f.read_text(encoding="utf-8") if f.exists() else None
 
 
 def extract(video: Path, out: Path) -> list[Path]:
@@ -47,7 +64,7 @@ def extract(video: Path, out: Path) -> list[Path]:
 
 def frames_of(vid: str) -> list[dict]:
     d = VIDEOS / Path(vid).name / "frames"
-    return [{"i": i, "t": i, "url": f"/_videos/{d.parent.name}/frames/{p.name}"}
+    return [{"i": i, "t": i, "url": f"_videos/{d.parent.name}/frames/{p.name}"}
             for i, p in enumerate(sorted(d.glob("*.jpg")))]
 
 
@@ -134,9 +151,10 @@ def video(vid: str) -> dict:
     return {**meta, "frames": frames_of(vid), "runs": runs}
 
 
-def videos() -> list[dict]:
-    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(VIDEOS.glob("*/meta.json"), reverse=True)] \
-        if VIDEOS.exists() else []
+def videos(ip: str | None) -> list[dict]:
+    """Les vidéos chargées depuis cette adresse (toutes en local)."""
+    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(VIDEOS.glob("*/meta.json"), reverse=True)
+            if ip is None or owner(p.parent.name) == ip] if VIDEOS.exists() else []
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -165,23 +183,30 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, dev_reload.status(HERE / "index.html"))
             if u.path in ("/", "/index.html"):
                 return self._send(HTTPStatus.OK, dev_reload.page(HERE / "index.html"), "text/html; charset=utf-8")
+        ip = QUOTA.client(self)
         if u.path == "/api/models":
+            public = None if ip is None else {
+                **QUOTA.limits(), "usd_par_lancement": USD_PER_RUN, "usd_jour": USD_PER_DAY,
+                "usd_restant": round(QUOTA.usd_left(USD_PER_DAY), 2), "max_side": PUBLIC_MAX_SIDE}
             return self._json(HTTPStatus.OK, {"models": [{"id": i, "nom": n, "vision": v, "prix": p, "fournisseur": f,
                                                           "cle": KEYS[f] if not os.environ.get(KEYS[f]) else None}
-                                                         for i, n, v, p, f in MODELS],
+                                                         for i, n, v, p, f in MODELS
+                                                         if ip is None or i in PUBLIC_MODELS],
                                               "prompt": PROMPT, "reasoning": REASONING,
-                                              "reasoning_by_model": REASONING_BY_MODEL})
+                                              "reasoning_by_model": {m: r for m, r in REASONING_BY_MODEL.items()
+                                                                     if ip is None or m in PUBLIC_MODELS},
+                                              "public": public})
         if u.path == "/api/estimate":
             q = parse_qs(u.query)
             return self._json(HTTPStatus.OK, estimate(q.get("video", [""])[0], int(q.get("max_side", ["768"])[0])))
         if u.path == "/api/videos":
-            return self._json(HTTPStatus.OK, videos())
+            return self._json(HTTPStatus.OK, videos(ip))
         if u.path == "/api/video":
             vid = parse_qs(u.query).get("id", [""])[0]
-            if not (VIDEOS / Path(vid).name / "meta.json").exists():
+            if not (VIDEOS / Path(vid).name / "meta.json").exists() or (ip is not None and owner(vid) != ip):
                 return self.send_error(HTTPStatus.NOT_FOUND)
             return self._json(HTTPStatus.OK, video(vid))
-        if u.path.endswith(".py") or "/runs/" in u.path:
+        if u.path.endswith((".py", "owner.txt", "quota.json")) or "/runs/" in u.path:  # IP des visiteurs
             return self.send_error(HTTPStatus.NOT_FOUND)
         return super().do_GET()
 
@@ -191,37 +216,82 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._upload()
             if self.path == "/api/run":
                 cfg = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-                return self._json(HTTPStatus.OK, run(cfg, api=self.api))
+                ip = QUOTA.client(self)
+                if ip is None:
+                    return self._json(HTTPStatus.OK, run(cfg, api=self.api))
+                return self._public_run(cfg, ip)
             return self.send_error(HTTPStatus.NOT_FOUND)
+        except Rejected as e:
+            return self._json(e.status, {"error": str(e)})
         except Exception as e:
             return self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(e).__name__}: {e}"})
+
+    def _public_run(self, cfg: dict, ip: str):
+        """Un lancement depuis la page publique : bornes de quota.py, puis la dépense réelle comptée."""
+        model, vid = cfg.get("model"), Path(str(cfg.get("video", ""))).name
+        if model not in PUBLIC_MODELS:
+            raise Rejected("En ligne, seuls les annotateurs du dataset peuvent être interrogés.", HTTPStatus.FORBIDDEN)
+        if not vid or owner(vid) != ip:
+            raise Rejected("Vidéo introuvable.", HTTPStatus.NOT_FOUND)
+        if (VIDEOS / vid / "runs" / f"{model}.json").exists():
+            raise Rejected("Ce modèle a déjà répondu sur cette vidéo.", HTTPStatus.CONFLICT)
+        cfg = {"model": model, "video": vid,
+               "max_side": min(int(cfg.get("max_side", PUBLIC_MAX_SIDE)), PUBLIC_MAX_SIDE),
+               "max_usd": min(float(cfg.get("max_usd", USD_PER_RUN)), USD_PER_RUN)}
+        QUOTA.reserve_usd(cfg["max_usd"], USD_PER_DAY)
+        spent = cfg["max_usd"]  # compté en entier si le lancement plante en route
+        try:
+            rec = run(cfg, api=self.api)
+            spent = rec["cost_usd"]
+            return self._json(HTTPStatus.OK, rec)
+        finally:
+            QUOTA.settle_usd(cfg["max_usd"], spent)
 
     def _upload(self):
         size = int(self.headers.get("Content-Length") or 0)
         if not size:
             return self._json(HTTPStatus.BAD_REQUEST, {"error": "vidéo vide"})
+        QUOTA.cleanup()
+        try:
+            ip = QUOTA.admit(self)
+        except Rejected as e:
+            self.close_connection = True  # le corps n'est pas lu
+            return self._json(e.status, {"error": str(e)})
         from urllib.parse import unquote
         name = Path(unquote(self.headers.get("X-Filename") or "video.mp4")).name
         vid = f"{time.strftime('%Y%m%d-%H%M%S')}_{uuid.uuid4().hex[:6]}"
         d = VIDEOS / vid
-        d.mkdir(parents=True)
-        path = d / ("video" + (Path(name).suffix.lower() or ".mp4"))
-        with open(path, "wb") as fh:
-            left = size
-            while left:
-                chunk = self.rfile.read(min(left, 1 << 20))
-                if not chunk:
-                    break
-                fh.write(chunk)
-                left -= len(chunk)
-        n = len(extract(path, d / "frames"))
-        if not n:
-            return self._json(HTTPStatus.BAD_REQUEST, {"error": "aucune image extraite : fichier vidéo illisible ?"})
-        (d / "meta.json").write_text(json.dumps({"id": vid, "nom": name, "images": n,
-                                                 "date": time.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False),
-                                     encoding="utf-8")
-        return self._json(HTTPStatus.OK, video(vid))
-
+        try:
+            d.mkdir(parents=True)
+            path = d / ("video" + (Path(name).suffix.lower() or ".mp4"))
+            with open(path, "wb") as fh:
+                left = size
+                while left:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    left -= len(chunk)
+            QUOTA.check_video(ip, path)
+            n = len(extract(path, d / "frames"))
+            if not n:
+                QUOTA.refund(ip)
+                shutil.rmtree(d, ignore_errors=True)
+                return self._json(HTTPStatus.BAD_REQUEST, {"error": "aucune image extraite : fichier vidéo illisible ?"})
+            if ip:
+                (d / "owner.txt").write_text(ip, encoding="utf-8")
+            (d / "meta.json").write_text(json.dumps({"id": vid, "nom": name, "images": n,
+                                                     "date": time.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False),
+                                         encoding="utf-8")
+            return self._json(HTTPStatus.OK, video(vid))
+        except Rejected as e:
+            shutil.rmtree(d, ignore_errors=True)
+            return self._json(e.status, {"error": str(e)})
+        except Exception:
+            QUOTA.refund(ip)
+            raise
+        finally:
+            QUOTA.release()
 
 def main() -> None:
     p = argparse.ArgumentParser(prog="interface/llm_bench/server.py")

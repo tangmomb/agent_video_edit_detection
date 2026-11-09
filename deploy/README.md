@@ -8,8 +8,10 @@ de vérité**, les runs se lancent là-bas et plus sur le PC.
 Toutes les pages publiées sont publiques, sans mot de passe. Les pages qui reçoivent des vidéos
 (modèle, saut d'images) sont bornées par `interface/quota.py` : 500 Mo et 5 min par vidéo, un envoi
 traité à la fois, 3 vidéos par IP et 30 par jour en tout pour le modèle (GPU Modal), 5 et 50 pour le
-saut d'images (CPU), envois effacés après 24 h. Les réglages sont en tête de chaque `server.py`. Le
-banc des annotateurs (appels payants) n'est pas publié.
+saut d'images (CPU), envois effacés après 24 h. Le banc des annotateurs (`/banc/`, appels payants)
+n'offre en ligne que les 3 annotateurs du dataset, sur ses propres vidéos, une fois par modèle, avec
+2 vidéos par IP et 10 par jour, 0,25 $ par lancement et 3 $ par jour pour tout le monde. Les réglages
+sont en tête de chaque `server.py`.
 
 ## Mettre à jour le code
 

@@ -35,6 +35,11 @@ update)
         sudo systemctl daemon-reload
     fi
 
+    # Les outils publiés (un dossier d'interface/ chacun, route dans le Caddyfile) : un outil ajouté ici
+    # démarre au prochain déploiement.
+    for tool in accueil runs_summary run_chat modele dataset_viewer skip_tester llm_bench; do
+        sudo systemctl enable --quiet "agent-interface@$tool"
+    done
     sudo systemctl restart 'agent-interface@*'
     sleep 10  # un serveur qui plante au démarrage n'est plus actif
     failed=0

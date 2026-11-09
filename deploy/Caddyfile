@@ -16,6 +16,7 @@ agent-video-edit-detection.tanguym.fr {
 	redir /modele /modele/
 	redir /dataset /dataset/
 	redir /saut /saut/
+	redir /banc /banc/
 
 	handle_path /runs/* {
 		reverse_proxy 127.0.0.1:8830
@@ -31,6 +32,10 @@ agent-video-edit-detection.tanguym.fr {
 	}
 	handle_path /saut/* {
 		reverse_proxy 127.0.0.1:8810
+	}
+	# Banc des annotateurs : appels payants, bornés par un budget en dollars par jour (llm_bench/server.py).
+	handle_path /banc/* {
+		reverse_proxy 127.0.0.1:8790
 	}
 	# Le panneau et ses pages statiques (arbre des agents, parcours).
 	handle {

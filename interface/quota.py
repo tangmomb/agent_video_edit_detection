@@ -2,7 +2,8 @@
 
 Sans mot de passe, chacun peut tester, dans des limites qui bornent le coût (GPU Modal, CPU, disque) :
 une vidéo de taille et de durée plafonnées, quelques envois par adresse IP et par jour, un plafond
-global par jour, un seul envoi traité à la fois, et le ménage des envois de plus de KEEP_H heures.
+global par jour, un seul envoi traité à la fois, un budget en dollars par jour pour les appels payants,
+et, sur le VPS seulement (INTERFACE_PROXIED), le ménage des envois de plus de KEEP_H heures.
 
 L'adresse du visiteur est la dernière d'X-Forwarded-For, posée par Caddy (qui ignore celle qu'un
 client fournirait). Sans cet en-tête, la requête ne passe pas par Caddy (développement local) : pas
@@ -10,6 +11,7 @@ de quota. Les compteurs du jour sont dans <jobs>/quota.json et survivent aux red
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -59,7 +61,7 @@ class Quota:
             state = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             state = {}
-        return state if state.get("day") == today else {"day": today, "total": 0, "ip": {}}
+        return state if state.get("day") == today else {"day": today, "total": 0, "ip": {}, "usd": 0.0}
 
     def _save(self, state: dict) -> None:
         self.jobs.mkdir(parents=True, exist_ok=True)
@@ -113,12 +115,33 @@ class Quota:
         if ip is not None:
             self._count(ip, -1)
 
+    # --- budget en dollars du jour (appels payants) -------------------------------------------------
+    def usd_left(self, cap: float) -> float:
+        with self._state:
+            return max(0.0, cap - self._load().get("usd", 0.0))
+
+    def reserve_usd(self, amount: float, cap: float) -> None:
+        """Réserve amount sur le budget du jour, ou lève Rejected s'il n'y suffit pas."""
+        with self._state:
+            s = self._load()
+            if s.get("usd", 0.0) + amount > cap:
+                raise Rejected("Budget du jour épuisé pour les appels aux LLM. Revenez demain.")
+            s["usd"] = s.get("usd", 0.0) + amount
+            self._save(s)
+
+    def settle_usd(self, reserved: float, spent: float) -> None:
+        """Remplace la réservation par la dépense réelle."""
+        with self._state:
+            s = self._load()
+            s["usd"] = max(0.0, s.get("usd", 0.0) - reserved + spent)
+            self._save(s)
+
     def release(self) -> None:
         self._busy.release()
 
     def cleanup(self) -> list[str]:
-        """Efface les envois de plus de KEEP_H heures ; rend leurs noms."""
-        if not self.jobs.exists():
+        """Sur le VPS, efface les envois de plus de KEEP_H heures ; rend leurs noms."""
+        if not os.environ.get("INTERFACE_PROXIED") or not self.jobs.exists():
             return []
         limit, gone = time.time() - KEEP_H * 3600, []
         for d in self.jobs.iterdir():

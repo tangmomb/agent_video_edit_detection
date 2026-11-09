@@ -148,6 +148,7 @@ table.matrix .diff { box-shadow: inset 0 0 0 2px var(--warn); border-radius: 4px
     <div class="icon">🎞</div>
     <strong>Dépose une vidéo ici</strong>
     <span>ou clique pour en choisir une</span>
+    <small id="limits" class="status"></small>
     <input type="file" id="file" accept="video/*" hidden>
   </div>
   <div class="row reprise">
@@ -214,10 +215,18 @@ const togglePick = (model) => { pick = pick === model ? null : model; render(); 
 const pending = {};  // modèle -> en cours
 
 let estimates = {};
+let pub = null;  // limites de la page publique (null en local)
 
 async function init() {
-  const info = await (await fetch("/api/models")).json();
+  const info = await (await fetch("api/models")).json();
   models = info.models;
+  pub = info.public;
+  if (pub) {
+    $("limits").textContent = `${pub.max_min.toLocaleString("fr-FR")} min et ${pub.max_mb} Mo au plus · ${pub.par_ip_jour} vidéos par jour · budget du jour restant pour tout le monde : ${pub.usd_restant.toFixed(2)} $ sur ${pub.usd_jour} $`;
+    $("max_usd").max = pub.usd_par_lancement;
+    if (+$("max_usd").value > pub.usd_par_lancement) $("max_usd").value = pub.usd_par_lancement.toFixed(2);
+    [...$("max_side").options].forEach((o) => { o.disabled = +o.value > pub.max_side; });
+  }
   $("prompt").textContent = info.prompt;
   const except = Object.entries(info.reasoning_by_model).map(([m, r]) => `${m} : ${r || "aucun effort précisé"}`);
   $("reasoning-note").textContent = `Raisonnement « ${info.reasoning} » pour tous les modèles${except.length ? ` sauf ${except.join(", ")}` : ""}.`;
@@ -228,12 +237,12 @@ async function init() {
     const why = !m.vision ? " · texte seulement, ne lit pas les images" : m.cle ? ` · ${m.cle} absente du .env` : "";
     const head = k === 0 || models[k - 1].fournisseur !== m.fournisseur ? `<h3>${PROVIDERS[m.fournisseur]}</h3>` : "";
     return `${head}<label class="${ok ? "" : "off"}">
-    <input type="checkbox" value="${m.id}" ${ok ? "" : "disabled"} ${ok && m.fournisseur === "mistral" ? "checked" : ""}>
+    <input type="checkbox" value="${m.id}" ${ok ? "" : "disabled"} ${ok && (pub || m.fournisseur === "mistral") ? "checked" : ""}>
     <span>${m.nom} <small>${m.id} · ${m.prix.input} / ${m.prix.output} $ par M${why}</small></span>
     <span class="est" data-m="${m.id}"></span></label>`;
   }).join("");
   $("models").querySelectorAll("input").forEach((x) => x.onchange = showEstimates);
-  const vids = await (await fetch("/api/videos")).json();
+  const vids = await (await fetch("api/videos")).json();
   $("previous").innerHTML = `<option value="">—</option>` + vids.map((v) => `<option value="${v.id}">${v.nom} · ${v.images} images · ${v.date}</option>`).join("");
 }
 
@@ -244,16 +253,21 @@ input.onchange = () => input.files[0] && upload(input.files[0]);
 ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && upload(e.dataTransfer.files[0]));
-$("previous").onchange = async (e) => e.target.value && open(await (await fetch(`/api/video?id=${e.target.value}`)).json());
+$("previous").onchange = async (e) => e.target.value && open(await (await fetch(`api/video?id=${e.target.value}`)).json());
 
 async function upload(file) {
   const st = $("status");
+  if (pub && file.size > pub.max_mb * 1024 * 1024) {
+    st.className = "status err";
+    st.textContent = `Vidéo trop lourde : ${pub.max_mb} Mo au plus.`;
+    return;
+  }
   st.className = "status";
   st.innerHTML = `<span class="spinner"></span>Extraction des images de « ${file.name} »…`;
   try {
-    const r = await fetch("/api/upload", { method: "POST", body: file, headers: { "X-Filename": encodeURIComponent(file.name) } });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || r.statusText);
+    const r = await fetch("api/upload", { method: "POST", body: file, headers: { "X-Filename": encodeURIComponent(file.name) } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `${r.status} ${r.statusText}`);
     st.textContent = "";
     open(j);
     init();
@@ -275,7 +289,7 @@ function open(v) {
 
 async function loadEstimates() {
   if (!cur) return;
-  estimates = await (await fetch(`/api/estimate?video=${cur.id}&max_side=${$("max_side").value}`)).json();
+  estimates = await (await fetch(`api/estimate?video=${cur.id}&max_side=${$("max_side").value}`)).json();
   showEstimates();
 }
 
@@ -403,15 +417,16 @@ $("go").onclick = async () => {
   render();
   await Promise.all(chosen.map(async (m) => {
     try {
-      const r = await fetch("/api/run", { method: "POST", body: JSON.stringify({ video: cur.id, model: m, ...opts }) });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || r.statusText);
+      const r = await fetch("api/run", { method: "POST", body: JSON.stringify({ video: cur.id, model: m, ...opts }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `${r.status} ${r.statusText}`);
       cur.runs.push(j);
       delete pending[m];
     } catch (e) { pending[m] = `échec : ${e.message}`; }
     render();
   }));
   $("go").disabled = false;
+  if (pub) init();  // budget du jour restant à jour
   loadEstimates();  // les modèles lancés passent en estimation « mesuré »
 };
 

@@ -46,7 +46,7 @@ TOOLS = [
     {"id": "dataset", "name": "Visionneuse du dataset", "icon": "🎞", "url": "http://localhost:8800/",
      "port": 8800,
      "desc": "Parcours les vidéos du dataset : étiquette et votes des trois annotateurs pour chaque image."},
-    {"id": "banc", "name": "Banc des annotateurs", "icon": "⚖", "local_seulement": True, "url": "http://localhost:8790/",
+    {"id": "banc", "name": "Banc des annotateurs", "icon": "⚖", "url": "http://localhost:8790/",
      "port": 8790,
      "desc": "Compare les réponses, le coût et la durée des LLM annotateurs sur une même vidéo (appels payants)."},
     {"id": "saut", "name": "Test du saut d'images", "icon": "⏭", "url": "http://localhost:8810/",
@@ -55,7 +55,7 @@ TOOLS = [
              "avec le seuil réglable."},
 ]
 # Sur le VPS (INTERFACE_PROXIED=1), Caddy est le seul point d'entrée : chaque outil est servi sous
-# /<id>/ (prive : derrière un mot de passe, aucun aujourd'hui), et le banc, aux appels payants, n'est pas publié.
+# /<id>/ (prive : derrière un mot de passe, aucun aujourd'hui), et local_seulement : non publié (aucun aujourd'hui).
 PROXIED = bool(os.environ.get("INTERFACE_PROXIED"))
 PUBLISHED = [{**t, "url": f"/{t['id']}/" if PROXIED and t.get("port") else t["url"],
               "prive": PROXIED and t.get("prive", False)}
