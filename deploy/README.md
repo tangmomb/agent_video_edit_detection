@@ -8,7 +8,7 @@ de vérité**, les runs se lancent là-bas et plus sur le PC.
 Toutes les pages publiées sont publiques, sans mot de passe. Les pages qui reçoivent des vidéos sont
 bornées par `interface/quota.py`, avec des limites globales (pas par IP), un envoi traité à la fois et
 les envois effacés après 24 h :
-- modèle (GPU Modal) : 30 vidéos par jour, 500 Mo et 5 min au plus ;
+- modèle (GPU Modal) : 5 vidéos par jour, 500 Mo et 5 min au plus ;
 - saut d'images (CPU) : 50 vidéos par jour, 500 Mo et 5 min au plus ;
 - banc des annotateurs (`/banc/`, appels payants) : 3 vidéos par jour, 3 min au plus, les 3
   annotateurs du dataset seulement, sur ses propres vidéos, une fois par modèle, 0,25 $ par
