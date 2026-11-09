@@ -44,7 +44,7 @@ VIDEOS = HERE / "_videos"
 QUOTA = Quota(VIDEOS, per_ip=None, per_day=3, max_mb=500, max_s=180)
 PUBLIC_MODELS = ANNOTATORS
 USD_PER_RUN = 0.25  # plafond d'un lancement (un modèle sur une vidéo)
-USD_PER_DAY = 3.0  # pour tout le monde
+USD_PER_DAY = 1.0  # pour tout le monde
 
 
 def owner(vid: str) -> str | None:

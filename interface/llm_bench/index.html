@@ -239,8 +239,7 @@ async function init() {
   models = info.models;
   pub = info.public;
   const L = info.limites;
-  renderLimits(L, ["les 3 annotateurs du dataset", `${L.usd_par_lancement.toLocaleString("fr-FR")} $ au plus par modèle`,
-    `budget du jour : ${L.usd_restant.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} $ restants sur ${L.usd_jour} $`]);
+  renderLimits(L, [`budget du jour : ${L.usd_restant.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} $ restants sur ${L.usd_jour} $`]);
   if (pub) {
   }
   $("prompt").textContent = info.prompt;

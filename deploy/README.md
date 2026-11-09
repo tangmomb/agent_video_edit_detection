@@ -12,7 +12,7 @@ les envois effacés après 24 h :
 - saut d'images (CPU) : 50 vidéos par jour, 500 Mo et 5 min au plus ;
 - banc des annotateurs (`/banc/`, appels payants) : 3 vidéos par jour, 3 min au plus, les 3
   annotateurs du dataset seulement, sur ses propres vidéos, une fois par modèle, 0,25 $ par
-  lancement et 3 $ par jour.
+  lancement et 1 $ par jour.
 Les réglages sont en tête de chaque `server.py`. Les adresses de `QUOTA_ILLIMITE` (`.env` du VPS, séparées par des virgules) n'ont aucune limite.
 
 ## Mettre à jour le code
