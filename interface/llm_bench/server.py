@@ -39,8 +39,8 @@ from video_source.annotators import (ANNOTATORS, KEYS, MODELS, PROMPT, PROVIDER,
 from video_source.annotators import cost as _cost  # noqa: E402
 
 VIDEOS = HERE / "_videos"
-# En ligne : une vidéo de 5 min coûte environ 0,10 à 0,15 $ par annotateur (300 images, 768 px).
-QUOTA = Quota(VIDEOS, per_ip=2, per_day=10, max_mb=500, max_s=300)
+# En ligne : une vidéo de 3 min coûte environ 0,06 à 0,09 $ par annotateur (180 images, 768 px).
+QUOTA = Quota(VIDEOS, per_ip=None, per_day=3, max_mb=500, max_s=180)
 PUBLIC_MODELS = ANNOTATORS
 USD_PER_RUN = 0.25  # plafond d'un lancement (un modèle sur une vidéo)
 USD_PER_DAY = 3.0  # pour tout le monde

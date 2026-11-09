@@ -40,7 +40,8 @@ class Rejected(Exception):
 
 
 class Quota:
-    def __init__(self, jobs: Path, per_ip: int, per_day: int, max_mb: int, max_s: int):
+    def __init__(self, jobs: Path, per_ip: int | None, per_day: int, max_mb: int, max_s: int):
+        """per_ip=None : pas de limite par adresse, seulement le plafond global per_day."""
         self.jobs, self.per_ip, self.per_day = jobs, per_ip, per_day
         self.max_mb, self.max_s = max_mb, max_s
         self._busy, self._state = Lock(), Lock()
@@ -52,7 +53,8 @@ class Quota:
         return fwd.split(",")[-1].strip() if fwd else None
 
     def limits(self) -> dict:
-        return {"max_mb": self.max_mb, "max_min": round(self.max_s / 60, 1), "par_ip_jour": self.per_ip}
+        return {"max_mb": self.max_mb, "max_min": round(self.max_s / 60, 1), "par_ip_jour": self.per_ip,
+                "par_jour": self.per_day}
 
     # --- compteurs du jour -------------------------------------------------------------------------
     def _load(self) -> dict:
@@ -89,7 +91,7 @@ class Quota:
             raise Rejected(f"Vidéo trop lourde : {self.max_mb} Mo au plus.", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
         with self._state:
             s = self._load()
-            if s["ip"].get(ip, 0) >= self.per_ip:
+            if self.per_ip is not None and s["ip"].get(ip, 0) >= self.per_ip:
                 raise Rejected(f"Limite atteinte : {self.per_ip} vidéos par jour. Revenez demain.")
             if s["total"] >= self.per_day:
                 raise Rejected("Limite du jour atteinte pour tout le monde. Revenez demain.")

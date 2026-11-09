@@ -222,7 +222,7 @@ async function init() {
   models = info.models;
   pub = info.public;
   if (pub) {
-    $("limits").textContent = `${pub.max_min.toLocaleString("fr-FR")} min et ${pub.max_mb} Mo au plus · ${pub.par_ip_jour} vidéos par jour · budget du jour restant pour tout le monde : ${pub.usd_restant.toFixed(2)} $ sur ${pub.usd_jour} $`;
+    $("limits").textContent = `${pub.max_min.toLocaleString("fr-FR")} min et ${pub.max_mb} Mo au plus · ${pub.par_ip_jour ? `${pub.par_ip_jour} vidéos par jour · ` : `${pub.par_jour} vidéos par jour pour tout le monde · `}budget du jour restant pour tout le monde : ${pub.usd_restant.toFixed(2)} $ sur ${pub.usd_jour} $`;
     $("max_usd").max = pub.usd_par_lancement;
     if (+$("max_usd").value > pub.usd_par_lancement) $("max_usd").value = pub.usd_par_lancement.toFixed(2);
     [...$("max_side").options].forEach((o) => { o.disabled = +o.value > pub.max_side; });

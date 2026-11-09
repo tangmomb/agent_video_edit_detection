@@ -10,7 +10,7 @@ Toutes les pages publiées sont publiques, sans mot de passe. Les pages qui reç
 traité à la fois, 3 vidéos par IP et 30 par jour en tout pour le modèle (GPU Modal), 5 et 50 pour le
 saut d'images (CPU), envois effacés après 24 h. Le banc des annotateurs (`/banc/`, appels payants)
 n'offre en ligne que les 3 annotateurs du dataset, sur ses propres vidéos, une fois par modèle, avec
-2 vidéos par IP et 10 par jour, 0,25 $ par lancement et 3 $ par jour pour tout le monde. Les réglages
+3 vidéos de 3 min au plus par jour pour tout le monde (pas de limite par IP), 0,25 $ par lancement et 3 $ par jour pour tout le monde. Les réglages
 sont en tête de chaque `server.py`.
 
 ## Mettre à jour le code
