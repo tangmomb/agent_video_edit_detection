@@ -97,8 +97,7 @@ def _estimate(model: str, items: list[tuple[Path, Path]], state: dict | None = N
     if per_request is not None:
         return per_request * len(items)
     w, h = Image.open(items[0][1]).size
-    k = min(1.0, annotators.MAX_SIDE / max(w, h))
-    cols, rows = -(-round(w * k) // 16), -(-round(h * k) // 16)
+    cols, rows = -(-w // 16), -(-h // 16)
     tin = len(items) * (cols * rows + rows + len(annotators.PROMPT) // 3.5)
     return annotators.cost(model, {"input": int(tin), "cached_input": 0,
                                    "output": len(items) * OUT_PER_IMAGE}) * DISCOUNT
@@ -139,7 +138,7 @@ def _send(provider: str, api, model: str, chunk: list[tuple[Path, Path]], reason
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as fh:
         for sdir, f in chunk:
             line = {"custom_id": _cid(sdir, f),
-                    "body": annotators.chat_body(provider, model, f, annotators.MAX_SIDE, reasoning)}
+                    "body": annotators.chat_body(provider, model, f, reasoning)}
             if provider == "openai":
                 line.update(method="POST", url="/v1/chat/completions")
             fh.write(json.dumps(line) + "\n")

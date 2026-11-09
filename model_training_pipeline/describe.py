@@ -68,7 +68,7 @@ def describe(frames: list[str], max_usd: float, every_s: float = 20) -> dict:
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as fh:
         for f in todo:
             line = {"custom_id": f, "body": annotators.chat_body(
-                provider, DESCRIBER, FRAMES_DIR / f, annotators.MAX_SIDE, None, PROMPT)}
+                provider, DESCRIBER, FRAMES_DIR / f, None, PROMPT)}
             if provider == "openai":
                 line.update(method="POST", url="/v1/chat/completions")
             fh.write(json.dumps(line) + "\n")

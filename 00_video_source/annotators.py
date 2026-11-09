@@ -55,9 +55,6 @@ REASONING_BY_MODEL = {
     "mistral-small-2603": None,
     "ministral-14b-2512": None,
 }
-# Plus grand côté envoyé ; le nombre de tokens d'une image suit son nombre de pixels. Égal à LONG_SIDE
-# (model_training_pipeline/frames.py) : les images sont extraites à cette taille et envoyées telles quelles.
-MAX_SIDE = 640
 
 # Les trois annotateurs du dataset (meilleurs du banc, octobre 2026).
 ANNOTATORS = ("gpt-6-luna", "gpt-5.6-luna", "zai-glm-5-3-flash")
@@ -87,9 +84,9 @@ def client(provider: str):
     return Mistral(api_key=key)
 
 
-def data_url(path: Path, max_side: int) -> str:
+def data_url(path: Path) -> str:
+    """L'image telle qu'extraite (config.IMAGE_SIDE px au plus grand côté), en JPEG qualité 85."""
     img = Image.open(path).convert("RGB")
-    img.thumbnail((max_side, max_side))
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=85)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
@@ -118,12 +115,12 @@ def _usage(u) -> dict:
     return {"input": get(u, "prompt_tokens") or 0, "cached_input": cached, "output": get(u, "completion_tokens") or 0}
 
 
-def chat_body(provider: str, model: str, path: Path, max_side: int, reasoning: str | None,
+def chat_body(provider: str, model: str, path: Path, reasoning: str | None,
               prompt: str = PROMPT) -> dict:
     """Corps d'une requête chat completions (OpenAI ou Mistral) : consigne (PROMPT par défaut, une
     autre pour model_training_pipeline.describe) + une image, réponse en JSON. Le même corps sert
     à l'appel direct et aux lignes d'un batch."""
-    url = data_url(path, max_side)
+    url = data_url(path)
     if provider == "openai":
         content = [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": url}}]
         body = {"model": model, "messages": [{"role": "user", "content": content}],
@@ -144,12 +141,12 @@ def read_chat(response) -> tuple[str, dict]:
     return _text(response.choices[0].message.content), _usage(response.usage)
 
 
-def ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: str | None) -> tuple[str, dict]:
+def ask(provider: str, api, model: str, path: Path, reasoning: str | None) -> tuple[str, dict]:
     """Une requête (consigne + une image) ; renvoie le texte de la réponse et les tokens consommés.
     reasoning=None : sans effort de raisonnement imposé. Erreurs passagères relancées sans fin
     (retry.forever)."""
     if provider == "anthropic":
-        url = data_url(path, max_side)
+        url = data_url(path)
         # Pas de fallbacks : on compare des modèles, la réponse doit venir du modèle demandé.
         r = retry.forever(lambda: api.messages.create(
             model=model, max_tokens=8000,
@@ -165,7 +162,7 @@ def ask(provider: str, api, model: str, path: Path, max_side: int, reasoning: st
         cached, created = u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0
         text = "" if r.stop_reason == "refusal" else "".join(b.text for b in r.content if b.type == "text")
         return text, {"input": u.input_tokens + cached + created, "cached_input": cached, "output": u.output_tokens}
-    body = chat_body(provider, model, path, max_side, reasoning)
+    body = chat_body(provider, model, path, reasoning)
     create = api.chat.completions.create if provider == "openai" else api.chat.complete
     return read_chat(retry.forever(lambda: create(**body), model))
 
@@ -184,7 +181,7 @@ def parse(text: str) -> bool | None:
     return bool(answer["ajout"]) if isinstance(answer, dict) and "ajout" in answer else None
 
 
-def vote(path: Path, apis: dict | None = None, models=ANNOTATORS, max_side: int = MAX_SIDE) -> dict:
+def vote(path: Path, apis: dict | None = None, models=ANNOTATORS) -> dict:
     """Fait annoter une image par chaque modèle. Renvoie {"votes": {modèle: bool|None}, "cost_usd",
     "label": 1|0|None} : label n'est donné que si tous les modèles ont répondu la même chose.
     apis : {fournisseur: client} (créés à la demande sinon)."""
@@ -194,7 +191,7 @@ def vote(path: Path, apis: dict | None = None, models=ANNOTATORS, max_side: int 
         provider = PROVIDER[model]
         if provider not in apis:
             apis[provider] = client(provider)
-        text, used = ask(provider, apis[provider], model, path, max_side, reasoning(model))
+        text, used = ask(provider, apis[provider], model, path, reasoning(model))
         spent += cost(model, used)
         votes[model] = parse(text)
     return {"votes": votes, "cost_usd": spent, "label": consensus(votes)}

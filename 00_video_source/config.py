@@ -12,6 +12,9 @@ LAB_DIR = Path(os.getenv("AGENT_LAB_DIR", ROOT))
 DATA_DIR = Path(os.getenv("VIDEO_SOURCE_DATA_DIR", LAB_DIR / "data"))
 SAMPLES_DIR = DATA_DIR / "videos_samples"
 FRAMES_DIR = DATA_DIR / "videos_samples_frames"  # images extraites et embeddings (model_training_pipeline)
+# Plus grand côté des images tirées des vidéos (640×360 en paysage, 360×640 en portrait). Elles sont
+# envoyées telles quelles aux LLM annotateurs, dans l'agent comme sur le banc.
+IMAGE_SIDE = 640
 
 
 def ffmpeg_bin() -> str:

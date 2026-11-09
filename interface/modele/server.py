@@ -110,7 +110,7 @@ class Model:
 
 def analyze(model: Model, video: Path, job: Path) -> dict:
     t0 = time.perf_counter()
-    frames = extract(video, job / "frames", FPS, long_side=640)  # mêmes réglages que frames.build
+    frames = extract(video, job / "frames", FPS)  # mêmes réglages que frames.build
     if not frames:
         raise ValueError("aucune frame extraite : fichier vidéo illisible ?")
     with _gpu:

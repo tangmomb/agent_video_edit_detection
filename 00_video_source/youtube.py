@@ -19,7 +19,7 @@ from .config import SAMPLES_DIR, ffmpeg_bin
 
 MAX_DURATION = 300  # s : au-delà, la vidéo coûterait trop à annoter (une image par seconde)
 MIN_DURATION = 5
-# Plus petit côté de la vidéo téléchargée. Les images sont réduites à 640 px (frames.LONG_SIDE) et
+# Plus petit côté de la vidéo téléchargée. Les images sont réduites à 640 px (config.IMAGE_SIDE) et
 # le modèle les voit en 224 : 360p (640×360) suffit. Comparé sur une vidéo à sous-titres (26/10/2026) :
 # bandeau et sous-titres nets comme en 720p, pour 57 % de volume en moins (proxy, temps).
 MAX_RES = 360

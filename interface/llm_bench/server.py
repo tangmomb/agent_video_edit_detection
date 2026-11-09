@@ -34,9 +34,10 @@ ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
 from interface import dev_reload  # noqa: E402
 from interface.quota import Quota, Rejected  # noqa: E402
-from video_source.annotators import (ANNOTATORS, KEYS, MAX_SIDE, MODELS, PROMPT, PROVIDER, REASONING, REASONING_BY_MODEL,  # noqa: E402
+from video_source.annotators import (ANNOTATORS, KEYS, MODELS, PROMPT, PROVIDER, REASONING, REASONING_BY_MODEL,  # noqa: E402
                                      ask, client, parse, reasoning)
 from video_source.annotators import cost as _cost  # noqa: E402
+from video_source.config import IMAGE_SIDE  # noqa: E402
 
 VIDEOS = HERE / "_videos"
 # En ligne : une vidéo de 3 min coûte environ 0,06 à 0,09 $ par annotateur (180 images de 640 px).
@@ -52,11 +53,11 @@ def owner(vid: str) -> str | None:
 
 
 def extract(video: Path, out: Path) -> list[Path]:
-    """Une image par seconde, MAX_SIDE px au plus grand côté : celles que l'agent envoie aux annotateurs."""
+    """Une image par seconde, IMAGE_SIDE px au plus grand côté : celles que l'agent envoie aux annotateurs."""
     import imageio_ffmpeg
     out.mkdir(parents=True, exist_ok=True)
     subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-loglevel", "error", "-i", str(video), "-vf",
-                    f"fps=1,scale='if(gt(iw,ih),{MAX_SIDE},-2)':'if(gt(iw,ih),-2,{MAX_SIDE})'", "-q:v", "3",
+                    f"fps=1,scale='if(gt(iw,ih),{IMAGE_SIDE},-2)':'if(gt(iw,ih),-2,{IMAGE_SIDE})'", "-q:v", "3",
                     str(out / "%05d.jpg")], check=True)
     return sorted(out.glob("*.jpg"))
 
@@ -74,7 +75,6 @@ def run(cfg: dict, api=None) -> dict:
         raise ValueError(f"{model} ne lit pas les images (ou n'est pas dans la liste) : il ne peut pas annoter")
     d = VIDEOS / Path(cfg["video"]).name
     paths = sorted((d / "frames").glob("*.jpg"))
-    max_side = MAX_SIDE  # comme l'agent
     max_usd, effort = float(cfg.get("max_usd", 0.5)), reasoning(model)  # plafond de sécurité, non réglable
     provider = PROVIDER[model]
     api = api or client(provider)
@@ -84,7 +84,7 @@ def run(cfg: dict, api=None) -> dict:
     for i, path in enumerate(paths):  # une requête par image
         if spent + last > max_usd:  # la prochaine image coûterait à peu près autant que la dernière
             break
-        text, used = ask(provider, api, model, path, max_side, effort)
+        text, used = ask(provider, api, model, path, effort)
         for k in tokens:
             tokens[k] += used[k]
         last = _cost(model, used)
@@ -92,7 +92,7 @@ def run(cfg: dict, api=None) -> dict:
         raw.append(text)
         answer = parse(text)
         labels.append({"i": i, "ajout": bool(answer), "manquant": answer is None})
-    config = {"max_side": max_side, "batch": 1, "max_usd": max_usd,
+    config = {"max_side": IMAGE_SIDE, "batch": 1, "max_usd": max_usd,
               "reasoning": effort or "par défaut"}
     rec = {"model": model, "config": config, "images_total": len(paths),
            "frames": labels, "tokens": tokens, "cost_usd": round(_cost(model, tokens), 4),
@@ -109,13 +109,12 @@ def run(cfg: dict, api=None) -> dict:
 OUT_PER_IMAGE = 15 + 150
 
 
-def _image_tokens(w: int, h: int, max_side: int) -> int:
-    k = min(1.0, max_side / max(w, h))
-    cols, rows = -(-round(w * k) // 16), -(-round(h * k) // 16)
+def _image_tokens(w: int, h: int) -> int:
+    cols, rows = -(-w // 16), -(-h // 16)
     return cols * rows + rows
 
 
-def estimate(vid: str, max_side: int = MAX_SIDE) -> dict:
+def estimate(vid: str) -> dict:
     """Coût estimé par modèle pour annoter toute la vidéo. Quand le modèle a déjà été lancé à la même
     taille d'image (sur n'importe quelle vidéo), on prend ses tokens réels par image."""
     paths = sorted((VIDEOS / Path(vid).name / "frames").glob("*.jpg"))
@@ -123,12 +122,12 @@ def estimate(vid: str, max_side: int = MAX_SIDE) -> dict:
         return {}
     w, h = Image.open(paths[0]).size
     n = len(paths)
-    base_in = n * (_image_tokens(w, h, max_side) + len(PROMPT) // 3.5)
+    base_in = n * (_image_tokens(w, h) + len(PROMPT) // 3.5)
     seen: dict[str, list[tuple[int, int, int]]] = {}
     for p in VIDEOS.glob("*/runs/*.json"):
         rec = json.loads(p.read_text(encoding="utf-8"))
-        # Les anciens lancements à 768 ou 1024 px ont reçu les mêmes images de 640 px.
-        if rec["config"].get("max_side", 0) >= max_side and rec["frames"]:
+        # Les anciens lancements notés 768 ou 1024 px ont reçu les mêmes images de 640 px ; pas ceux à 512.
+        if rec["config"].get("max_side", 0) >= IMAGE_SIDE and rec["frames"]:
             seen.setdefault(rec["model"], []).append((len(rec["frames"]), rec["tokens"]["input"], rec["tokens"]["output"]))
     out = {}
     for model, *_ in MODELS:

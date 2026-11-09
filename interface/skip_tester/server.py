@@ -31,7 +31,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
 from model_training_pipeline.features import embed_images, get_features  # noqa: E402
-from model_training_pipeline.frames import (FPS, LONG_SIDE, SKIP_SIMILAR, extract, frames_of,  # noqa: E402
+from model_training_pipeline.frames import (FPS, SKIP_SIMILAR, extract, frames_of,  # noqa: E402
                                             load_votes, skip_refs)
 from interface import dev_reload  # noqa: E402
 from interface.quota import Quota, Rejected  # noqa: E402
@@ -216,7 +216,7 @@ class Handler(SimpleHTTPRequestHandler):
             (job / "name.txt").write_text(name, encoding="utf-8")
             if ip:
                 (job / "owner.txt").write_text(ip, encoding="utf-8")
-            frames = extract(video, job / "img", FPS, LONG_SIDE)
+            frames = extract(video, job / "img", FPS)
             # comme frames_of : sans les images qu'ffmpeg ajoute après la fin de la vidéo
             duration = _duration(video)
             for i, f in enumerate(frames):

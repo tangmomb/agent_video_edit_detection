@@ -22,11 +22,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from video_source import annotators
-from video_source.config import FRAMES_DIR, SAMPLES_DIR, ffmpeg_bin
+from video_source.config import FRAMES_DIR, IMAGE_SIDE, SAMPLES_DIR, ffmpeg_bin
 from video_source.youtube import load_meta
 
 FPS = 1.0  # frames extraites par seconde de vidéo
-LONG_SIDE = 640
 WORKERS = 8  # images annotées en parallèle
 # Cosinus CLIP (clip_b32, image entière) au-delà duquel une image est jugée identique à la dernière
 # annotée de la vidéo et sautée. Mesuré avec skip_refs sur les 7 144 images du dataset (27/10/2026) :
@@ -48,9 +47,10 @@ def source_key(meta: dict) -> str:
 EXTRACTION = "fps-round-up"
 
 
-def extract(video: Path, out_dir: Path, fps: float, long_side: int) -> list[Path]:
+def extract(video: Path, out_dir: Path, fps: float) -> list[Path]:
+    """Images à fps par seconde, IMAGE_SIDE px au plus grand côté."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    scale = f"scale='if(gt(iw,ih),{long_side},-2)':'if(gt(iw,ih),-2,{long_side})'"
+    scale = f"scale='if(gt(iw,ih),{IMAGE_SIDE},-2)':'if(gt(iw,ih),-2,{IMAGE_SIDE})'"
     # round=up : la frame i est celle de l'instant i/fps. Avec le défaut (round=near), ffmpeg prend
     # la frame ~0,5 s plus tard (constaté sur les vidéos générées, octobre 2026).
     cmd = [ffmpeg_bin(), "-y", "-hide_banner", "-loglevel", "error", "-i", str(video),
@@ -75,7 +75,7 @@ def _drop(out_dir: Path, sample_id: str) -> None:
         f.unlink()
 
 
-def frames_of(sdir: Path, out_dir: Path = FRAMES_DIR, fps: float = FPS, long_side: int = LONG_SIDE) -> list[Path]:
+def frames_of(sdir: Path, out_dir: Path = FRAMES_DIR, fps: float = FPS) -> list[Path]:
     """Images extraites de la vidéo (extraites au besoin), sans celles qu'ffmpeg ajoute parfois
     après la fin de la vidéo (instant >= durée)."""
     meta = load_meta(sdir)
@@ -83,7 +83,7 @@ def frames_of(sdir: Path, out_dir: Path = FRAMES_DIR, fps: float = FPS, long_sid
     if _stale(frames_dir):
         _drop(Path(out_dir), meta["sample_id"])
     frames = sorted(frames_dir.glob("*.jpg")) if frames_dir.exists() else []
-    frames = frames or extract(sdir / meta["video"]["file"], frames_dir, fps, long_side)
+    frames = frames or extract(sdir / meta["video"]["file"], frames_dir, fps)
     duration = meta["video"]["duration"]
     return [f for i, f in enumerate(frames) if not duration or i / fps < duration]
 
@@ -191,8 +191,7 @@ def annotate(sdir: Path, max_usd: float | None = None, apis: dict | None = None,
             "images_restantes": len(todo) - done, "arret_budget": stopped}
 
 
-def build(samples_dir: Path = SAMPLES_DIR, out_dir: Path = FRAMES_DIR, fps: float = FPS,
-          long_side: int = LONG_SIDE) -> Path:
+def build(samples_dir: Path = SAMPLES_DIR, out_dir: Path = FRAMES_DIR, fps: float = FPS) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -201,7 +200,7 @@ def build(samples_dir: Path = SAMPLES_DIR, out_dir: Path = FRAMES_DIR, fps: floa
             continue
         meta = load_meta(sdir)
         votes = load_votes(sdir)["frames"]
-        for i, f in enumerate(frames_of(sdir, out_dir, fps, long_side)):
+        for i, f in enumerate(frames_of(sdir, out_dir, fps)):
             t = round(i / fps, 3)
             rows.append({"frame": str(f.relative_to(out_dir)).replace("\\", "/"),
                          "sample_id": meta["sample_id"], "t": t, "source": source_key(meta),
