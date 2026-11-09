@@ -175,7 +175,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path in ("/", "/index.html"):
                 return self._page(dev_reload.page(HERE / "index.html"))
         if self.path == "/api/model":
-            return self._json(HTTPStatus.OK, {**self.current_model().info(), "limites": QUOTA.limits()})
+            return self._json(HTTPStatus.OK, {**self.current_model().info(), "limites": QUOTA.limits(self)})
         if self.path.split("?")[0].endswith("quota.json"):  # IP des visiteurs
             return self.send_error(HTTPStatus.NOT_FOUND)
         if self.path.startswith("/jobs/"):

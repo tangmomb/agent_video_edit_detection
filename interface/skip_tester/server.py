@@ -166,7 +166,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._send(HTTPStatus.OK, dev_reload.page(HERE / "index.html"), "text/html; charset=utf-8")
         try:
             if u.path == "/api/videos":
-                return self._json({"videos": videos(QUOTA.client(self)), "limites": QUOTA.limits(), "seuil_pipeline": SKIP_SIMILAR})
+                return self._json({"videos": videos(QUOTA.client(self)), "limites": QUOTA.limits(self), "seuil_pipeline": SKIP_SIMILAR})
             if u.path == "/api/simulate":
                 return self._json(simulate(q.get("id", [""])[0], float(q.get("seuil", [SKIP_SIMILAR])[0])))
         except FileNotFoundError:

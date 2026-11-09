@@ -60,8 +60,9 @@ class Quota:
         ip = fwd.split(",")[-1].strip() if fwd else None
         return None if ip in unlimited() else ip
 
-    def limits(self) -> dict:
-        return {"max_mb": self.max_mb, "max_min": round(self.max_s / 60, 1), "par_ip_jour": self.per_ip,
+    def limits(self, handler=None) -> dict:
+        """Les limites, pour l'encart des pages ; illimite : ce visiteur n'y est pas soumis."""
+        return {"illimite": handler is not None and self.client(handler) is None, "max_mb": self.max_mb, "max_min": round(self.max_s / 60, 1), "par_ip_jour": self.per_ip,
                 "par_jour": self.per_day}
 
     # --- compteurs du jour -------------------------------------------------------------------------

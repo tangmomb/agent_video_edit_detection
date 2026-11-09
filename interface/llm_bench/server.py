@@ -194,7 +194,10 @@ class Handler(SimpleHTTPRequestHandler):
                                               "prompt": PROMPT, "reasoning": REASONING,
                                               "reasoning_by_model": {m: r for m, r in REASONING_BY_MODEL.items()
                                                                      if ip is None or m in PUBLIC_MODELS},
-                                              "public": public})
+                                              "public": public,
+                                              "limites": {**QUOTA.limits(self), "usd_par_lancement": USD_PER_RUN,
+                                                          "usd_jour": USD_PER_DAY,
+                                                          "usd_restant": round(QUOTA.usd_left(USD_PER_DAY), 2)}})
         if u.path == "/api/estimate":
             q = parse_qs(u.query)
             return self._json(HTTPStatus.OK, estimate(q.get("video", [""])[0]))

@@ -91,6 +91,17 @@ input[type=range] { width: 100%; accent-color: var(--sent); margin: 0; display: 
   font-variant-numeric: tabular-nums; }
 .card .t .r { color: var(--muted); }
 .card.sent .t .r::before { content: "envoyée "; color: var(--sent); }
+/* Encart des limites d'usage, affiché dès l'ouverture (interface/quota.py). */
+.limits { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 14px 0 0;
+  padding: 8px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.4; color: #ffc2c2;
+  background: color-mix(in srgb, #ff4d4f 10%, transparent);
+  border: 1px solid color-mix(in srgb, #ff4d4f 45%, transparent); }
+.limits[hidden] { display: none; }
+.limits .lim-t { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: #ff6b6d; }
+.limits .lim-i + .lim-i::before { content: "·"; margin-right: 10px; color: #ff6b6d; }
+.limits .lim-ok { margin-left: auto; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 600;
+  color: #8fe0b0; background: color-mix(in srgb, #8fe0b0 14%, transparent); }
 </style>
 </head>
 <body>
@@ -101,13 +112,14 @@ input[type=range] { width: 100%; accent-color: var(--sent); margin: 0; display: 
     <p class="lede">Une image dont le cosinus CLIP avec la dernière image gardée dépasse le seuil n'est pas
       envoyée aux annotateurs (<code>frames.skip_refs</code>, seuil du pipeline <code id="pipe"></code>) : elle
       reprend l'étiquette de cette image. Choisis une vidéo pour voir ce qui serait envoyé. Aucun appel payant.</p>
+    <div class="limits" id="limits" hidden></div>
   </header>
 
   <section class="panel">
     <h2>Vidéo et seuil</h2>
     <div class="pick">
       <select id="video"><option value="">Choisis une vidéo…</option></select>
-      <label class="drop" id="drop">ou envoie une vidéo<small id="limits" class="muted"></small><input type="file" id="file" accept="video/*" hidden></label>
+      <label class="drop" id="drop">ou envoie une vidéo<input type="file" id="file" accept="video/*" hidden></label>
     </div>
     <div class="thr">
       <label for="seuil">Seuil</label>
@@ -169,7 +181,7 @@ async function init() {
   $("seuil-mark").style.left = `${(pipe - SMIN) / (SMAX - SMIN) * 100}%`;
   setSeuil(pipe);
   limites = r.limites;
-  if (limites) $("limits").textContent = ` (${limites.max_min.toLocaleString("fr-FR")} min, ${limites.max_mb} Mo au plus · ${limites.par_ip_jour ? `${limites.par_ip_jour} par jour` : `${limites.par_jour} par jour pour tout le monde`})`;
+  renderLimits(limites);
   fillVideos(r.videos);
 }
 
@@ -233,6 +245,16 @@ function render() {
 }
 
 let limites = null;
+// Encart des limites : pour tout le monde, chiffres du serveur ; « aucune limite » pour une adresse illimitée.
+function renderLimits(l, extra = []) {
+  if (!l) return;
+  const items = [`${l.par_jour} vidéos par jour pour tout le monde`,
+    ...(l.par_ip_jour ? [`${l.par_ip_jour} par adresse`] : []),
+    `${l.max_min.toLocaleString("fr-FR")} min et ${l.max_mb} Mo par vidéo`, "une vidéo traitée à la fois", ...extra];
+  $("limits").innerHTML = `<span class="lim-t">Limites</span>` + items.map((x) => `<span class="lim-i">${x}</span>`).join("")
+    + (l.illimite ? `<span class="lim-ok">aucune limite pour toi</span>` : "");
+  $("limits").hidden = false;
+}
 async function upload(file) {
   if (limites && file.size > limites.max_mb * 1024 * 1024) {
     $("status").innerHTML = `<span class="err">Vidéo trop lourde : ${limites.max_mb} Mo au plus.</span>`;

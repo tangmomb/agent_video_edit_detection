@@ -132,6 +132,17 @@ table.matrix .diff { box-shadow: inset 0 0 0 2px var(--warn); border-radius: 4px
 .chip.miss { font-style: italic; }
 .chip.sel { outline: 2px solid var(--pick); outline-offset: -2px; }
 #pick-note { font-size: 12.5px; color: var(--pick); font-weight: 500; text-transform: none; letter-spacing: 0; }
+/* Encart des limites d'usage, affiché dès l'ouverture (interface/quota.py). */
+.limits { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 14px 0 0;
+  padding: 8px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.4; color: #ffc2c2;
+  background: color-mix(in srgb, #ff4d4f 10%, transparent);
+  border: 1px solid color-mix(in srgb, #ff4d4f 45%, transparent); }
+.limits[hidden] { display: none; }
+.limits .lim-t { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: #ff6b6d; }
+.limits .lim-i + .lim-i::before { content: "·"; margin-right: 10px; color: #ff6b6d; }
+.limits .lim-ok { margin-left: auto; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 600;
+  color: #8fe0b0; background: color-mix(in srgb, #8fe0b0 14%, transparent); }
 </style>
 </head>
 <body>
@@ -142,13 +153,13 @@ table.matrix .diff { box-shadow: inset 0 0 0 2px var(--warn); border-radius: 4px
     <p class="lede">Charge une vidéo : chaque modèle coché dit en JSON quelles images (1 par seconde) contiennent
       un ajout de montage. On compare leurs réponses, leur coût et leur durée pour choisir le prochain modèle
       d'annotation. Outil autonome, non branché au dataset ni au classifieur.</p>
+    <div class="limits" id="limits" hidden></div>
   </header>
 
   <div id="drop" tabindex="0" role="button" aria-label="Choisir une vidéo">
     <div class="icon">🎞</div>
     <strong>Dépose une vidéo ici</strong>
     <span>ou clique pour en choisir une</span>
-    <small id="limits" class="status" style="display: block; margin-top: 6px"></small>
     <input type="file" id="file" accept="video/*" hidden>
   </div>
   <div class="row reprise">
@@ -212,13 +223,25 @@ const pending = {};  // modèle -> en cours
 
 let estimates = {};
 let pub = null;  // limites de la page publique (null en local)
+// Encart des limites : pour tout le monde, chiffres du serveur ; « aucune limite » pour une adresse illimitée.
+function renderLimits(l, extra = []) {
+  if (!l) return;
+  const items = [`${l.par_jour} vidéos par jour pour tout le monde`,
+    ...(l.par_ip_jour ? [`${l.par_ip_jour} par adresse`] : []),
+    `${l.max_min.toLocaleString("fr-FR")} min et ${l.max_mb} Mo par vidéo`, "une vidéo traitée à la fois", ...extra];
+  $("limits").innerHTML = `<span class="lim-t">Limites</span>` + items.map((x) => `<span class="lim-i">${x}</span>`).join("")
+    + (l.illimite ? `<span class="lim-ok">aucune limite pour toi</span>` : "");
+  $("limits").hidden = false;
+}
 
 async function init() {
   const info = await (await fetch("api/models")).json();
   models = info.models;
   pub = info.public;
+  const L = info.limites;
+  renderLimits(L, ["les 3 annotateurs du dataset", `${L.usd_par_lancement.toLocaleString("fr-FR")} $ au plus par modèle`,
+    `budget du jour : ${L.usd_restant.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} $ restants sur ${L.usd_jour} $`]);
   if (pub) {
-    $("limits").textContent = `${pub.max_min.toLocaleString("fr-FR")} min et ${pub.max_mb} Mo au plus · ${pub.par_ip_jour ? `${pub.par_ip_jour} vidéos par jour · ` : `${pub.par_jour} vidéos par jour pour tout le monde · `}budget du jour restant pour tout le monde : ${pub.usd_restant.toFixed(2)} $ sur ${pub.usd_jour} $`;
   }
   $("prompt").textContent = info.prompt;
   const except = Object.entries(info.reasoning_by_model).map(([m, r]) => `${m} : ${r || "aucun effort précisé"}`);
