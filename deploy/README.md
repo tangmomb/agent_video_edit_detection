@@ -12,6 +12,7 @@ saut d'images (CPU), envois effacés après 24 h. Le banc des annotateurs (`/ban
 n'offre en ligne que les 3 annotateurs du dataset, sur ses propres vidéos, une fois par modèle, avec
 3 vidéos de 3 min au plus par jour pour tout le monde (pas de limite par IP), 0,25 $ par lancement et 3 $ par jour pour tout le monde. Les réglages
 sont en tête de chaque `server.py`.
+Les adresses de `QUOTA_ILLIMITE` (`.env` du VPS, séparées par des virgules) n'ont aucune limite.
 
 ## Mettre à jour le code
 

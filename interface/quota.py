@@ -7,7 +7,8 @@ et, sur le VPS seulement (INTERFACE_PROXIED), le ménage des envois de plus de K
 
 L'adresse du visiteur est la dernière d'X-Forwarded-For, posée par Caddy (qui ignore celle qu'un
 client fournirait). Sans cet en-tête, la requête ne passe pas par Caddy (développement local) : pas
-de quota. Les compteurs du jour sont dans <jobs>/quota.json et survivent aux redémarrages.
+de quota. Les adresses de QUOTA_ILLIMITE (.env du VPS, séparées par des virgules) sont traitées comme
+en local : aucune limite, et sur le banc tous les modèles et toutes les vidéos. Les compteurs du jour sont dans <jobs>/quota.json et survivent aux redémarrages.
 """
 
 import json
@@ -33,6 +34,12 @@ def duration_s(video: Path) -> float | None:
     return int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3]) if m else None
 
 
+def unlimited() -> set[str]:
+    from video_source import config  # noqa: F401  (charge le .env)
+
+    return {a.strip() for a in os.environ.get("QUOTA_ILLIMITE", "").split(",") if a.strip()}
+
+
 class Rejected(Exception):
     def __init__(self, message: str, status: int = HTTPStatus.TOO_MANY_REQUESTS):
         super().__init__(message)
@@ -48,9 +55,10 @@ class Quota:
 
     @staticmethod
     def client(handler) -> str | None:
-        """Adresse du visiteur derrière Caddy, None en local."""
+        """Adresse du visiteur derrière Caddy, None en local ou pour une adresse de QUOTA_ILLIMITE."""
         fwd = handler.headers.get("X-Forwarded-For")
-        return fwd.split(",")[-1].strip() if fwd else None
+        ip = fwd.split(",")[-1].strip() if fwd else None
+        return None if ip in unlimited() else ip
 
     def limits(self) -> dict:
         return {"max_mb": self.max_mb, "max_min": round(self.max_s / 60, 1), "par_ip_jour": self.per_ip,
