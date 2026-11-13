@@ -29,8 +29,12 @@ BOOTSTRAP_DRAWS = 200
 # la taille du val (311 chaînes) : le seuil tenait sur ces gros jeux, pas sur les 77 chaînes du
 # test (run 019 : 3 tests échoués sur split_008, précision test 0,868 à 0,893 pour 0,911 sur val).
 # Tirés à la taille du test et au centile 90, 4 candidats sur 5 de split_008 passaient (exp_394 :
-# 0,921), pour environ 1 point de rappel val en moins.
-BOOTSTRAP_QUANTILE = 90
+# 0,921), pour environ 1 point de rappel val en moins. 90 jusqu'au 13/11/2026 : ce seuil rate
+# la cible sur environ 1 test sur 10 par simple tirage des chaînes (run 026 : exp_600 et exp_601,
+# précision test 0,888 et 0,892 ; exp_601 au 4e centile des jeux val de 128 chaînes, 41 % de ses
+# FP dans 5 chaînes, 0,9006 sans la pire). Au centile 95 : environ 0,4 à 0,8 point de rappel val
+# en moins (exp_601 : 0,9838 -> 0,9801 ; exp_580 : 0,9766 -> 0,9689).
+BOOTSTRAP_QUANTILE = 95
 
 
 def operating_point(y: np.ndarray, probs: np.ndarray, threshold: float) -> dict:

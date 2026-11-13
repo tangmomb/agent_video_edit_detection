@@ -57,10 +57,10 @@ python -m model_training_pipeline exclude <sample_id> "<raison>"  # retire une v
 
 Cible binaire `label_any` (au moins un ajout visible sur l'image), `null` sans accord des annotateurs.
 Split dev/test par chaîne YouTube (une chaîne garde son habillage d'une vidéo à l'autre).
-Métrique principale : rappel à précision fixée (95 % par défaut) sur val, une validation croisée
+Métrique principale : rappel à précision fixée (90 % par défaut) sur val, une validation croisée
 par chaîne sur dev (5 plis : chaque image est prédite par un modèle qui n'a vu aucune vidéo de sa
-chaîne). Le seuil y est choisi prudemment (centile 80 des seuils de 200 tirages de chaînes avec
-remise), puis appliqué tel quel sur test à la moyenne des modèles de plis ; AUC et AP en repères
+chaîne). Le seuil y est choisi prudemment (centile 95 des seuils de 200 tirages avec remise de
+jeux de chaînes de la taille du test), puis appliqué tel quel sur test à la moyenne des modèles de plis ; AUC et AP en repères
 (`model_training_pipeline/metrics.py`). Un val fixe ne comptait que 5 à 13 chaînes : son seuil ne
 tenait pas la précision sur d'autres chaînes (banc b1 : 0.53 à 1.0 pour 0.95 visé).
 

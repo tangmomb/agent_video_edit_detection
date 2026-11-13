@@ -1394,7 +1394,7 @@
                   </ul>
                   <div class="example-note">
                     <span class="ex-tag">Exemple</span>
-                    le modèle en production, <code>exp_215</code>, est une
+                    le modèle mis en production au run 012, <code>exp_215</code>, est une
                     logreg à <code>C</code> = 0,02 sur CLIP, image entière
                     (<code>clip_b32:full</code>). 72 des 78 expériences de
                     <code>split_005</code> sont des logreg.
@@ -1473,8 +1473,8 @@
                   <li>
                     <b>Tout se mesure sur l'ensemble réuni</b>, pas pli par pli
                     puis moyenné. Au seuil choisi, on compte sur les 1 833
-                    images : <i>VP</i> = 1 156 ajouts trouvés (vrais positifs),
-                    <i>FP</i> = 99 fausses alertes, <i>FN</i> = 110 ajouts
+                    images : <i>VP</i> = 1 096 ajouts trouvés (vrais positifs),
+                    <i>FP</i> = 47 fausses alertes, <i>FN</i> = 170 ajouts
                     ratés.
                     <div class="math noted">
                       <span
@@ -1485,9 +1485,9 @@
                         >
                         =
                         <span class="frac"
-                          ><span>1 156</span><span>1 156 + 99</span></span
+                          ><span>1 096</span><span>1 096 + 47</span></span
                         >
-                        = <b>92,1 %</b></span
+                        = <b>95,9 %</b></span
                       >
                       <em
                         >la part des images signalées qui a vraiment un
@@ -1501,9 +1501,9 @@
                         >
                         =
                         <span class="frac"
-                          ><span>1 156</span><span>1 156 + 110</span></span
+                          ><span>1 096</span><span>1 096 + 170</span></span
                         >
-                        = <b>91,3 %</b></span
+                        = <b>86,6 %</b></span
                       >
                       <em>la part des 1 266 ajouts qui est trouvée</em>
                     </div>
@@ -1534,32 +1534,32 @@
                       <td>12</td>
                       <td>349</td>
                       <td>217</td>
-                      <td>86,2 %</td>
-                      <td>80,6 %</td>
+                      <td>91,3 %</td>
+                      <td>72,8 %</td>
                     </tr>
                     <tr>
                       <td>2</td>
                       <td>12</td>
                       <td>297</td>
                       <td>184</td>
-                      <td>98,0 %</td>
-                      <td>78,8 %</td>
+                      <td>100,0 %</td>
+                      <td>70,1 %</td>
                     </tr>
                     <tr>
                       <td>3</td>
                       <td>12</td>
                       <td>298</td>
                       <td>216</td>
-                      <td>90,6 %</td>
-                      <td>98,6 %</td>
+                      <td>97,6 %</td>
+                      <td>94,9 %</td>
                     </tr>
                     <tr>
                       <td>4</td>
                       <td>12</td>
                       <td>393</td>
                       <td>257</td>
-                      <td>84,8 %</td>
-                      <td>91,1 %</td>
+                      <td>90,7 %</td>
+                      <td>86,8 %</td>
                     </tr>
                     <tr>
                       <td>5</td>
@@ -1567,22 +1567,22 @@
                       <td>496</td>
                       <td>392</td>
                       <td>99,0 %</td>
-                      <td>99,2 %</td>
+                      <td>97,2 %</td>
                     </tr>
                     <tr class="total">
                       <td>réunis</td>
                       <td>58</td>
                       <td>1 833</td>
                       <td>1 266</td>
-                      <td>92,1 %</td>
-                      <td>91,3 %</td>
+                      <td>95,9 %</td>
+                      <td>86,6 %</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
               <p>
                 Dans les deux cas, le code fixe ensuite le <b>seuil</b> prudent
-                qui tient 90 % de précision (200 tirages de chaînes, 80<sup
+                qui tient 90 % de précision (200 tirages de chaînes, 95<sup
                   >e</sup
                 >
                 centile), enregistré avec l'expérience.
@@ -1609,19 +1609,20 @@
                   </li>
                   <li>
                     <b>200 tirages de chaînes.</b> On simule d'autres jeux de
-                    chaînes : on pioche 58 fois une chaîne parmi les 58,
-                    <b>avec remise</b> (une chaîne peut sortir plusieurs fois,
-                    d'autres pas du tout), et on recalcule le seuil qui tient 90
-                    % de précision sur ce jeu. 200 fois. Les seuils obtenus vont
-                    de <b>0,04 à 0,78</b> (milieu 0,31) : le bon seuil dépend
+                    chaînes, de la taille du test (15 chaînes) : on pioche 15
+                    fois une chaîne parmi les 58, <b>avec remise</b> (une chaîne
+                    peut sortir plusieurs fois, d'autres pas du tout), et on
+                    recalcule le seuil qui tient 90 % de précision sur ce jeu.
+                    200 fois. Les seuils obtenus vont de <b>0,001 à 0,835</b>
+                    (milieu 0,31) : sur un petit jeu, le bon seuil dépend
                     beaucoup des chaînes.
                   </li>
                   <li>
-                    <b>Le 80<sup>e</sup> centile.</b> On trie les 200 seuils et
-                    on garde celui que seuls 20 % dépassent : <b>0,509</b>. Il
-                    aurait tenu 90 % sur environ 80 % des jeux de chaînes
-                    simulés. Plus haut serait plus prudent, avec moins de
-                    rappel.
+                    <b>Le 95<sup>e</sup> centile.</b> On trie les 200 seuils et
+                    on garde celui que seuls 5 % dépassent : <b>0,729</b>. Il
+                    aurait tenu 90 % sur environ 95 % des jeux de chaînes
+                    simulés. Au 90<sup>e</sup> centile (jusqu'au 13/11), un test
+                    sur dix environ échouait par simple tirage des chaînes.
                   </li>
                   <li>
                     <b>Enregistré.</b> Ce seuil est écrit dans
@@ -1644,15 +1645,16 @@
                       <td>94,3 %</td>
                     </tr>
                     <tr>
-                      <td>prudent · 0,509</td>
-                      <td>92,1 %</td>
-                      <td>91,3 %</td>
+                      <td>prudent · 0,729</td>
+                      <td>95,9 %</td>
+                      <td>86,6 %</td>
                     </tr>
                   </tbody>
                 </table>
                 <p class="emb-note">
-                  Environ 3 points de rappel sacrifiés pour mieux tenir 90 % sur
-                  des chaînes nouvelles.
+                  Environ 8 points de rappel sacrifiés ici, parce que le test de
+                  ce split ne comptait que 15 chaînes. Sur les splits récents
+                  (environ 128 chaînes de test), l'écart tombe sous 1 point.
                 </p>
               </div>
             </div>
@@ -1859,9 +1861,9 @@
                           <li>
                             <b>Chaque chaîne décale ses scores.</b> Un seuil
                             unique coupe mal une chaîne notée un peu trop haut
-                            ou trop bas : au seuil 0,509, la chaîne ci-dessus a
-                            1 fausse alerte (rang 4) et 3 ajouts ratés (rangs 6,
-                            7 et 9), alors que son classement est presque bon.
+                            ou trop bas : au seuil 0,729, la chaîne ci-dessus
+                            rate 4 de ses 7 ajouts (rangs 5, 6, 7 et 9), alors
+                            que son classement est presque bon.
                             Le rappel et la précision punissent ce décalage,
                             l'AP par chaîne non : le décalage est traité à part,
                             par le seuil prudent.
@@ -1889,7 +1891,7 @@
                 <li class="s-fold spaced">
                   <b>Le candidat</b> : parmi elles, le meilleur
                   <b>rappel val</b> au <b>seuil prudent</b> qui tient 90 % de
-                  précision (0,608 pour <code>exp_215</code>). À rappel égal, la
+                  précision (0,608 pour <code>exp_215</code> au run 012). À rappel égal, la
                   meilleure AP globale, puis la meilleure AUC, puis la plus
                   rapide. Rappel, AP globale et AUC se mesurent sur les scores
                   val, un modèle par image ; seule la vitesse est mesurée sur
@@ -1904,7 +1906,8 @@
               <div class="subbox">
                 <h4>
                   Run 012 sur <code>split_005</code> · 78 expériences,
-                  meilleure AP par chaîne 0,9266 (exp_227)
+                  meilleure AP par chaîne 0,9266 (exp_227) · seuil de l'époque
+                  (80<sup>e</sup> centile)
                 </h4>
                 <table class="mini folds">
                   <thead>
@@ -1952,6 +1955,14 @@
                   37 candidats potentiels (AP par chaîne ≥ 0,9216) ; ici les 5
                   meilleurs rappels. exp_215 n'a pas la meilleure AP par chaîne,
                   mais il est dans la marge et a le meilleur rappel.
+                </p>
+                <p class="emb-note">
+                  Au réglage actuel (95<sup>e</sup> centile, tirages de 14
+                  chaînes, la taille du test de <code>split_005</code>), le
+                  candidat serait <code>exp_239</code> : rappel val 85,8 % au
+                  seuil 0,867, devant <code>exp_216</code> (85,5 %) et
+                  <code>exp_204</code> (85,3 %). Avec si peu de chaînes de test,
+                  le seuil prudent monte beaucoup.
                 </p>
               </div>
               <p>
@@ -2095,7 +2106,7 @@
       <!-- ======================= EXEMPLE ======================= -->
       <aside class="example">
         <div class="eyebrow">Exemple</div>
-        <h3>Le run 012 (03/11, cible 90 %)</h3>
+        <h3>Le run 012 (03/11, cible 90 %, seuil au 80<sup>e</sup> centile)</h3>
         <ol>
           <li>
             Plus gros split : <code>split_005</code> (75 vidéos, 78 expériences),
