@@ -25,6 +25,25 @@ body{background:var(--bg);color:var(--fg);font:14.5px/1.45 "Segoe UI",system-ui,
 body.open #burger span{background:transparent}
 body.open #burger span:before{transform:translateY(6px) rotate(45deg)}
 body.open #burger span:after{transform:translateY(-6px) rotate(-45deg)}
+/* Lueur qui fait le tour du bouton de temps en temps (toutes les 7 s), pour le repérer */
+#burger::before,#burger::after{content:"";position:absolute;inset:-4px;border-radius:50%;pointer-events:none;opacity:0}
+#burger::before{padding:2px;background:conic-gradient(transparent 0 55%,rgba(125,156,255,.25) 70%,var(--accent) 88%,#fff 96%,transparent);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+  filter:drop-shadow(0 0 5px var(--accent));animation:ring 7s ease-in-out infinite}
+#burger::after{inset:-1px;box-shadow:0 0 18px 2px rgba(125,156,255,.45);animation:halo 7s ease-in-out infinite}
+@keyframes ring{0%{transform:rotate(0);opacity:0}4%{opacity:1}24%{opacity:1}30%,100%{transform:rotate(720deg);opacity:0}}
+@keyframes halo{0%,100%{opacity:0}12%{opacity:1}30%{opacity:0}}
+/* « voir les autres pages », à côté du bouton */
+#hint{position:fixed;left:72px;bottom:27px;z-index:20;padding:3px 10px;border-radius:999px;border:1px solid var(--line);
+  background:var(--panel);color:var(--muted);font-family:inherit;font-size:12.5px;line-height:1.4;box-shadow:var(--shadow);cursor:pointer;
+  white-space:nowrap;animation:nudge 1.8s ease-in-out infinite;transition:opacity .15s}
+#hint:hover{color:var(--fg);border-color:var(--accent)}
+#hint b{color:var(--accent);font-weight:600;display:inline-block;margin-right:4px}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(-6px)}}
+body.open #hint{opacity:0;pointer-events:none}
+body.open #burger::before,body.open #burger::after{animation:none;opacity:0}
+@media (prefers-reduced-motion:reduce){#burger::before,#burger::after,#hint{animation:none}}
 
 #menu{position:fixed;left:16px;bottom:72px;z-index:19;width:360px;max-height:calc(100vh - 100px);overflow-y:auto;
   background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px;
@@ -50,6 +69,7 @@ body.open #scrim{display:block}
 <div id="scrim"></div>
 <nav id="menu" aria-label="Outils"><h1>Panneau de contrôle</h1><div id="items"></div></nav>
 <button id="burger" aria-label="Menu" title="Changer d'outil"><span></span></button>
+<button id="hint" type="button" tabindex="-1" aria-hidden="true"><b>←</b>voir les autres pages</button>
 <script>
 let TOOLS = [];
 const frames = document.getElementById("frames"), status = {};
@@ -102,7 +122,8 @@ async function check() {
   menu();
 }
 
-document.getElementById("burger").onclick = () => document.body.classList.toggle("open");
+document.getElementById("burger").onclick = document.getElementById("hint").onclick =
+  () => document.body.classList.toggle("open");
 document.getElementById("scrim").onclick = () => document.body.classList.remove("open");
 addEventListener("keydown", e => { if (e.key === "Escape") document.body.classList.remove("open"); });
 addEventListener("hashchange", show);
