@@ -199,6 +199,23 @@ def _best_by_rule(rows: list[dict]) -> dict | None:
                key=lambda r: (r["val_recall"], r["ap_par_chaine"] or 0.0, r["ap"], r["auc"], -r["ms_par_frame"]))
 
 
+class LabeledRows:
+    """Matrice des seules lignes étiquetées, lue comme si elle couvrait tout l'index : X[idx] avec
+    des numéros de ligne de Lab.rows. Lire une ligne non étiquetée est une erreur."""
+
+    def __init__(self, data: np.ndarray, rows: np.ndarray, n_rows: int):
+        self.data = data
+        self._pos = np.full(n_rows, -1, dtype=np.int64)
+        self._pos[rows] = np.arange(len(rows))
+        self.shape = (n_rows, data.shape[1])
+
+    def __getitem__(self, idx) -> np.ndarray:
+        pos = self._pos[np.asarray(idx, dtype=int)]
+        if (pos < 0).any():
+            raise IndexError("ligne sans étiquette : pas d'embeddings chargés")
+        return self.data[pos]
+
+
 class FoldEnsemble:
     """Moyenne des probabilités des modèles de la validation croisée (model.pkl des expériences)."""
 
@@ -360,20 +377,21 @@ class Lab:
             self._ann_cache[sample_id] = youtube.load_meta(SAMPLES_DIR / sample_id)
         return self._ann_cache[sample_id]
 
-    def _X(self, features: list[str]) -> tuple[np.ndarray, float]:
+    def _X(self, features: list[str]) -> tuple["LabeledRows", float]:
+        """Embeddings des seules images étiquetées (les seules que _idx sélectionne), indexés par
+        numéro de ligne de self.rows. Une matrice sur tout l'index, à 0 hors étiquettes, faisait
+        4x la taille utile : run 025 tué à 5 Go (MemoryMax) avec 11 embeddings."""
         mats, ms = [], 0.0
-        # seules les images étiquetées servent (_idx) : les autres restent à 0, sans calcul
-        labeled = [i for i, r in enumerate(self.rows) if r["label_any"] is not None]
+        labeled = np.array([i for i, r in enumerate(self.rows) if r["label_any"] is not None], dtype=int)
         for spec in features:
             ext, _, view = spec.partition(":")
             feats = get_features([self.rows[i] for i in labeled], ext, view or "full")
-            X = np.zeros((len(self.rows), 0 if feats is None else feats.shape[1]), dtype=np.float32)
             if feats is not None:
-                X[labeled] = feats
-            mats.append(X)
+                mats.append(np.asarray(feats, dtype=np.float32))
             ms += extraction_cost(ext, view or "full") or 0.0
-        X = np.concatenate(mats, axis=1)
-        return X, ms
+        X = np.concatenate(mats, axis=1) if mats else np.zeros((len(labeled), 0), dtype=np.float32)
+        del mats
+        return LabeledRows(X, labeled, len(self.rows)), ms
 
     # ------------------------------------------------------------------ outils
     def _composition(self, sids: set[str], with_positives: bool = True) -> dict:
