@@ -1,4 +1,4 @@
-"""Entraînement de train_model sur un GPU Modal : allumé par l'appel, éteint une minute après le
+"""Entraînement de train_model sur un GPU Modal : allumé par l'appel, éteint 20 s après le
 dernier, facturé à la seconde. Sur le VPS, la matrice d'embeddings et les copies de scikit-learn
 grandissaient avec le dataset jusqu'à l'OOM (run 025 tué à 5 Go ; run 028 vers 4,6 à 5 Go).
 
@@ -39,7 +39,16 @@ app = modal.App(APP, image=image)
 volume = modal.Volume.from_name(VOLUME, create_if_missing=True)
 
 
-@app.function(cpu=4, memory=16384, timeout=3600, scaledown_window=60, max_containers=1, retries=1,
+# Modal facture la mémoire et les CPU réservés (ou utilisés, si plus), en plus du GPU, et un conteneur
+# reste payé pendant scaledown_window après son dernier appel. Run 029 (14/11) : 1,42 $ d'entraînement
+# pour 24 min de calcul, le conteneur GPU (4 CPU, 32 Go) ne s'éteignant presque jamais entre deux
+# train_model (un par minute environ). D'où des réserves au plus juste et un arrêt rapide.
+# Plus grosse matrice à ce jour : 21 000 images x 18 000 dims, 1,5 Go en float32.
+IDLE_S = 20
+
+
+@app.function(cpu=4,  # lectures et décompression des npz en parallèle
+              memory=8192, timeout=3600, scaledown_window=IDLE_S, max_containers=1, retries=1,
               volumes={ROOT: volume})
 def pack(payload: dict) -> dict:
     """Assemble la matrice des images demandées dans <volume>/packs/<key>.npy (déjà là : rien à
@@ -73,7 +82,9 @@ def pack(payload: dict) -> dict:
 
 
 # Plusieurs GPU acceptés : un L4 seul peut rester des minutes en attente de place.
-@app.function(gpu=["L4", "T4", "A10"], cpu=4, memory=32768, timeout=3600, scaledown_window=60,
+@app.function(gpu=["L4", "T4", "A10"], cpu=2,  # le calcul est sur le GPU
+              memory=12288,  # la matrice une fois en RAM avant d'aller sur le GPU
+              timeout=3600, scaledown_window=IDLE_S,
               max_containers=1,  # plafond de dépense : jamais deux GPU en même temps
               retries=1,  # GPU repris par Modal en plein calcul
               volumes={ROOT: volume})
