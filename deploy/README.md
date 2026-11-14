@@ -17,8 +17,9 @@ Les réglages sont en tête de chaque `server.py`. Les adresses de `QUOTA_ILLIMI
 
 ## Mettre à jour le code
 
-Automatique à chaque push sur `master` (`.github/workflows/deploy.yml`) : `modal deploy` si
-`encoders.py` ou `embed_modal.py` a changé, puis `deploy/update_vps.sh update` sur le VPS (`git pull`,
+Automatique à chaque push sur `master` (`.github/workflows/deploy.yml`) : `modal deploy` de
+l'app des embeddings si `encoders.py` ou `embed_modal.py` a changé, de l'app d'entraînement si
+`train_modal.py` ou `train_torch.py` a changé, puis `deploy/update_vps.sh update` sur le VPS (`git pull`,
 dépendances, Caddy, redémarrage des interfaces). Un push qui ne touche que des `.md` attend le
 lancement de l'heure.
 
@@ -33,6 +34,20 @@ GitHub désactive les lancements programmés après 60 jours sans activité sur 
 réactiver dans l'onglet Actions.
 
 Mise en place, ou remplacement de la clé et des jetons : `deploy/setup_github_actions.sh`.
+
+## GPU Modal
+
+Deux réglages du `.env` du VPS envoient le calcul lourd sur un GPU Modal, allumé à l'appel et
+facturé à la seconde (hors budget des runs) :
+- `EMBED_GPU=modal` : les embeddings absents du cache (`embed_modal.py`, app `agent-embeddings`) ;
+- `TRAIN_GPU=modal` : les entraînements de `train_model` (`train_modal.py`, app `agent-training`).
+  Le VPS ne construit plus la matrice d'embeddings, qui grandissait avec le dataset jusqu'à l'OOM
+  (run 025). Les caches d'embeddings sont copiés dans le volume Modal `agent-features` avant chaque
+  entraînement, seulement les fichiers nouveaux ou modifiés (`feature_volume.py`, manifeste
+  `data/videos_samples_frames/feat/.modal_volume.json`). Les modèles reviennent en objets
+  scikit-learn : `model.pkl`, la production et les pages prédisent toujours sur le CPU du VPS.
+
+Sans ces réglages, tout tourne sur place (PC, secours).
 
 ## Lancer un run (payant)
 

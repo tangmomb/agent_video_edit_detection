@@ -46,7 +46,7 @@ from video_source import annotators, youtube
 from video_source.atomic import sync_dir, write_atomic
 from video_source.config import DATA_DIR, LAB_DIR, SAMPLES_DIR
 
-from . import batch, describe, metrics
+from . import batch, describe, metrics, remote_train
 from .features import extraction_cost, get_features
 from .frames import FPS, FRAMES_DIR, SKIPPED_SHARE, annotate, build, load_index, source_key, to_annotate
 
@@ -92,6 +92,8 @@ MLP_HOLDOUT, MLP_MAX_EPOCHS, MLP_PATIENCE, MLP_ALPHA = 0.15, 200, 10, 1.0
 # avec ajout ; orientation.
 BALANCE_GROUPS = ("positif", "negatif", "clip_vide", "portrait", "paysage")
 MAX_FACTOR = 10  # facteur maximal de balance et de weights
+# ms_par_frame : temps de prédiction mesuré sur CPU (comme en production) sur au plus ces images de dev
+PRED_SAMPLE = 512
 
 
 def _jsonable(o):
@@ -377,21 +379,27 @@ class Lab:
             self._ann_cache[sample_id] = youtube.load_meta(SAMPLES_DIR / sample_id)
         return self._ann_cache[sample_id]
 
-    def _X(self, features: list[str]) -> tuple["LabeledRows", float]:
-        """Embeddings des seules images étiquetées (les seules que _idx sélectionne), indexés par
-        numéro de ligne de self.rows. Une matrice sur tout l'index, à 0 hors étiquettes, faisait
-        4x la taille utile : run 025 tué à 5 Go (MemoryMax) avec 11 embeddings."""
-        mats, ms = [], 0.0
-        labeled = np.array([i for i, r in enumerate(self.rows) if r["label_any"] is not None], dtype=int)
+    def _X(self, features: list[str], rows=None) -> tuple["LabeledRows", float]:
+        """Embeddings des lignes demandées de self.rows (par défaut toutes les étiquetées), indexés
+        par numéro de ligne. Seulement celles qui servent : sur tout l'index, la matrice faisait 4x la
+        taille utile (run 025 tué à 5 Go, MemoryMax) ; final_test ne charge que le test."""
+        rows = (np.array([i for i, r in enumerate(self.rows) if r["label_any"] is not None], dtype=int)
+                if rows is None else np.unique(np.asarray(rows, dtype=int)))
+        mats = []
         for spec in features:
             ext, _, view = spec.partition(":")
-            feats = get_features([self.rows[i] for i in labeled], ext, view or "full")
+            feats = get_features([self.rows[i] for i in rows], ext, view or "full")
             if feats is not None:
                 mats.append(np.asarray(feats, dtype=np.float32))
-            ms += extraction_cost(ext, view or "full") or 0.0
-        X = np.concatenate(mats, axis=1) if mats else np.zeros((len(labeled), 0), dtype=np.float32)
+        X = np.concatenate(mats, axis=1) if mats else np.zeros((len(rows), 0), dtype=np.float32)
         del mats
-        return LabeledRows(X, labeled, len(self.rows)), ms
+        return LabeledRows(X, rows, len(self.rows)), self._feat_ms(features)
+
+    @staticmethod
+    def _feat_ms(features: list[str]) -> float:
+        """Temps d'extraction des embeddings par image (mesuré à leur calcul sur place)."""
+        return sum(extraction_cost(ext, view or "full") or 0.0
+                   for ext, _, view in (spec.partition(":") for spec in features))
 
     # ------------------------------------------------------------------ outils
     def _composition(self, sids: set[str], with_positives: bool = True) -> dict:
@@ -662,15 +670,22 @@ class Lab:
         folds = self._folds(split_id)
         fold = np.array([folds[self.rows[i]["source"]] for i in dev])
         groups = np.array([self.rows[i]["source"] for i in dev])
-        X, feat_ms = self._X(embeddings)
         y = self._y()
 
         t0 = time.time()
-        probs, fold_models = np.zeros(len(dev)), []
-        for k in np.unique(fold):  # chaque pli prédit par un modèle qui n'a vu aucune de ses chaînes
-            out = fold == k
-            fold_models.append(self._fit(model, params, dev[~out], balance, weights, X, y)[0])
-            probs[out] = fold_models[-1].predict_proba(X[dev[out]])[:, 1]
+        where = None
+        if remote_train.enabled():  # GPU Modal : le VPS ne construit pas la matrice
+            probs, fold_models, n_features, where = self._train_remote(
+                embeddings, model, params, balance, weights, dev, fold, y)
+        else:
+            X, _ = self._X(embeddings, dev)
+            n_features = X.shape[1]
+            probs, fold_models = np.zeros(len(dev)), []
+            for k in np.unique(fold):  # chaque pli prédit par un modèle qui n'a vu aucune de ses chaînes
+                out = fold == k
+                fold_models.append(self._fit(model, params, dev[~out], balance, weights, X, y)[0])
+                probs[out] = fold_models[-1].predict_proba(X[dev[out]])[:, 1]
+            del X
         # Modèle gardé : la moyenne des modèles de plis, dont les scores sont ceux sur lesquels le
         # seuil est choisi. Un modèle réentraîné sur tout dev est plus confiant : au même seuil, il
         # perdait 4 à 9 points de précision sur les chaînes cachées du banc b1.
@@ -678,17 +693,23 @@ class Lab:
         balance_report = self._balance(dev, balance or {})[1]
         weighted = bool(weights)
         train_s = time.time() - t0
+        # Prédiction mesurée sur CPU, comme en production, sur un échantillon de dev
+        sample = np.sort(np.random.default_rng(0).choice(dev, min(PRED_SAMPLE, len(dev)), replace=False))
+        Xs, feat_ms = self._X(embeddings, sample)
         t0 = time.time()
-        clf.predict_proba(X[dev])
-        pred_ms = 1000 * (time.time() - t0) / len(dev)
+        clf.predict_proba(Xs[sample])
+        pred_ms = 1000 * (time.time() - t0) / len(sample)
+        del Xs
 
         exp_id = self._next_exp_id()
         result = {
             "val": metrics.summary(y[dev], probs, groups, self._test_chains(split_id)), "train_s": train_s,
-            "ms_par_frame": feat_ms + pred_ms, "n_features": X.shape[1],
+            "ms_par_frame": feat_ms + pred_ms, "n_features": n_features,
             "n_dev": len(dev), "plis": len(np.unique(fold)), "data": self._data_snapshot(split_id),
             "date": time.strftime("%Y-%m-%d %H:%M"),
         }
+        if where:
+            result["entrainement"] = where
         if balance_report:
             result["reequilibrage_train"] = balance_report
         if weighted:
@@ -935,7 +956,7 @@ class Lab:
         self.final_tests_left -= 1
         with open(d / "model.pkl", "rb") as fh:
             clf = pickle.load(fh)
-        X, _ = self._X(config["features"])
+        X, _ = self._X(config["features"], te)
         y = self._y()[te]
         probs = clf.predict_proba(X[te])[:, 1]
         s = metrics.summary(y, probs)
@@ -971,7 +992,7 @@ class Lab:
         pconfig = json.loads((pd / "config.json").read_text(encoding="utf-8"))
         with open(pd / "model.pkl", "rb") as fh:
             pclf = pickle.load(fh)
-        PX, _ = self._X(pconfig["features"])
+        PX, _ = self._X(pconfig["features"], te[keep])
         y = self._y()[te[keep]]
         pprobs = pclf.predict_proba(PX[te[keep]])[:, 1]
         side = lambda p, t: {**metrics.operating_point(y, p, t), "ap": metrics.summary(y, p)["ap"]}
@@ -992,7 +1013,7 @@ class Lab:
             with open(p.parent / "model.pkl", "rb") as fh:
                 clf = pickle.load(fh)
             te = self._idx("test", split_id)
-            X, _ = self._X(config["features"])
+            X, _ = self._X(config["features"], te)
             ft["contre_production"] = self._against_production(
                 eid, te, clf.predict_proba(X[te])[:, 1], ft["seuil_choisi_sur_val"])
             write_atomic(p, json.dumps(_jsonable(ft), indent=2))
@@ -1190,10 +1211,11 @@ class Lab:
             clf.fit(X[tr], y[tr], **({} if w is None else {f"{clf.steps[-1][0]}__sample_weight": w}))
         return clf, report, w is not None
 
-    def _fit_mlp(self, clf, tr: np.ndarray, w: np.ndarray | None, X: np.ndarray, y: np.ndarray):
-        """Entraîne le mlp époque par époque et garde l'époque à la meilleure AP par chaîne sur
-        MLP_HOLDOUT des chaînes de tr, jamais vues : la même question que val. Les deux classes
-        pèsent autant au total, comme class_weight="balanced" de la logreg."""
+    def _mlp_split(self, tr: np.ndarray, w: np.ndarray | None, y: np.ndarray):
+        """(images d'ajustement du mlp, leurs poids, images mises de côté pour l'arrêt) : MLP_HOLDOUT
+        des chaînes de tr mises de côté (aucune si elles n'ont pas les deux classes) ; poids des
+        classes équilibrés comme class_weight="balanced" (sur les effectifs), puis x weights.
+        Commun au calcul sur place (_fit_mlp) et au GPU (_train_remote)."""
         chans = np.array([self.rows[i]["source"] for i in tr])
         names = np.unique(chans)
         rng = np.random.default_rng(0)
@@ -1203,23 +1225,84 @@ class Lab:
             out[:] = False  # chaînes mises de côté sans les deux classes : pas d'arrêt possible
         fit_i, w_fit = tr[~out], (np.ones(len(tr)) if w is None else w)[~out]
         yf = y[fit_i]
-        for c in (0, 1):  # même calcul que class_weight="balanced" : sur les effectifs, puis x weights
+        for c in (0, 1):
             m = yf == c
             if m.any():
                 w_fit = np.where(m, w_fit * len(yf) / (2 * m.sum()), w_fit)
+        return fit_i, w_fit, tr[out]
+
+    def _train_remote(self, embeddings: list[str], model: str, params: dict, balance: dict | None,
+                      weights: dict | None, dev: np.ndarray, fold: np.ndarray, y: np.ndarray):
+        """train_model sur le GPU Modal (remote_train.py) : complète les caches d'embeddings de dev
+        (images manquantes calculées comme d'habitude, sans garder de matrice), les envoie au
+        volume, puis envoie les plis rééchantillonnés et pondérés ici même. Renvoie (probs hors
+        pli, modèles de plis scikit-learn, dimensions, où et en combien de temps)."""
+        from . import feature_volume
+
+        feat_dir = FRAMES_DIR / "feat"
+        rows = [self.rows[i] for i in dev]
+        sids = [r["sample_id"] for r in rows]
+        frames = [int(Path(r["frame"]).stem) - 1 for r in rows]
+        specs = [remote_train.cache_spec(s) for s in embeddings]
+        incomplete = remote_train.incomplete(feat_dir, specs, sids, frames)
+        for spec, (dirname, _, _) in zip(embeddings, specs):
+            if incomplete.get(dirname):
+                ext, _, view = spec.partition(":")
+                get_features([r for r in rows if r["sample_id"] in incomplete[dirname]], ext, view or "full")
+        files = {f"{d}/{s}.npz" for d, _, _ in specs for s in set(sids)}
+        feature_volume.sync(feat_dir, files)
+
+        pos = {g: k for k, g in enumerate(dev)}
+        plan_folds = []
+        for k in np.unique(fold):
+            out = fold == k
+            tr, _ = self._balance(dev[~out], balance or {})
+            w = self._weights(tr, weights or {})
+            f = {"pred": np.flatnonzero(out)}
+            if model == "mlp":
+                fit_i, w_fit, held = self._mlp_split(tr, w, y)
+                f.update(fit=np.array([pos[i] for i in fit_i]), w=w_fit,
+                         held=np.array([pos[i] for i in held], dtype=int),
+                         held_groups=np.array([self.rows[i]["source"] for i in held]))
+            else:
+                f.update(fit=np.array([pos[i] for i in tr]), w=w)
+            plan_folds.append(f)
+        payload = {"namespace": feature_volume.namespace(feat_dir), "specs": specs, "sids": sids,
+                   "frames": frames, "y": y[dev],
+                   "plan": {"model": model, "params": params, "mlp_alpha": MLP_ALPHA,
+                            "mlp_max_epochs": MLP_MAX_EPOCHS, "mlp_patience": MLP_PATIENCE,
+                            "folds": plan_folds}}
+        out = remote_train.train(payload)
+        if out.get("missing"):  # volume en retard sur le manifeste (volume vidé, envoi perdu) : renvoyés
+            feature_volume.sync(feat_dir, files, force={f"{d}/{s}.npz" for d, s in out["missing"]})
+            out = remote_train.train(payload)
+            if out.get("missing"):
+                raise RuntimeError(f"embeddings introuvables sur le GPU : {out['missing'][:5]}")
+        fold_models = [remote_train.rebuild(model, params, f, MLP_ALPHA) for f in out["folds"]]
+        n_features = len(out["folds"][0]["prep"]["scaler"]["mean"])
+        return out["probs"], fold_models, n_features, {"lieu": f"GPU Modal ({out.get('device')})",
+                                                       **(out.get("timing") or {})}
+
+    def _fit_mlp(self, clf, tr: np.ndarray, w: np.ndarray | None, X: np.ndarray, y: np.ndarray):
+        """Entraîne le mlp époque par époque et garde l'époque à la meilleure AP par chaîne sur
+        MLP_HOLDOUT des chaînes de tr, jamais vues : la même question que val. Les deux classes
+        pèsent autant au total, comme class_weight="balanced" de la logreg."""
+        fit_i, w_fit, held = self._mlp_split(tr, w, y)
+        yf, yo = y[fit_i], y[held]
+        chans_o = np.array([self.rows[i]["source"] for i in held])
         *prep, (_, mlp) = clf.steps
-        Xf, Xo = X[fit_i], X[tr[out]]
+        Xf, Xo = X[fit_i], (X[held] if len(held) else None)
         for _, step in prep:
             Xf = step.fit_transform(Xf)
-            Xo = step.transform(Xo) if out.any() else Xo
+            Xo = step.transform(Xo) if Xo is not None else Xo
         best, best_ap, stale = None, -1.0, 0
         for _ in range(MLP_MAX_EPOCHS):
             mlp.partial_fit(Xf, yf, sample_weight=w_fit, classes=np.array([0, 1]))
-            if not out.any():
+            if Xo is None:
                 continue
             p = mlp.predict_proba(Xo)[:, 1]
-            ap = metrics.group_ap(y[tr[out]], p, chans[out])
-            ap = average_precision_score(y[tr[out]], p) if ap is None else ap
+            ap = metrics.group_ap(yo, p, chans_o)
+            ap = average_precision_score(yo, p) if ap is None else ap
             if ap > best_ap + 1e-4:
                 best, best_ap, stale = pickle.dumps(mlp), ap, 0
             else:

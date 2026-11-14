@@ -70,11 +70,19 @@ jobs:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
-          if git diff --quiet "${{ steps.vps.outputs.commit }}" HEAD --               model_training_pipeline/encoders.py model_training_pipeline/embed_modal.py; then
-            echo "encoders.py et embed_modal.py inchangés : pas de déploiement Modal."
+          base="${{ steps.vps.outputs.commit }}"
+          if git diff --quiet "$base" HEAD -- model_training_pipeline/encoders.py model_training_pipeline/embed_modal.py; then
+            echo "encoders.py et embed_modal.py inchangés : app des embeddings non redéployée."
           else
             pip install --quiet modal==1.6.3
             modal deploy model_training_pipeline/embed_modal.py
+          fi
+          # Entraînement sur GPU (TRAIN_GPU=modal) : train_modal.py et le calcul qu'il embarque
+          if git diff --quiet "$base" HEAD -- model_training_pipeline/train_modal.py model_training_pipeline/train_torch.py; then
+            echo "train_modal.py et train_torch.py inchangés : app d'entraînement non redéployée."
+          else
+            pip install --quiet modal==1.6.3
+            modal deploy model_training_pipeline/train_modal.py
           fi
 
       - name: Mettre à jour le VPS

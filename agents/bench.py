@@ -163,9 +163,9 @@ def _score_one(exp_dir: str, threshold: float, hidden: list[str]) -> dict:
     with open(d / "model.pkl", "rb") as fh:
         clf = pickle.load(fh)
     lab = Lab()
-    X, _ = lab._X(config["features"])
     hid = set(hidden)
     idx = np.array([i for i, r in enumerate(lab.rows) if r["sample_id"] in hid and r["label_any"] is not None])
+    X, _ = lab._X(config["features"], idx)
     y = lab._y()[idx]
     probs = clf.predict_proba(X[idx])[:, 1]
     s = metrics.summary(y, probs)
