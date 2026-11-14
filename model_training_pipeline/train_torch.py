@@ -3,7 +3,8 @@ calculs que la chaîne scikit-learn de Lab._make, sans scikit-learn :
 - StandardScaler (moyenne, écart-type ddof 0, écart nul -> 1) ;
 - PCA (composantes principales exactes, centrées) ;
 - LogisticRegression(C, class_weight="balanced") : même fonction objectif (perte logistique moyenne
-  pondérée + ||w||² / (2 C somme des poids), intercept libre), L-BFGS en float64 ;
+  pondérée + ||w||² / (2 C somme des poids), intercept libre), L-BFGS en float64 (produits
+  matrice-vecteur en float32, voir LOGREG_FP32) ;
 - MLPClassifier (relu, sortie logistique, alpha, Adam par défaut, lots de 200, mélange et
   initialisation tirés comme scikit-learn avec random_state=0), époque par époque avec l'arrêt de
   Lab._fit_mlp (AP par chaîne sur des chaînes mises de côté).
@@ -22,6 +23,11 @@ LBFGS_MAX_ITER = 15000
 # Gradient max de la fonction objectif moyenne (scikit-learn : 1e-4). Mesuré sur split_014 (4 000
 # images, 8 embeddings) : AP stable dès 1e-5 ; 1e-6 = 160 itérations, 1e-7 = 342.
 LBFGS_TOL = 1e-6
+# Produits matrice-vecteur de la logreg en float32 (paramètres, perte et L-BFGS restent en float64) :
+# chaque itération relit toute la matrice, deux fois moins lourde en float32. Mesuré sur exp_666
+# (11 000 images, 16 384 dims, 3 plis, RTX 2080) : logreg 1,9 fois plus rapide, AP par chaîne,
+# rappel@90 et seuil identiques, probabilités à 8e-4 près. Les embeddings sont eux-mêmes en float32.
+LOGREG_FP32 = True
 ADAM = {"lr": 1e-3, "beta_1": 0.9, "beta_2": 0.999, "eps": 1e-8}  # défauts de MLPClassifier
 MLP_BATCH = 200
 
@@ -143,8 +149,10 @@ def _prep(X: torch.Tensor, prep: dict) -> torch.Tensor:
 
 
 # ------------------------------------------------------------------ logreg
-def _logreg(Z: torch.Tensor, y: torch.Tensor, sw: torch.Tensor, C: float) -> dict:
+def _logreg(Z: torch.Tensor, y: torch.Tensor, sw: torch.Tensor, C: float, fp32: bool | None = None) -> dict:
     s = sw.sum()
+    fp32 = LOGREG_FP32 if fp32 is None else fp32
+    Zm = Z.float() if fp32 else Z
     wb = torch.zeros(Z.shape[1] + 1, dtype=torch.float64, device=Z.device, requires_grad=True)
     opt = torch.optim.LBFGS([wb], lr=1, max_iter=LBFGS_MAX_ITER, max_eval=LBFGS_MAX_ITER * 2,
                             tolerance_grad=LBFGS_TOL, tolerance_change=0, history_size=10,
@@ -153,7 +161,7 @@ def _logreg(Z: torch.Tensor, y: torch.Tensor, sw: torch.Tensor, C: float) -> dic
 
     def closure():
         opt.zero_grad()
-        z = Z @ wb[:-1] + wb[-1]
+        z = (Zm @ wb[:-1].to(Zm.dtype)).double() + wb[-1]
         loss = (sw * torch.nn.functional.binary_cross_entropy_with_logits(z, y, reduction="none")).sum() / s
         loss = loss + (wb[:-1] @ wb[:-1]) / (2 * C * s)
         loss.backward()
