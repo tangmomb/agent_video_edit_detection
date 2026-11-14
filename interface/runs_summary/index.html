@@ -57,20 +57,20 @@ details.run > summary::-webkit-details-marker { display: none; }
 details.run > summary:hover { background: color-mix(in srgb, var(--fg) 3%, transparent); }
 .l1, .l2 { display: flex; align-items: center; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 .l1 { gap: 4px 10px; }
-.l2 { gap: 4px 20px; margin-top: 5px; font-size: 13.5px; color: var(--muted); }
+.l2 { gap: 6px 20px; margin-top: 9px; font-size: 13.5px; color: var(--muted); }
 .l2 b { color: var(--fg); font-weight: 600; }
 .runname { font-weight: 650; font-size: 15px; }
-.fin { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; padding: 4px 10px 4px 8px;
-  border-radius: 6px; font-size: 13.5px; width: fit-content; max-width: 100%;
-  --c: var(--muted); background: color-mix(in srgb, var(--c) 12%, transparent); border-left: 2px solid var(--c); }
+.fin { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  font-size: 13.5px; width: fit-content; max-width: 100%; --c: var(--muted); }
 .fin.ok { --c: var(--ok); } .fin.ko { --c: var(--ko); } .fin.warn { --c: var(--warn); }
 .fin .k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--c); }
 .fin b { color: var(--fg); font-weight: 600; }
 .fin .lim { font-size: 12px; color: var(--muted); padding: 0 7px; border-radius: 999px; background: var(--sunk); white-space: nowrap; }
 .when { font-size: 13px; color: var(--muted); }
 .cost { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.cost .meter { width: 70px; margin: 0; }
-.spend { display: grid; grid-template-columns: auto auto 70px; align-items: center; gap: 2px 10px; justify-items: end; }
+.cost .meter { width: 44px; margin: 0; }
+.spend { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 20px; font-size: 13.5px; }
+.spend .sp { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .spend .k { font-size: 12px; }
 @media (max-width: 520px) { .cost { margin-left: 0; width: 100%; } }
 .chip { display: inline-block; font-size: 11.5px; font-weight: 650; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
@@ -79,6 +79,9 @@ details.run > summary:hover { background: color-mix(in srgb, var(--fg) 3%, trans
 .chip.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
 .chip.live { background: color-mix(in srgb, var(--live) 20%, transparent); color: var(--live); }
 .chip.dim { background: var(--sunk); color: var(--muted); }
+.timer { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 1px 9px 1px 7px;
+  border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); white-space: nowrap; }
+.timer svg { width: 12px; height: 12px; flex: none; color: var(--muted); }
 .meter { height: 5px; border-radius: 3px; background: var(--sunk); margin-top: 4px; overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 .meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 10px; }
@@ -200,7 +203,7 @@ function prodChip(p) {
 }
 
 function overview(d) {
-  const p = d.production, total = d.runs.reduce((s, r) => s + (r.cost_usd || 0) + (r.annotation_usd || 0), 0);
+  const p = d.production, total = d.runs.reduce((s, r) => s + (r.cost_usd || 0) + (r.annotation_usd || 0) + (r.modal_usd || 0), 0);
   const live = d.runs.find((r) => r.status === "running");
   $("overview").innerHTML = `
     <div><div class="k">Modèle en production</div><div class="v">${p ? esc(p.experiment_id) : "–"}</div>
@@ -208,7 +211,7 @@ function overview(d) {
     <div><div class="k">Run en cours</div><div class="v">${live ? `Run ${live.n}` : "aucun"}</div>
       <div class="s">${live ? `${(AGENTS[live.en_cours?.agent] || [live.en_cours?.agent || "—"])[0]} · ${dur(live.duration_s)}` : "dernier : " + (d.runs[0] ? `run ${d.runs[0].n}, ${date(d.runs[0].started)}` : "–")}</div></div>
     <div><div class="k">Dépensé au total</div><div class="v">${usd(total)}</div>
-      <div class="s">agents + annotation, ${d.runs.length} runs</div></div>
+      <div class="s">agents + annotation${d.runs.some((r) => r.modal_usd != null) ? " + Modal" : ""}, ${d.runs.length} runs</div></div>
     <div><div class="k">Expériences</div><div class="v">${d.runs.reduce((s, r) => s + r.experiences.length, 0)}</div>
       <div class="s">${d.runs.reduce((s, r) => s + r.final_tests.length, 0)} tests finaux</div></div>`;
 }
@@ -223,6 +226,7 @@ function liveBanner(d) {
     <div class="facts"><span>démarré <b>${date(r.started)}</b></span><span>durée <b>${dur(r.duration_s)}</b></span>
       <span>coût agents <b>${usd(r.cost_usd, 3)}</b> / ${usd(r.budget_usd)}</span>
       <span>coût annotation <b>${usd(r.annotation_usd, 3)}</b> / ${usd(r.annotation_budget_usd || 0)}</span>
+      ${r.modal_usd == null ? "" : `<span title="${modalTitle(r)}">coût Modal <b>${usd(r.modal_usd, 3)}</b>${r.modal_partiel ? " + heure en cours" : ""}</span>`}
       <span>tests finaux <b>${r.final_tests.length}</b> / ${r.final_tests_budget ?? "?"}</span>
       <span>expériences <b>${r.experiences.length}</b></span>
       <span>dernier événement <b>${date(r.dernier_evenement)}</b></span></div>
@@ -319,16 +323,32 @@ function detail(r) {
 function spendLine(what, spent, budget, count) {
   const ratio = budget ? Math.min(100, 100 * (spent || 0) / budget) : 0;
   const [a, b] = count ? [spent || 0, budget ?? "?"] : [usd(spent || 0, 3), usd(budget || 0)];
-  return `<span class="muted k">${what}</span><span><b>${a}</b> <span class="muted">/ ${b}</span></span>
-    <span class="meter"><i style="width:${ratio}%"></i></span>`;
+  return `<span class="sp"><span class="muted k">${what}</span><span><b>${a}</b> <span class="muted">/ ${b}</span></span>
+    <span class="meter"><i style="width:${ratio}%"></i></span></span>`;
+}
+
+// Ce que Modal a facturé pendant le run (GPU des embeddings et des entraînements) : pas de plafond,
+// donc pas de barre. Absent si Modal ne répond pas.
+const modalTitle = (r) => "facturé par Modal pendant le run (embeddings et entraînements sur GPU), d'après sa facturation à l'heure" +
+  (r.modal_partiel ? " ; la dernière heure n'est pas encore publiée par Modal" : "");
+function modalLine(r) {
+  if (r.modal_usd == null) return "";
+  return `<span class="sp" title="${modalTitle(r)}"><span class="muted k">modal</span><span><b>${usd(r.modal_usd, 3)}</b>${
+    r.modal_partiel ? ' <span class="muted">+ heure en cours</span>' : ""}</span></span>`;
 }
 
 // Pourquoi le run s'est arrêté (déduit du journal par le serveur), en couleur du verdict, puis les
 // autres budgets arrivés à bout.
 function finLine(f) {
   if (!f) return "";
-  return `<div class="fin ${f.cls}"><span class="k">fin</span><b>${esc(f.raison)}</b>${
+  return `<div class="fin ${f.cls}"><span><span class="k">fin</span> : <b>${esc(f.raison)}</b></span>${
     (f.limites || []).map((x) => `<span class="lim">${esc(x)}</span>`).join("")}</div>`;
+}
+
+// La durée dans une petite bulle, avec un chronomètre.
+function timer(s, title) {
+  return `<span class="timer" title="${title}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">` +
+    `<circle cx="8" cy="9.2" r="5.3"/><path d="M8 6.4v2.8l1.9 1.2M6.3 1.6h3.4M8 1.6v2.3M12.6 4.6l-.9.9"/></svg>${dur(s)}</span>`;
 }
 
 function runRow(r) {
@@ -337,14 +357,13 @@ function runRow(r) {
   return `<details class="run" data-id="${r.id}" ${opened.has(r.id) ? "open" : ""}>
     <summary>
       <div class="l1">
-        <span class="runname">Run ${r.n}</span><span class="when">${date(r.started)}</span><span class="chip ${cls}">${label}</span>
+        <span class="runname">Run ${r.n}</span><span class="when">${date(r.started)}</span><span class="chip ${cls}">${label}</span>${timer(r.duration_s, r.status === "running" ? "durée écoulée du run" : "durée du run")}
         <span class="cost"><span class="spend">${spendLine("agents", r.cost_usd, r.budget_usd)}${
           r.annotation_budget_usd != null || r.annotation_usd ? spendLine("annotation", r.annotation_usd, r.annotation_budget_usd) : ""}${
-          r.final_tests_budget != null ? spendLine("tests finaux", r.final_tests.length, r.final_tests_budget, true) : ""}</span>
-          <b>${dur(r.duration_s)}</b></span>
+          r.final_tests_budget != null ? spendLine("tests finaux", r.final_tests.length, r.final_tests_budget, true) : ""}${modalLine(r)}</span></span>
       </div>
-      ${finLine(r.fin)}
       <div class="l2">
+        ${finLine(r.fin)}
         <span><b>${r.experiences.length}</b> exp.${ap}</span>
         <span>tests : ${r.final_tests.length ? r.final_tests.map(testChip).join(" ") : "aucun"}</span>
         <span>production : ${prodChip(r.production)}</span>

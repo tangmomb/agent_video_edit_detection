@@ -31,6 +31,9 @@ h1 { font-size: 26px; margin: 2px 0 4px; letter-spacing: -.01em; }
 .model-card .k { font-size: 11.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
 .model-card .v { font-size: 16px; font-weight: 650; margin-top: 2px; overflow-wrap: anywhere; }
 .model-card .s { font-size: 12.5px; color: var(--muted); }
+.model-card .lines { font-size: 13px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.model-card .lines b { color: var(--fg); font-weight: 650; }
+.model-card .modal-logo { display: block; height: 16px; margin-top: 5px; }
 #model-err { color: var(--hit); font-size: 14px; }
 
 /* ---------- dépôt ---------- */
@@ -237,8 +240,11 @@ fetch("api/model").then((r) => r.json()).then((m) => {
   $("model").innerHTML = tile("Modèle", m.experiment_id, `${m.model} · ${m.split_id || ""}`)
     + tile("Embeddings", m.features.map((f) => `<code>${f}</code>`).join(" "))
     + tile("Seuil", dec(m.threshold), `précision visée ${pct(m.precision_visee)}`)
-    + (m.test ? tile("Test", `${pct(m.test.precision)}`, `précision · rappel ${pct(m.test.recall)}`) : "")
-    + tile("Calcul", deviceName(m.device), m.device);
+    + (m.test ? `<div><div class="k">Test</div><div class="lines"><div>Précision : <b>${pct(m.test.precision)}</b></div>` +
+        `<div>Rappel : <b>${pct(m.test.recall)}</b></div>` +
+        (m.test.images != null ? `<div>Nb d'images en test : <b>${m.test.images.toLocaleString("fr-FR")}</b></div>` : "") + `</div></div>` : "")
+    + tile("Calcul", deviceName(m.device), m.device === "modal"
+      ? '<img class="modal-logo" src="https://modal-cdn.com/modal-wordmark-primary-light.png" alt="Modal">' : m.device);
   renderLimits(m.limites);
   if (data) render();
 }).catch(() => { $("model").innerHTML = '<div><span id="model-err">Serveur du modèle injoignable.</span></div>'; });

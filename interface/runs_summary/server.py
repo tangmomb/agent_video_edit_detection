@@ -2,7 +2,7 @@
 mis en production), et le détail court d'un run (étapes par agent avec leur durée et leur coût,
 expériences entraînées). Complète les conversations des runs (interface/run_chat), qui relisent un
 run message par message. Les journaux sont relus à chaque requête : un run en cours se suit en
-direct. Aucun appel payant.
+direct. Aucun appel payant : le coût Modal d'un run vient du rapport de facturation de Modal (gratuit).
 
     .venv/Scripts/python.exe interface/runs_summary/server.py [--port 8830]
 """
@@ -11,8 +11,9 @@ import argparse
 import json
 import re
 import sys
+import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -31,6 +32,14 @@ PAGE = HERE / "index.html"
 STALE_S = 15 * 60
 OLD_SIGNS = (ROOT / "data" / "batches.json", ROOT / "data" / "videos_samples")
 _PROD_RE = re.compile(r"`(exp_\d+)` sur `(split_\d+)`")
+# Coût Modal d'un run : les applications du projet (embed_modal.APP, train_modal.APP) dans le rapport
+# de facturation de l'espace Modal. Une heure publiée peut encore bouger un peu : relue toutes les
+# MODAL_REFRESH tant qu'elle n'a pas MODAL_SETTLED d'ancienneté, puis gardée.
+MODAL_APPS = ("agent-embeddings", "agent-training")
+HOUR = timedelta(hours=1)
+MODAL_REFRESH = timedelta(minutes=5)
+MODAL_SETTLED = timedelta(hours=6)
+_modal = {"lock": threading.Lock(), "hours": {}, "seen": {}, "retry_at": 0.0}
 
 
 def _stale(path: Path) -> bool:
@@ -224,6 +233,71 @@ def summarize(run_dir: Path) -> dict:
     }
 
 
+def _utc(iso: str) -> datetime:
+    """Heure du journal (heure locale de la machine du run, sans fuseau) -> UTC sans fuseau."""
+    return datetime.fromisoformat(iso).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _modal_hours(needed: set[datetime]) -> dict[datetime, float] | None:
+    """Heure UTC -> dollars facturés par Modal aux applications du projet, pour les heures demandées
+    déjà publiées (Modal ne publie que les heures pleines écoulées). Lu dans le rapport de facturation
+    de l'espace Modal, gardé en mémoire ; None si Modal ne répond pas (pas d'identifiants, panne)."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    with _modal["lock"]:
+        if time.time() < _modal["retry_at"]:
+            return None
+        seen, hours = _modal["seen"], _modal["hours"]
+        todo = sorted(h for h in needed if h + HOUR <= now and (
+            h not in seen or (seen[h] - h < MODAL_SETTLED and now - seen[h] > MODAL_REFRESH)))
+        try:
+            while todo:
+                # un rapport horaire couvre 7 jours au plus
+                part = [h for h in todo if h < todo[0] + timedelta(days=7)]
+                todo = todo[len(part):]
+                import modal
+
+                rows = modal.billing.workspace_billing_report(start=part[0], end=part[-1] + HOUR, resolution="h")
+                got: dict[datetime, float] = {}
+                for row in rows:
+                    if row["description"] in MODAL_APPS:
+                        h = row["interval_start"].astimezone(timezone.utc).replace(tzinfo=None)
+                        got[h] = got.get(h, 0.0) + float(row["cost"])
+                for h in part:
+                    hours[h], seen[h] = got.get(h, 0.0), now
+        except Exception:  # noqa: BLE001 — modal absent, identifiants, réseau : la page s'affiche sans ce coût
+            _modal["retry_at"] = time.time() + MODAL_REFRESH.total_seconds()
+            return None
+        return {h: hours[h] for h in needed if h in hours}
+
+
+def _modal_costs(out: list[dict]) -> None:
+    """Ajoute à chaque run modal_usd, ce que Modal a facturé pendant le run (embeddings et
+    entraînements sur GPU), et modal_partiel si sa dernière heure n'est pas encore publiée. Modal
+    facture par heure et par application, pas par run : une heure partagée entre deux runs est
+    répartie au prorata du temps que chacun y a passé."""
+    now = datetime.now().isoformat(timespec="seconds")
+    spans = {}
+    for r in out:
+        end = r["ended"] or (now if r["status"] == "running" else r["dernier_evenement"])
+        if r["started"] and end:
+            spans[r["id"]] = (_utc(r["started"]), max(_utc(end), _utc(r["started"]) + timedelta(seconds=1)))
+    # secondes passées par chaque run dans chaque heure
+    inside: dict[datetime, dict[str, float]] = {}
+    for rid, (a, b) in spans.items():
+        h = a.replace(minute=0, second=0, microsecond=0)
+        while h < b:
+            inside.setdefault(h, {})[rid] = (min(b, h + HOUR) - max(a, h)).total_seconds()
+            h += HOUR
+    costs = _modal_hours(set(inside))
+    for r in out:
+        r["modal_usd"], r["modal_partiel"] = None, False
+        if costs is None or r["id"] not in spans:
+            continue
+        mine = [h for h, by in inside.items() if r["id"] in by]
+        r["modal_usd"] = round(sum(costs[h] * inside[h][r["id"]] / sum(inside[h].values()) for h in mine if h in costs), 4)
+        r["modal_partiel"] = any(h not in costs for h in mine)
+
+
 def runs() -> dict:
     out, unreadable = [], []
     for path in sorted(RUNS.glob("*/pipeline.json"), reverse=True):
@@ -231,6 +305,7 @@ def runs() -> dict:
             out.append(summarize(path.parent))
         except (OSError, ValueError, KeyError):
             unreadable.append(path.parent.name)  # journal vide, abîmé ou en cours d'écriture
+    _modal_costs(out)
     prod = json.loads(PROD.read_text(encoding="utf-8")) if PROD.exists() else None
     return {"runs": out, "illisibles": unreadable, "production": prod}
 

@@ -98,7 +98,10 @@ class Model:
                 "model": self.config["model"],
                 "split_id": self.config.get("split_id"), "threshold": self.threshold,
                 "precision_visee": self.precision, "device": "modal" if _remote() else DEVICE,
-                "test": {k: ft[k] for k in ("precision", "recall")} if ft else None}
+                # images : celles du test (absent des anciens final_test.json, sans les quatre comptes)
+                "test": {**{k: ft[k] for k in ("precision", "recall")},
+                         "images": sum(ft[k] for k in ("tp", "fp", "fn", "tn"))
+                         if all(k in ft for k in ("tp", "fp", "fn", "tn")) else None} if ft else None}
 
     def score(self, frames: list[Path]) -> tuple[np.ndarray, str]:
         """Les probabilités, et où les embeddings ont été calculés (sur place si un seul l'a été)."""
