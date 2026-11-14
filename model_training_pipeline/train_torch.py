@@ -27,39 +27,49 @@ MLP_BATCH = 200
 
 
 # ------------------------------------------------------------------ données
-def load_matrix(root: Path, specs: list, sids: list[str], frames: list[int]) -> tuple[np.ndarray | None, list]:
+def load_matrix(root: Path, specs: list, sids: list[str], frames: list[int],
+                threads: int = 1) -> tuple[np.ndarray | None, list]:
     """Matrice float32 (len(sids), dim) des embeddings en cache, alignée sur (sids, frames).
     specs : (dossier, parts, skip) par embedding : le fichier <root>/<dossier>/<sid>.npz contient ids
     (numéros d'images) et emb ; une vue dérivée (quads, tb) garde les parts après les skip premières
     (comme get_features). Renvoie (matrice, []) ou (None, [(dossier, sid), ...]) si des images
-    manquent dans le cache."""
+    manquent dans le cache. threads : fichiers lus en même temps (un volume Modal paie une latence
+    réseau par fichier : 17 000 lectures une à une ne finissaient pas en 35 min)."""
+    from concurrent.futures import ThreadPoolExecutor
+
     by_sample: dict[str, list[int]] = {}
     for k, s in enumerate(sids):
         by_sample.setdefault(s, []).append(k)
     frames = np.asarray(frames, dtype=np.int64)
+
+    def read(dirname: str, s: str):
+        path = Path(root) / dirname / f"{s}.npz"
+        if not path.exists():
+            return None
+        with np.load(path) as z:
+            ids, emb = z["ids"], z["emb"]
+        want = frames[by_sample[s]]
+        pos = np.searchsorted(ids, want)
+        if (pos >= len(ids)).any() or (ids[np.minimum(pos, len(ids) - 1)] != want).any():
+            return None
+        return emb[pos].astype(np.float32, copy=False)
+
     mats, missing = [], []
-    for dirname, parts, skip in specs:
-        out = None
-        for s, idxs in by_sample.items():
-            path = Path(root) / dirname / f"{s}.npz"
-            if not path.exists():
-                missing.append((dirname, s))
-                continue
-            with np.load(path) as z:
-                ids, emb = z["ids"], z["emb"]
-            want = frames[idxs]
-            pos = np.searchsorted(ids, want)
-            if (pos >= len(ids)).any() or (ids[np.minimum(pos, len(ids) - 1)] != want).any():
-                missing.append((dirname, s))
-                continue
-            sel = emb[pos].astype(np.float32, copy=False)
-            if skip:
-                sel = sel[:, sel.shape[1] // parts * skip:]
-            if out is None:
-                out = np.zeros((len(sids), sel.shape[1]), dtype=np.float32)
-            out[idxs] = sel
-        if out is not None:
-            mats.append(out)
+    with ThreadPoolExecutor(max(1, threads)) as pool:
+        for dirname, parts, skip in specs:
+            out = None
+            samples = list(by_sample)
+            for s, sel in zip(samples, pool.map(lambda s: read(dirname, s), samples)):
+                if sel is None:
+                    missing.append((dirname, s))
+                    continue
+                if skip:
+                    sel = sel[:, sel.shape[1] // parts * skip:]
+                if out is None:
+                    out = np.zeros((len(sids), sel.shape[1]), dtype=np.float32)
+                out[by_sample[s]] = sel
+            if out is not None:
+                mats.append(out)
     if missing:
         return None, missing
     return np.concatenate(mats, axis=1), []

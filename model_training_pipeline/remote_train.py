@@ -101,10 +101,29 @@ def rebuild(model: str, params: dict, fold: dict, mlp_alpha: float):
     return make_pipeline(*steps, clf)
 
 
+def pack_key(payload: dict) -> str:
+    """Clé de la matrice assemblée : mêmes images et mêmes embeddings, même matrice (l'embedding
+    d'une image ne change pas), réutilisée par les train_model suivants."""
+    import hashlib
+    import json
+
+    h = hashlib.sha1(json.dumps([payload["namespace"], payload["specs"], payload["sids"],
+                                 [int(f) for f in payload["frames"]]]).encode())
+    return h.hexdigest()[:20]
+
+
 def train(payload: dict) -> dict:
-    """Appel du GPU Modal ; une panne ou un manque de place met l'entraînement en pause (un run
-    peut attendre), comme les embeddings."""
+    """Assemblage de la matrice sur un conteneur CPU Modal (pack), puis entraînement sur GPU
+    (train) ; une panne ou un manque de place met l'entraînement en pause (un run peut attendre),
+    comme les embeddings. Renvoie {"missing": [...]} si le volume n'a pas toutes les images."""
     import modal
 
-    fn = modal.Function.from_name(APP, "train")
-    return retry.forever(lambda: fn.remote(payload), "entraînement GPU")
+    data = {k: payload[k] for k in ("namespace", "specs", "sids", "frames")}
+    data["key"] = pack_key(payload)
+    packed = retry.forever(lambda: modal.Function.from_name(APP, "pack").remote(data), "assemblage CPU")
+    if packed.get("missing"):
+        return packed
+    job = {"pack": packed["pack"], "y": payload["y"], "plan": payload["plan"]}
+    out = retry.forever(lambda: modal.Function.from_name(APP, "train").remote(job), "entraînement GPU")
+    out["timing"] = {**{k: v for k, v in packed.items() if k not in ("pack",)}, **(out.get("timing") or {})}
+    return out
