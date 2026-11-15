@@ -146,14 +146,16 @@ def run(goal: str, budget_usd: float, data_budget: int, final_tests: int, annota
     report += "\n\n---\n\n## Modèle de production (choix automatique du code)\n\n" + (
         f"Erreur : {choice['error']}" if "error" in choice else
         f"`{choice['production']['experiment_id']}` sur `{choice['production']['split_id']}` conservé : "
-        f"il a réussi son test final, et aucun modèle de `{choice['split_id']}` (le plus gros split) "
-        "n'a réussi le sien. Classement de ce split :\n\n"
+        f"il a réussi son test final, et aucun modèle d'aucun split n'a réussi le sien. Classement de "
+        f"`{choice['split_id']}` (le split le plus récent) :\n\n"
         + "\n".join(f"- {r['experiment_id']} : AP par chaîne {r['ap_par_chaine']}, rappel val "
                     f"{r['val_recall']}, AP {r['ap']}, AUC {r['auc']}, "
                     f"test {r['test']['statut']}" for r in choice["classement"])
         if choice["production_conservee"] else
-        f"`{choice['production']['experiment_id']}` sur `{choice['split_id']}` (le plus gros split), seuil "
-        f"{choice['production']['threshold']} : "
+        f"`{choice['production']['experiment_id']}` sur `{choice['split_id']}` ("
+        + ("le split le plus récent" if choice["split_id"] == choice["dernier_split"] else
+           f"le split le plus récent avec un test réussi ; aucun sur `{choice['dernier_split']}`")
+        + f"), seuil {choice['production']['threshold']} : "
         + (f"meilleur rappel val parmi les AP par chaîne à {AP_TIE} près de la meilleure, chez les "
            "modèles qui ont réussi leur test final"
            + (f" (test : {choice['production']['test']['motif']})."

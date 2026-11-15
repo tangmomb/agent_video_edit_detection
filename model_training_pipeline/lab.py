@@ -1107,44 +1107,56 @@ class Lab:
         return best["experiment_id"] if best else None
 
     def select_production(self, precision: float = metrics.DEFAULT_PRECISION) -> dict:
-        """Choix automatique du modèle de production, fait par le code en fin de run, parmi les
-        expériences du plus gros split (le plus de clips ; à égalité, le plus récent) qui ont
-        réussi leur test final (précision visée tenue sur test) : parmi celles dont l'AP par
-        chaîne sur val est à moins de AP_TIE de la meilleure, celle de meilleur rappel val. À
-        défaut de test réussi, même règle sur les non testées, puis sur toutes, marquées comme non
+        """Choix automatique du modèle de production, fait par le code en fin de run : on parcourt
+        les splits du plus récent au plus ancien, et le premier qui compte une expérience ayant
+        réussi son test final (précision visée tenue sur test, ou production battue sur ses chaînes
+        inédites) donne la production : parmi ses expériences réussies dont l'AP par chaîne sur val
+        est à moins de AP_TIE de la meilleure, celle de meilleur rappel val. Run 030 : exp_711
+        (split_016) avait réussi son test, mais l'ancienne règle ne regardait que le plus gros split
+        (split_017, aucun test réussi) et gardait exp_666 (split_015). Sans aucun test réussi, même
+        règle sur les non testées du split le plus récent, puis sur toutes, marquées comme non
         vérifiées, sauf si la production actuelle a réussi son test : elle est alors conservée
-        (production_conservee), même sur un plus petit split. L'AP par chaîne choisit bien mieux
-        que le rappel val le modèle qui tient sur des chaînes nouvelles (metrics.py) ; le rappel ne
-        départage que des AP équivalentes. Écrit production.json (via save_model) et renvoie le
-        classement (par AP par chaîne)."""
-        splits = self._split_summaries()
+        (production_conservee). L'AP par chaîne choisit bien mieux que le rappel val le modèle qui
+        tient sur des chaînes nouvelles (metrics.py) ; le rappel ne départage que des AP
+        équivalentes. Écrit production.json (via save_model) et renvoie le classement (par AP par
+        chaîne) du split retenu."""
+        splits = sorted((s["split_id"] for s in self._split_summaries()), reverse=True)
         if not splits:
             return {"error": "aucun split figé : rien à mettre en production"}
-        big = max(splits, key=lambda s: (sum(s[k] for k in SPLITS), s["split_id"]))["split_id"]
-        ranked = self._ranked(big, precision)
+        for sid in splits:
+            ranked = self._ranked(sid, precision)
+            passed = [r for r in ranked if r["test"]["statut"] == "réussi"]
+            if passed:
+                best = _best_by_rule(passed)
+                prod = self.save_model(
+                    best["experiment_id"], precision,
+                    f"choix automatique de fin de run sur {sid} (le split le plus récent avec un test "
+                    f"réussi) : meilleur rappel val parmi les AP par chaîne à {AP_TIE} près de la "
+                    "meilleure, chez les modèles qui ont réussi leur test final", test=best["test"])
+                return _jsonable({"split_id": sid, "dernier_split": splits[0], "production": prod,
+                                  "verifie_sur_test": True, "production_conservee": False,
+                                  "classement": ranked})
+        last = splits[0]
+        ranked = self._ranked(last, precision)
         if not ranked:
-            return {"error": f"aucune expérience sur le plus gros split ({big})"}
-        order = {"réussi": 0, "non testé": 1, "échoué": 2}
-        status = min(order[r["test"]["statut"]] for r in ranked)
-        best = _best_by_rule([r for r in ranked if order[r["test"]["statut"]] == status])
-        verifie = best["test"]["statut"] == "réussi"
+            return {"error": f"aucun test réussi et aucune expérience sur le split le plus récent ({last})"}
         current_path = EXP_DIR / "production.json"
         current = json.loads(current_path.read_text(encoding="utf-8")) if current_path.exists() else None
-        if not verifie and current and current["test"].get("statut") == "réussi":
+        if current and current["test"].get("statut") == "réussi":
             # Un modèle vérifié sur son test n'est jamais remplacé par un modèle qui ne l'est pas
             # (run 007 : exp_045, vérifié sur split_002, avait cédé la place à exp_081, non testé).
-            return _jsonable({"split_id": big, "production": current, "verifie_sur_test": True,
-                              "production_conservee": True, "classement": ranked})
+            return _jsonable({"split_id": last, "dernier_split": last, "production": current,
+                              "verifie_sur_test": True, "production_conservee": True, "classement": ranked})
+        order = {"non testé": 0, "échoué": 1}
+        status = min(order[r["test"]["statut"]] for r in ranked)
+        best = _best_by_rule([r for r in ranked if order[r["test"]["statut"]] == status])
         prod = self.save_model(best["experiment_id"], precision,
-                               f"choix automatique de fin de run sur {big} (le plus gros split) : "
-                               + (f"meilleur rappel val parmi les AP par chaîne à {AP_TIE} près de la "
-                                  "meilleure, chez les modèles qui ont réussi leur test final" if verifie else
-                                  "NON VÉRIFIÉ sur test (aucun modèle n'a réussi son test final), meilleur "
-                                  f"rappel val parmi les AP par chaîne à {AP_TIE} près de la meilleure "
-                                  f"({best['test']['statut']})"),
-                               test=best["test"])
-        return _jsonable({"split_id": big, "production": prod, "verifie_sur_test": verifie,
-                          "production_conservee": False, "classement": ranked})
+                               f"choix automatique de fin de run sur {last} (le split le plus récent) : "
+                               "NON VÉRIFIÉ sur test (aucun modèle n'a réussi son test final), meilleur "
+                               f"rappel val parmi les AP par chaîne à {AP_TIE} près de la meilleure "
+                               f"({best['test']['statut']})", test=best["test"])
+        return _jsonable({"split_id": last, "dernier_split": last, "production": prod,
+                          "verifie_sur_test": False, "production_conservee": False, "classement": ranked})
 
     def _group_ap(self, e: dict) -> float | None:
         """AP par chaîne sur val d'une expérience ; recalculée depuis val_preds.json pour celles

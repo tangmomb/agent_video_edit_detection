@@ -116,9 +116,10 @@ Organisation :
   Ses exemples d'erreurs (`show_examples`) sont les plus franches, une vidéo à tour de rôle. Vues d'embeddings : `full`, `grid2` (image + 4 quadrants) et `bands` (image + tiers bas
   + tiers haut, pour les bandeaux et sous-titres).
   Aucun agent ne met de modèle en production : en fin de run, le code (`Lab().select_production()`)
-  écrit dans `production.json`, sur le plus gros split (le plus de clips), l'expérience de meilleure
-  AP par chaîne sur val (moyenne des AP de chaque chaîne) parmi celles qui ont réussi leur test final
-  (précision visée tenue sur test) — départage par rappel val à 95 %, AP, AUC puis temps de calcul.
+  écrit dans `production.json`, sur le split le plus récent qui en compte une (splits parcourus du
+  plus récent au plus ancien), l'expérience de meilleure AP par chaîne sur val (moyenne des AP de
+  chaque chaîne) parmi celles qui ont réussi leur test final (précision visée tenue sur test, ou
+  production battue sur les chaînes de test qu'elle n'a jamais vues) — départage par rappel val à 95 %, AP, AUC puis temps de calcul.
   Banc b2 rejoué : le rappel val gardait souvent CLIP seul, qui ne tient pas sur des chaînes
   nouvelles ; l'AP par chaîne fait passer le rappel idéal caché du modèle choisi de 0.55 à 0.66. Sans modèle testé avec succès, il prend le
   meilleur sur val et le marque « non vérifié sur test » dans le rapport. On peut
