@@ -103,9 +103,18 @@ def group_ap(y: np.ndarray, p: np.ndarray, groups: np.ndarray) -> float | None:
 
 
 # ------------------------------------------------------------------ prétraitement
+def _blocks(X: torch.Tensor):
+    """Blocs de lignes de X en float64, ~256 Mo chacun : jamais de copie float64 de toute la
+    matrice (le T4 de 14,6 Go manquait de mémoire dans _scaler)."""
+    step = max(1, (1 << 25) // max(X.shape[1], 1))
+    for i in range(0, X.shape[0], step):
+        yield X[i:i + step].double()
+
+
 def _scaler(X: torch.Tensor) -> dict:
-    mean = X.double().mean(0)
-    var = ((X.double() - mean) ** 2).mean(0)
+    n = max(X.shape[0], 1)
+    mean = sum(b.sum(0) for b in _blocks(X)) / n  # deux passes, comme StandardScaler
+    var = sum(((b - mean) ** 2).sum(0) for b in _blocks(X)) / n
     scale = var.sqrt()
     scale[scale < 10 * torch.finfo(torch.float64).eps] = 1.0  # _handle_zeros_in_scale
     return {"mean": mean, "var": var, "scale": scale, "n": X.shape[0]}
@@ -141,8 +150,13 @@ def _pca(Z: torch.Tensor, k: int) -> dict:
             torch.zeros((), dtype=torch.float64, device=Z.device), "n": n, "k": k}
 
 
+def _standardize(X: torch.Tensor, scaler: dict) -> torch.Tensor:
+    """(X - mean) / scale en float64, sur place : une seule matrice float64 en mémoire."""
+    return X.to(torch.float64, copy=True).sub_(scaler["mean"]).div_(scaler["scale"])
+
+
 def _prep(X: torch.Tensor, prep: dict) -> torch.Tensor:
-    Z = (X.double() - prep["scaler"]["mean"]) / prep["scaler"]["scale"]
+    Z = _standardize(X, prep["scaler"])
     if prep.get("pca"):
         Z = (Z - prep["pca"]["mean"]) @ prep["pca"]["components"].T
     return Z
@@ -290,7 +304,7 @@ def run(X: np.ndarray, y: np.ndarray, plan: dict, device: str | None = None) -> 
         fit = torch.as_tensor(np.asarray(f["fit"], dtype=np.int64), device=dev)
         Xf = Xt[fit]
         prep = {"scaler": _scaler(Xf)}
-        Z = (Xf.double() - prep["scaler"]["mean"]) / prep["scaler"]["scale"]
+        Z = _standardize(Xf, prep["scaler"])
         del Xf
         if params.get("pca"):
             prep["pca"] = _pca(Z, int(params["pca"]))
