@@ -22,7 +22,13 @@ from urllib.parse import urlparse
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
+from dotenv import load_dotenv  # noqa: E402
+
 from interface import dev_reload  # noqa: E402
+
+# Jetons Modal du rapport de facturation (MODAL_TOKEN_ID / MODAL_TOKEN_SECRET) : sur le VPS, ils ne
+# sont que dans .env (pas de ~/.modal.toml), et sans eux le coût Modal des runs restait vide.
+load_dotenv(ROOT / ".env")
 
 RUNS = ROOT / "runs"
 PROD = ROOT / "model_results" / "production.json"
