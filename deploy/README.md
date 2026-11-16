@@ -17,11 +17,14 @@ Les réglages sont en tête de chaque `server.py`. Les adresses de `QUOTA_ILLIMI
 
 ## Mettre à jour le code
 
-Automatique à chaque push sur `master` (`.github/workflows/deploy.yml`) : `modal deploy` de
+Automatique après chaque push sur `master`, une fois la CI réussie (`.github/workflows/ci.yml` :
+ruff sur les vraies erreurs, syntaxe des scripts, `pytest tests`) ; `.github/workflows/deploy.yml`
+fait alors `modal deploy` de
 l'app des embeddings si `encoders.py` ou `embed_modal.py` a changé, de l'app d'entraînement si
 `train_modal.py` ou `train_torch.py` a changé, puis `deploy/update_vps.sh update` sur le VPS (`git pull`,
-dépendances, Caddy, redémarrage des interfaces). Un push qui ne touche que des `.md` attend le
-lancement de l'heure.
+dépendances, Caddy, redémarrage des interfaces). **Un commit dont la CI échoue n'est jamais
+déployé**, même par le lancement de l'heure : corriger et repousser. Tests en local :
+`pip install pytest` puis `python -m pytest tests -q` (sans GPU ni appel d'API, environ 5 s).
 
 **Rien n'est déployé tant qu'un run tourne.** Le workflow repasse toutes les heures et rattrape le
 retard après le run ; sans retard, il ne fait rien. Pour ne pas attendre l'heure suivante :

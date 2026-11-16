@@ -1,12 +1,14 @@
-# Met à jour Modal (s'il le faut) puis le VPS à chaque push sur master, et toutes les heures pour
-# reprendre ce qu'un run a retardé : rien n'est déployé tant qu'un run tourne.
+# Met à jour Modal (s'il le faut) puis le VPS après chaque CI réussie sur master (ci.yml), et
+# toutes les heures pour reprendre ce qu'un run a retardé : rien n'est déployé tant qu'un run
+# tourne, ni tant que la CI n'a pas réussi sur le dernier commit de master.
 # Mise en place : deploy/setup_github_actions.sh
 name: Déploiement
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [master]
-    paths-ignore: ["**.md"]
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
@@ -17,9 +19,12 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read  # statut de la CI du commit
 
 jobs:
   deploy:
+    # Une CI en échec déclenche aussi workflow_run : rien à faire dans ce cas.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -29,7 +34,25 @@ jobs:
           ref: master
           fetch-depth: 0
 
+      # Vaut pour les trois déclencheurs : la CI terminée peut être celle d'un commit dépassé par
+      # un push plus récent (sa propre CI déclenchera le déploiement), et l'essai horaire ne doit
+      # pas déployer un commit dont la CI a échoué.
+      - name: Vérifier la CI du commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          ok=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$sha" \
+                 --status success --json databaseId --jq length)
+          if [ "$ok" -gt 0 ]; then
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::CI pas (encore) réussie sur $sha : rien n'est déployé."
+          fi
+
       - name: Préparer SSH
+        if: steps.ci.outputs.ok
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
@@ -41,6 +64,7 @@ jobs:
 
       - name: Contrôler le VPS
         id: vps
+        if: steps.ci.outputs.ok
         run: |
           state=$(ssh "${{ secrets.VPS_TARGET }}" check)
           if [ "$state" = running ]; then
@@ -51,16 +75,11 @@ jobs:
             echo "commit=$state" >> "$GITHUB_OUTPUT"
           fi
 
+      # Syntaxe, erreurs Python et tests : vérifiés par la CI (étape « Vérifier la CI du commit »)
       - uses: actions/setup-python@v5
         if: steps.vps.outputs.commit
         with:
           python-version: "3.12"
-
-      - name: Vérifier la syntaxe
-        if: steps.vps.outputs.commit
-        run: |
-          git ls-files -z '*.py' | xargs -0 python -m py_compile
-          bash -n deploy/update_vps.sh
 
       # Comparé au commit du VPS, pas au dernier push : le VPS n'avance qu'après Modal, donc un
       # changement retardé par un run est repris au déploiement suivant.

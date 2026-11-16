@@ -1,0 +1,47 @@
+# Contrôles de chaque push et de chaque PR : vraies erreurs Python (ruff, sans règles de style),
+# syntaxe des scripts de déploiement et tests (tests/, sans GPU ni appel d'API).
+# Le déploiement (deploy.yml) ne part que si ce workflow a réussi sur le commit de master.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Installer
+        run: |
+          # torch CPU : la variante CUDA par défaut pèse plusieurs Go et ne sert à rien ici
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e . scikit-learn numpy pytest ruff
+
+      - name: Vraies erreurs Python (noms non définis, syntaxe)
+        run: ruff check --select F821,F811,F823,E9,F63,F7 .
+
+      - name: Syntaxe des scripts de déploiement
+        run: |
+          for f in deploy/*.sh deploy/*/*.sh; do
+            if [ -f "$f" ]; then bash -n "$f"; fi
+          done
+
+      - name: Tests
+        run: pytest tests -q
