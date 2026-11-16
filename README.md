@@ -1,5 +1,32 @@
 # Détecteur d'ajouts de montage
 
+Des agents IA construisent un classifieur qui dit si une image de vidéo contient un ajout de
+montage (sous-titres, logo, texte, image incrustée…) ou si elle est brute de la caméra.
+
+## En 30 secondes
+
+- Classifieur d'images entraîné sur de vraies vidéos YouTube, annotées image par image au
+  consensus de trois LLM de vision.
+- Évaluation par chaîne : aucune chaîne ne se retrouve à la fois en entraînement et en test.
+  Modèle en production : **94,7 % de précision et 98,8 % de rappel** sur 150 vidéos de chaînes
+  jamais vues.
+- Les agents explorent ; seul le code autorise la promotion d'un modèle, après son test final.
+- GPU Modal à la demande pour les embeddings et l'entraînement ; interfaces et déploiement sur
+  VPS, derrière une CI (ruff + 85 tests pytest).
+
+→ Portfolio : [portfolio-ia.tanguym.fr](https://portfolio-ia.tanguym.fr/#agents) ·
+démonstration : [agent-video-edit-detection.tanguym.fr](https://agent-video-edit-detection.tanguym.fr/)
+
+→ Architecture détaillée : [plus bas](#architecture-détaillée)
+
+```
+Vidéos YouTube → images (1 par seconde) → consensus de 3 annotateurs de vision
+      → entraînement / validation croisée par chaîne
+      → test final sur des chaînes jamais vues → promotion contrôlée par le code → interface
+```
+
+## Architecture détaillée
+
 Classifieur d'images : « cette image de vidéo contient-elle un ajout de montage (habillage, texte,
 sous-titres, image incrustée, logo…) ou est-elle brute de la caméra ? ». Il est entraîné sur de
 vraies vidéos YouTube, annotées image par image par trois LLM de vision.
